@@ -77,7 +77,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 5️⃣ REDIRIGIR AL ADM
     // ============================
     window.location.href =
-      "https://kusne.github.io/operativos-wsp-adm/adm/index.html";
+      "https://kusne.github.io/operativos-wsp-adm/ADM/index.html";
   });
 });
 
