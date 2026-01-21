@@ -1,18 +1,19 @@
-// ===== SUPABASE CONFIG =====
+// ===== IMPORT SUPABASE (ESM) =====
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ===== CONFIG =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+console.log("reset.js cargado");
 
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("reset.js cargado");
 
-  // =========================================
-  // 1️⃣ LEER TOKEN DE RECOVERY DESDE EL HASH
-  // =========================================
+  // ============================
+  // 1️⃣ LEER TOKENS DEL HASH
+  // ============================
   const hash = window.location.hash.substring(1);
   const params = new URLSearchParams(hash);
 
@@ -24,36 +25,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
-  // =========================================
-  // 2️⃣ INYECTAR SESIÓN MANUALMENTE (CLAVE)
-  // =========================================
+  // ============================
+  // 2️⃣ INYECTAR SESIÓN
+  // ============================
   const { error: sessionError } = await supabase.auth.setSession({
     access_token,
     refresh_token
   });
 
   if (sessionError) {
-    alert("Error estableciendo sesión de recuperación");
+    alert("Error estableciendo sesión");
     console.error(sessionError);
     return;
   }
 
   console.log("Sesión recovery establecida");
 
-  // =========================================
+  // ============================
   // 3️⃣ DOM
-  // =========================================
+  // ============================
   const btn = document.getElementById("btnSavePassword");
   const input = document.getElementById("newPassword");
 
   if (!btn || !input) {
-    alert("Formulario de reset incompleto");
+    alert("Formulario incompleto");
     return;
   }
 
-  // =========================================
-  // 4️⃣ GUARDAR CONTRASEÑA (AHORA SÍ)
-  // =========================================
+  // ============================
+  // 4️⃣ BOTÓN GUARDAR
+  // ============================
   btn.addEventListener("click", async () => {
     const password = input.value.trim();
 
@@ -62,9 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    const { error } = await supabase.auth.updateUser({
-      password
-    });
+    const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
       alert("Error guardando contraseña: " + error.message);
@@ -74,12 +73,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     alert("Contraseña actualizada correctamente");
 
-    // =========================================
-    // 5️⃣ IR AL ADM
-    // =========================================
+    // ============================
+    // 5️⃣ REDIRIGIR AL ADM
+    // ============================
     window.location.href =
       "https://kusne.github.io/operativos-wsp-adm/adm/index.html";
   });
 });
-
 
