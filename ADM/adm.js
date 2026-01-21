@@ -10,22 +10,40 @@ const supabaseClient = window.supabase.createClient(
   // ===== DOM refs =====
   const chkFinalizar = document.getElementById("aFinalizarCheckbox");
   const fechaCaducidadInput = document.getElementById("fechaCaducidad");
-
+  const btnForgot = document.getElementById("btnForgot");
+  const loginEmailEl = document.getElementById("loginEmail");
   const numOrdenEl = document.getElementById("numOrden");
   const textoRefEl = document.getElementById("textoRef");
   const franjasEl = document.getElementById("franjas");
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
-
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const infoOrdenEl = document.getElementById("infoOrden");
-
   const exportBoxEl = document.getElementById("exportBox");
   const importBoxEl = document.getElementById("importBox");
   const toggleExportImport = document.getElementById("toggleExportImport");
   const exportImportContainer = document.getElementById("exportImportContainer");
-
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
+  if (btnForgot) {
+    btnForgot.addEventListener("click", async () => {
+      const email = (loginEmailEl?.value || "").trim();
 
+      if (!email) {
+        alert("Escribí tu email primero.");
+        return;
+      }
+
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: "https://kusne.github.io/operativos-wsp-adm/reset.html"
+      });
+
+      if (error) {
+        alert("Error enviando recovery: " + error.message);
+        return;
+      }
+
+      alert("Listo. Revisá tu correo y abrí el link para crear tu contraseña.");
+    });
+  }
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
   let ordenSeleccionadaIdx = null;
@@ -230,6 +248,7 @@ if (btnLogin) {
     document.getElementById("admContainer").style.display = "block";
   });
 }
+
 
 
 
