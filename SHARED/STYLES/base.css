@@ -1,5 +1,5 @@
 /* ============================= */
-/* BASE GLOBAL                  */
+/* BASE GLOBAL NEUTRO            */
 /* ============================= */
 
 * {
@@ -13,80 +13,23 @@ body {
   background: #ffffff;
 }
 
-/* ============================= */
-/* CONTENEDOR PRINCIPAL         */
-/* (LOGIN + ADM)                */
-/* ============================= */
-
-.app {
-  max-width: 480px;              /* ancho lógico real */
-  margin: 0 auto;                /* centrado horizontal */
-  transform: scale(1.9);         /* zoom visual */
-  transform-origin: top center;  /* mantiene centrado */
-}
-
-/* ============================= */
-/* SECCIONES / BLOQUES          */
-/* ============================= */
-
-.section {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin: 14px auto;
-  max-width: 420px;
-  background: #fff;
-}
-
-/* ============================= */
-/* FORMULARIOS                  */
-/* ============================= */
-
+/* textos */
 label {
   font-weight: bold;
   display: block;
   margin-top: 10px;
 }
 
+/* inputs básicos */
 input,
 textarea,
 select {
-  font-size: 18px;
+  font-size: 16px;
   padding: 6px;
   width: 100%;
 }
 
-textarea {
-  resize: vertical;
-}
-
-select {
-  padding: 8px;
-}
-
-input[type="number"] {
-  text-align: left;
-}
-
-input[type="checkbox"] {
-  transform: scale(1.6);
-  margin-right: 8px;
-}
-
-/* ============================= */
-/* BOTONES                      */
-/* ============================= */
-
-button {
-  margin-top: 15px;
-  padding: 10px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-/* ============================= */
-/* UTILIDADES                   */
-/* ============================= */
-
+/* utilidades */
 .hidden {
   display: none;
 }
@@ -94,5 +37,3 @@ button {
 .obligatorio {
   border: 2px solid #c62828;
 }
-
-
