@@ -54,6 +54,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
   function actualizarSelector() {
+    console.log("actualizarSelector EJECUTADA");
+
     if (!selectOrdenExistente) return;
 
     const ordenes = StorageApp.cargarOrdenes();
@@ -262,6 +264,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   actualizarEstadoPublicar();
 
 });
+
 
 
 
