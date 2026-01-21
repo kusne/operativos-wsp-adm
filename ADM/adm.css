@@ -57,6 +57,33 @@
 #exportImportContainer.hidden {
   display: none;
 }
+/* ===================================== */
+/* FIX CHECKBOXES ADM (alineación real)  */
+/* ===================================== */
+
+/* SOLO labels que contienen checkbox */
+#admContainer label:has(input[type="checkbox"]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+  width: auto;
+}
+
+/* checkbox */
+#admContainer input[type="checkbox"] {
+  margin: 0;
+  transform: scale(1.2);
+}
+
+/* evitar que el texto se vaya a la derecha */
+#admContainer label:has(input[type="checkbox"]) span,
+#admContainer label:has(input[type="checkbox"]) {
+  white-space: nowrap;
+}
+
+
 
 
 
