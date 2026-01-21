@@ -82,6 +82,29 @@
 #admContainer label:has(input[type="checkbox"]) {
   white-space: nowrap;
 }
+/* ===================================== */
+/* BOTONES ADM (colores consistentes)    */
+/* ===================================== */
+
+#admContainer button {
+  background-color: #1976d2;   /* azul */
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+}
+
+/* botón publicar (verde, ya existente) */
+#admContainer button.publicar,
+#admContainer button.btn-publicar {
+  background-color: #2e7d32;
+}
+
+/* hover */
+#admContainer button:hover {
+  opacity: 0.9;
+}
+
+
 
 
 
