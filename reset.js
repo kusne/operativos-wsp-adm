@@ -8,15 +8,43 @@ const supabase = window.supabase.createClient(
 );
 
 document.addEventListener("DOMContentLoaded", async () => {
+  console.log("reset.js cargado");
+
+  // ================================
+  // PASO CRÍTICO OBLIGATORIO
+  // CONSUMIR TOKEN DEL HASH (RECOVERY)
+  // ================================
+  const { data, error: sessionError } =
+    await supabase.auth.getSessionFromUrl({ storeSession: true });
+
+  if (sessionError) {
+    alert("Error leyendo sesión de recuperación");
+    console.error(sessionError);
+    return;
+  }
+
+  if (!data || !data.session) {
+    alert("Sesión de recuperación inválida o expirada");
+    return;
+  }
+
+  console.log("Sesión recovery OK");
+
+  // ================================
+  // DOM
+  // ================================
   const btn = document.getElementById("btnSavePassword");
   const input = document.getElementById("newPassword");
   const msg = document.getElementById("msg");
 
   if (!btn || !input) {
-    console.error("Elementos de reset no encontrados");
+    alert("No se encontraron elementos del formulario");
     return;
   }
 
+  // ================================
+  // BOTÓN GUARDAR CONTRASEÑA
+  // ================================
   btn.addEventListener("click", async () => {
     const password = input.value.trim();
 
@@ -30,16 +58,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     if (error) {
-      alert("Error al guardar la contraseña: " + error.message);
+      alert("Error al guardar contraseña: " + error.message);
+      console.error(error);
       return;
     }
 
-    msg.textContent = "Contraseña actualizada correctamente.";
-    msg.style.display = "block";
+    alert("Contraseña actualizada correctamente");
 
-    // redirigir al ADM
-    setTimeout(() => {
-      window.location.href = "./adm/index.html";
-    }, 1500);
+    // ================================
+    // REDIRECCIÓN AL ADM
+    // ================================
+    window.location.href =
+      "https://kusne.github.io/operativos-wsp-adm/adm/index.html";
   });
 });
+
