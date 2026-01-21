@@ -1,141 +1,112 @@
-/* =========================
-   ADM UI LIMPIA Y ESTABLE
-   ========================= */
+/* ============================= */
+/* RESET BASE                    */
+/* ============================= */
 
 * {
   box-sizing: border-box;
 }
 
 body {
+  font-family: Arial, sans-serif;
   margin: 0;
-  padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #f2f2f2;
-  color: #111;
-}
-
-/* ===== CONTENEDOR CENTRAL ===== */
-.app,
-.container,
-main {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
   background: #ffffff;
 }
 
-/* ===== TITULOS ===== */
-h1, h2, h3 {
-  text-align: center;
-  margin: 12px 0 20px;
+/* ============================= */
+/* CONTENEDORES PRINCIPALES      */
+/* LOGIN + ADM                   */
+/* ============================= */
+
+#loginContainer,
+#admContainer {
+  max-width: 700px;
+  margin: 0 auto;
 }
 
-/* ===== SECCIONES ===== */
+/* ============================= */
+/* SECCIONES                     */
+/* ============================= */
+
 .section {
   border: 1px solid #ccc;
-  border-radius: 6px;
   padding: 12px;
-  margin-bottom: 16px;
-  background: #fafafa;
+  margin: 14px auto;
+  max-width: 100%;
+  background: #fff;
 }
 
-/* ===== LABELS ===== */
+/* ============================= */
+/* FORMULARIOS                   */
+/* ============================= */
+
 label {
-  display: block;
   font-weight: bold;
-  margin-bottom: 6px;
+  display: block;
+  margin-top: 12px;
+  text-align: left;
 }
 
-/* ===== INPUTS ===== */
-input[type="text"],
-input[type="date"],
+input,
 textarea,
 select {
-  width: 100%;
+  font-size: 18px;
   padding: 8px;
-  font-size: 15px;
-  margin-bottom: 12px;
-  border: 1px solid #aaa;
-  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-/* ===== TEXTAREA ===== */
 textarea {
   resize: vertical;
-  min-height: 80px;
 }
 
-/* ===== CHECKBOX GRUPOS ===== */
-.checkbox-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+select {
+  padding: 8px;
 }
 
-.checkbox-group label {
-  font-weight: normal;
+/* ============================= */
+/* CHECKBOXES (CLAVE)            */
+/* ============================= */
+
+input[type="checkbox"] {
+  transform: scale(1.3);
+  margin-right: 8px;
+  margin-left: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-/* ===== BOTONES ===== */
+/* ============================= */
+/* BOTONES                       */
+/* ============================= */
+
 button {
-  width: 100%;
-  padding: 10px;
+  margin-top: 15px;
+  padding: 12px;
   font-size: 16px;
-  border: none;
-  border-radius: 6px;
   cursor: pointer;
-  background: #1976d2;
-  color: #fff;
-}
-
-button:hover {
-  background: #125aa0;
-}
-
-/* ===== BOTONES SECUNDARIOS ===== */
-button.secondary {
-  background: #555;
-}
-
-button.secondary:hover {
-  background: #333;
-}
-
-/* ===== SELECT ORDEN EXISTENTE ===== */
-#ordenExistente {
   width: 100%;
-  min-height: 140px;
 }
 
-/* ===== INFO ORDEN ===== */
-#infoOrden {
-  font-size: 14px;
-  background: #eee;
-  padding: 10px;
-  border-radius: 4px;
-}
+/* ============================= */
+/* EXPORT / IMPORT               */
+/* ============================= */
 
-/* ===== FINALIZAR ===== */
-.hidden {
-  display: none;
-}
-
-/* ===== RESPONSIVE ===== */
-@media (max-width: 600px) {
-  .app,
-  .container,
-  main {
-    padding: 12px;
-  }
-}
-.hidden {
-  display: none;
-}
-/* ===== EXPORT / IMPORT ===== */
 #exportImportContainer {
-  margin-top: 12px;
+  margin-top: 15px;
 }
 
+/* ============================= */
+/* UTILIDADES                    */
+/* ============================= */
+
+.hidden {
+  display: none !important;
+}
+
+.obligatorio {
+  border: 2px solid #c62828;
+}
 
 
 
