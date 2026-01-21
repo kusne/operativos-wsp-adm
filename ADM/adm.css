@@ -1,91 +1,49 @@
 /* ============================= */
-/* RESET BASE                    */
+/* CONTENEDOR ADM                */
 /* ============================= */
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 20px;
-  background: #ffffff;
-}
-
-/* ============================= */
-/* CONTENEDORES PRINCIPALES      */
-/* LOGIN + ADM                   */
-/* ============================= */
-
-#loginContainer,
 #admContainer {
   max-width: 700px;
   margin: 0 auto;
 }
 
 /* ============================= */
-/* SECCIONES                     */
+/* BOTONES ADM                   */
 /* ============================= */
 
-.section {
-  border: 1px solid #ccc;
-  padding: 12px;
-  margin: 14px auto;
-  max-width: 100%;
-  background: #fff;
-}
-
-/* ============================= */
-/* FORMULARIOS                   */
-/* ============================= */
-
-label {
-  font-weight: bold;
-  display: block;
-  margin-top: 12px;
-  text-align: left;
-}
-
-input,
-textarea,
-select {
-  font-size: 18px;
-  padding: 8px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-textarea {
-  resize: vertical;
-}
-
-select {
-  padding: 8px;
-}
-
-/* ============================= */
-/* CHECKBOXES (CLAVE)            */
-/* ============================= */
-
-input[type="checkbox"] {
-  transform: scale(1.3);
-  margin-right: 8px;
-  margin-left: 0;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-/* ============================= */
-/* BOTONES                       */
-/* ============================= */
-
-button {
+#admContainer button {
   margin-top: 15px;
   padding: 12px;
   font-size: 16px;
   cursor: pointer;
   width: 100%;
+}
+
+/* ============================= */
+/* SECCIONES                     */
+/* ============================= */
+
+#admContainer .section {
+  border: 1px solid #ccc;
+  padding: 12px;
+  margin: 14px 0;
+  background: #fff;
+}
+
+/* ============================= */
+/* CHECKBOXES (ADM)              */
+/* ============================= */
+
+#admContainer label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#admContainer input[type="checkbox"] {
+  transform: scale(1.2);
+  margin: 0;
 }
 
 /* ============================= */
@@ -96,57 +54,10 @@ button {
   margin-top: 15px;
 }
 
-/* ============================= */
-/* UTILIDADES                    */
-/* ============================= */
-
-.hidden {
-  display: none !important;
-}
-
-.obligatorio {
-  border: 2px solid #c62828;
-}
-/* ===================================== */
-/* FIX CHECKBOXES (alineación izquierda) */
-/* ===================================== */
-
-/* contenedores típicos de checkbox */
-label,
-.checkbox,
-.checkbox-row,
-.checkbox-container {
-  text-align: left !important;
-}
-
-/* si el checkbox está dentro de flex */
-label {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start !important;
-}
-
-/* checkbox en sí */
-input[type="checkbox"] {
-  margin-left: 0 !important;
-  margin-right: 8px;
-  transform: scale(1.3);
-}
-
-/* ===================================== */
-/* FIX EXPORT / IMPORT (visibilidad)      */
-/* ===================================== */
-
-#exportImportContainer {
-  display: block !important;
-  visibility: visible;
-  opacity: 1;
-}
-
-/* cuando está oculto */
 #exportImportContainer.hidden {
-  display: none !important;
+  display: none;
 }
+
 
 
 
