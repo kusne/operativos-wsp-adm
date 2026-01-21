@@ -32,6 +32,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
+  const toggleExportImport = document.getElementById("toggleExportImport");
+  const exportImportContainer = document.getElementById("exportImportContainer");
+  if (toggleExportImport && exportImportContainer) {
+    toggleExportImport.addEventListener("change", () => {
+      if (toggleExportImport.checked) {
+        exportImportContainer.classList.remove("hidden");
+      } else {
+        exportImportContainer.classList.add("hidden");
+      }
+    });
+  }
 
   // ======================================================
   // CONTROL DE SESIÓN
@@ -82,21 +93,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================================================
   // OLVIDÉ MI CONTRASEÑA (CONTROLADO – SIN RECOVERY SUPABASE)
   // ======================================================
-  //if (btnForgot) {
-    //btnForgot.addEventListener("click", () => {
-      //const email = loginEmail.value.trim();
 
-      //if (!email) {
-        //alert("Escribí tu email primero.");
-        //return;
-      //}
-
-      //alert(
-        //"Recuperación de contraseña deshabilitada.\n" +
-        //"Contactá al administrador para restablecer el acceso."
-      //);
-    //});
-  //}
   btnForgot.addEventListener("click", async () => {
     const email = loginEmail.value.trim();
 
@@ -232,6 +229,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   actualizarEstadoPublicar();
 
 });
+
 
 
 
