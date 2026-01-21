@@ -170,6 +170,34 @@ const supabaseClient = window.supabase.createClient(
   })();
 
 })();
+document.addEventListener("DOMContentLoaded", async () => {
+  const login = document.getElementById("loginContainer");
+  const adm = document.getElementById("admContainer");
+
+  if (!login || !adm) {
+    console.error("No se encontraron loginContainer o admContainer");
+    return;
+  }
+
+  const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    console.error("Error obteniendo sesión:", error);
+    login.style.display = "block";
+    adm.style.display = "none";
+    return;
+  }
+
+  if (session) {
+    login.style.display = "none";
+    adm.style.display = "block";
+  } else {
+    login.style.display = "block";
+    adm.style.display = "none";
+  }
+});
+
+
 
 
 
