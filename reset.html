@@ -1,6 +1,7 @@
 <script>
   const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+
   const supabase = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY
@@ -8,17 +9,30 @@
 
   const msg = document.getElementById("msg");
 
-  // 1️⃣ Convertir token del mail en sesión
+  // 1️⃣ Leer tokens del hash (#)
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+
+  const access_token = params.get("access_token");
+  const refresh_token = params.get("refresh_token");
+
+  if (!access_token || !refresh_token) {
+    msg.textContent = "Link inválido o vencido. Pedí otro email.";
+  }
+
+  // 2️⃣ Crear sesión válida (ESTO ES CLAVE)
   (async () => {
-    const { error } = await supabase.auth.exchangeCodeForSession(
-      window.location.href
-    );
+    const { error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token
+    });
+
     if (error) {
-      msg.textContent = "Error de sesión. Abrí nuevamente el link del mail.";
+      msg.textContent = "Error creando sesión: " + error.message;
     }
   })();
 
-  // 2️⃣ Guardar nueva contraseña
+  // 3️⃣ Guardar nueva contraseña
   document.getElementById("btn").onclick = async () => {
     const p1 = document.getElementById("p1").value;
     const p2 = document.getElementById("p2").value;
@@ -33,10 +47,9 @@
     });
 
     if (error) {
-      msg.textContent = error.message;
+      msg.textContent = "Error: " + error.message;
     } else {
-      msg.textContent = "Contraseña actualizada. Ya podés volver al ADM.";
+      msg.textContent = "✅ Contraseña actualizada. Ya podés volver al ADM.";
     }
   };
 </script>
-
