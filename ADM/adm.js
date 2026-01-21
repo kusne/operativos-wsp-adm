@@ -43,6 +43,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
   }
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+
+      // volver al login
+      admContainer.style.display = "none";
+      loginContainer.style.display = "block";
+    });
+  }
 
   // ======================================================
   // CONTROL DE SESIÓN
@@ -229,6 +239,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   actualizarEstadoPublicar();
 
 });
+
 
 
 
