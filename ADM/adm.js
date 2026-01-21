@@ -1,55 +1,112 @@
-// ===== CONFIG SUPABASE (SOLO ADM - SIMPLE) =====
+// ===== CONFIG SUPABASE (SOLO ADM) =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
 
-(function () {
-  // ===== DOM refs =====
+// ======================================================
+// TODO EL CÓDIGO DEPENDIENTE DEL DOM VA ACÁ
+// ======================================================
+document.addEventListener("DOMContentLoaded", async () => {
+
+  // ===== CONTENEDORES LOGIN / ADM =====
+  const loginContainer = document.getElementById("loginContainer");
+  const admContainer = document.getElementById("admContainer");
+
+  // ===== LOGIN ELEMENTS =====
+  const btnLogin = document.getElementById("btnLogin");
+  const btnForgot = document.getElementById("btnForgot");
+  const loginEmail = document.getElementById("loginEmail");
+  const loginPassword = document.getElementById("loginPassword");
+  const loginError = document.getElementById("loginError");
+
+  // ===== ADM ELEMENTS =====
   const chkFinalizar = document.getElementById("aFinalizarCheckbox");
   const fechaCaducidadInput = document.getElementById("fechaCaducidad");
-  const btnForgot = document.getElementById("btnForgot");
-  const loginEmailEl = document.getElementById("loginEmail");
   const numOrdenEl = document.getElementById("numOrden");
   const textoRefEl = document.getElementById("textoRef");
   const franjasEl = document.getElementById("franjas");
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
   const selectOrdenExistente = document.getElementById("ordenExistente");
-  const infoOrdenEl = document.getElementById("infoOrden");
-  const exportBoxEl = document.getElementById("exportBox");
-  const importBoxEl = document.getElementById("importBox");
-  const toggleExportImport = document.getElementById("toggleExportImport");
-  const exportImportContainer = document.getElementById("exportImportContainer");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
+
+  // ======================================================
+  // CONTROL DE SESIÓN
+  // ======================================================
+  const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+  if (error || !session) {
+    loginContainer.style.display = "block";
+    admContainer.style.display = "none";
+  } else {
+    loginContainer.style.display = "none";
+    admContainer.style.display = "block";
+  }
+
+  // ======================================================
+  // LOGIN
+  // ======================================================
+  if (btnLogin) {
+    btnLogin.addEventListener("click", async () => {
+      loginError.style.display = "none";
+
+      const email = loginEmail.value.trim();
+      const password = loginPassword.value.trim();
+
+      if (!email || !password) {
+        loginError.textContent = "Complete email y contraseña";
+        loginError.style.display = "block";
+        return;
+      }
+
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        loginError.textContent = "Credenciales inválidas";
+        loginError.style.display = "block";
+        return;
+      }
+
+      // Login OK
+      loginContainer.style.display = "none";
+      admContainer.style.display = "block";
+    });
+  }
+
+  // ======================================================
+  // OLVIDÉ MI CONTRASEÑA (CONTROLADO – SIN RECOVERY SUPABASE)
+  // ======================================================
   if (btnForgot) {
-    btnForgot.addEventListener("click", async () => {
-      const email = (loginEmailEl?.value || "").trim();
+    btnForgot.addEventListener("click", () => {
+      const email = loginEmail.value.trim();
 
       if (!email) {
         alert("Escribí tu email primero.");
         return;
       }
 
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: "https://kusne.github.io/operativos-wsp-adm/reset.html"
-      });
-
-      if (error) {
-        alert("Error enviando recovery: " + error.message);
-        return;
-      }
-
-      alert("Listo. Revisá tu correo y abrí el link para crear tu contraseña.");
+      alert(
+        "Recuperación de contraseña deshabilitada.\n" +
+        "Contactá al administrador para restablecer el acceso."
+      );
     });
   }
+
+  // ======================================================
+  // ESTADO DE CAMBIOS / PUBLICACIÓN
+  // ======================================================
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
   let ordenSeleccionadaIdx = null;
 
   function marcarCambio() {
-    cambiosId += 1;
+    cambiosId++;
     actualizarEstadoPublicar();
   }
 
@@ -58,10 +115,14 @@ const supabaseClient = window.supabase.createClient(
   }
 
   function actualizarEstadoPublicar() {
-    if (!btnPublicar) return;
-    btnPublicar.disabled = !puedePublicar();
+    if (btnPublicar) {
+      btnPublicar.disabled = !puedePublicar();
+    }
   }
 
+  // ======================================================
+  // FINALIZAR / CADUCIDAD
+  // ======================================================
   if (typeof CaducidadFinalizar !== "undefined") {
     CaducidadFinalizar.bindAFinalizar({
       checkboxEl: chkFinalizar,
@@ -69,7 +130,9 @@ const supabaseClient = window.supabase.createClient(
     });
   }
 
-  // ===== EVENTO SELECT ORDEN =====
+  // ======================================================
+  // SELECT ORDEN EXISTENTE
+  // ======================================================
   if (selectOrdenExistente) {
     selectOrdenExistente.addEventListener("change", () => {
       const v = selectOrdenExistente.value;
@@ -99,32 +162,14 @@ const supabaseClient = window.supabase.createClient(
     });
   }
 
-  function actualizarSelector() {
-    const ordenes = StorageApp.cargarOrdenes();
-    selectOrdenExistente.innerHTML = "";
-
-    const optVacio = document.createElement("option");
-    optVacio.value = "";
-    optVacio.text = "";
-    selectOrdenExistente.appendChild(optVacio);
-
-    ordenes.forEach((o, i) => {
-      if (!o || !o.num) return;
-      const opt = document.createElement("option");
-      opt.value = String(i);
-      opt.text = `${o.num} ${o.textoRef || ""}`.trim();
-      selectOrdenExistente.appendChild(opt);
-    });
-
-    selectOrdenExistente.value = "";
-  }
-
+  // ======================================================
+  // FUNCIONES AUXILIARES
+  // ======================================================
   function limpiarCampos() {
     numOrdenEl.value = "";
     textoRefEl.value = "";
     franjasEl.value = "";
     fechaVigenciaEl.value = "";
-    fechaCaducidadInput.readOnly = false;
     fechaCaducidadInput.value = "";
     chkFinalizar.checked = false;
     ordenSeleccionadaIdx = null;
@@ -137,27 +182,9 @@ const supabaseClient = window.supabase.createClient(
     StorageApp.guardarOrdenes(filtradas);
   }
 
-  function parseFranjas(raw) {
-    const lines = String(raw || "")
-      .split("\n")
-      .map(x => x.trim())
-      .filter(Boolean);
-
-    const out = [];
-    const re = /^(.*?)\s*[-–—]\s*(.*?)\s*[-–—]\s*(.*?)$/;
-
-    for (let i = 0; i < lines.length; i++) {
-      const m = re.exec(lines[i]);
-      if (!m) return { ok: false, error: `Error en franja ${i + 1}` };
-      out.push({ horario: m[1].trim(), lugar: m[2].trim(), titulo: m[3].trim() });
-    }
-
-    return out.length ? { ok: true, franjas: out } : { ok: false };
-  }
-
-  async function publicarOrdenes(modo) {
+  async function publicarOrdenes() {
     if (!puedePublicar()) {
-      alert("primero cargue orden");
+      alert("Primero cargue una orden");
       return;
     }
 
@@ -179,76 +206,13 @@ const supabaseClient = window.supabase.createClient(
 
   window.publicarOrdenes = publicarOrdenes;
 
-  (function init() {
-    limpiarOrdenesCaducadas();
-    actualizarSelector();
-    cambiosId = 0;
-    ultimoPublicadoId = 0;
-    actualizarEstadoPublicar();
-  })();
+  // ======================================================
+  // INIT
+  // ======================================================
+  limpiarOrdenesCaducadas();
+  actualizarEstadoPublicar();
 
-})();
-document.addEventListener("DOMContentLoaded", async () => {
-  const login = document.getElementById("loginContainer");
-  const adm = document.getElementById("admContainer");
-
-  if (!login || !adm) {
-    console.error("No se encontraron loginContainer o admContainer");
-    return;
-  }
-
-  const { data: { session }, error } = await supabaseClient.auth.getSession();
-
-  if (error) {
-    console.error("Error obteniendo sesión:", error);
-    login.style.display = "block";
-    adm.style.display = "none";
-    return;
-  }
-
-  if (session) {
-    login.style.display = "none";
-    adm.style.display = "block";
-  } else {
-    login.style.display = "block";
-    adm.style.display = "none";
-  }
 });
-const btnLogin = document.getElementById("btnLogin");
-const loginEmail = document.getElementById("loginEmail");
-const loginPassword = document.getElementById("loginPassword");
-const loginError = document.getElementById("loginError");
-
-if (btnLogin) {
-  btnLogin.addEventListener("click", async () => {
-    loginError.style.display = "none";
-
-    const email = loginEmail.value.trim();
-    const password = loginPassword.value.trim();
-
-    if (!email || !password) {
-      loginError.textContent = "Complete email y contraseña";
-      loginError.style.display = "block";
-      return;
-    }
-
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) {
-      loginError.textContent = "Credenciales inválidas";
-      loginError.style.display = "block";
-      return;
-    }
-
-    // login OK → mostrar ADM
-    document.getElementById("loginContainer").style.display = "none";
-    document.getElementById("admContainer").style.display = "block";
-  });
-}
-
 
 
 
