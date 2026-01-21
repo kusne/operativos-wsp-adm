@@ -53,6 +53,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       loginContainer.style.display = "block";
     });
   }
+  function actualizarSelector() {
+    if (!selectOrdenExistente) return;
+
+    const ordenes = StorageApp.cargarOrdenes();
+    selectOrdenExistente.innerHTML = "";
+
+    const optVacio = document.createElement("option");
+    optVacio.value = "";
+    optVacio.text = "";
+    selectOrdenExistente.appendChild(optVacio);
+
+    ordenes.forEach((o, i) => {
+      if (!o || !o.num) return;
+
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.text = `${o.num} ${o.textoRef || ""}`.trim();
+      selectOrdenExistente.appendChild(opt);
+    });
+
+    selectOrdenExistente.value = "";
+  }
 
   // ======================================================
   // CONTROL DE SESIÓN
@@ -236,9 +258,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // INIT
   // ======================================================
   limpiarOrdenesCaducadas();
+  actualizarSelector();
   actualizarEstadoPublicar();
 
 });
+
 
 
 
