@@ -1,55 +1,128 @@
-<script>
-  const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Restablecer contraseña</title>
 
-  const supabase = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    .box {
+      max-width: 360px;
+      margin: 80px auto;
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 6px;
+      box-shadow: 0 0 10px rgba(0,0,0,.15);
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+    }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 10px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #msg {
+      margin-top: 16px;
+      font-size: 14px;
+    }
+  </style>
+</head>
 
-  const msg = document.getElementById("msg");
+<body>
 
-  // 1️⃣ Leer tokens del hash (#)
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
+  <div class="box">
+    <h3>Restablecer contraseña</h3>
 
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
+    <label>Nueva contraseña</label>
+    <input type="password" id="p1">
 
-  if (!access_token || !refresh_token) {
-    msg.textContent = "Link inválido o vencido. Pedí otro email.";
-  }
+    <label>Repetir contraseña</label>
+    <input type="password" id="p2">
 
-  // 2️⃣ Crear sesión válida (ESTO ES CLAVE)
-  (async () => {
-    const { error } = await supabase.auth.setSession({
-      access_token,
-      refresh_token
+    <button id="btn">Guardar contraseña</button>
+
+    <p id="msg"></p>
+  </div>
+
+  <!-- SUPABASE LIB -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <script>
+    const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+
+    const supabase = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    const msg = document.getElementById("msg");
+
+    // =====================================================
+    // 1️⃣ LEER TOKENS DEL LINK (PASSWORD RECOVERY)
+    // =====================================================
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+
+    if (!access_token || !refresh_token) {
+      msg.textContent = "Link inválido o vencido. Pedí nuevamente el email.";
+      throw new Error("Recovery tokens missing");
+    }
+
+    // =====================================================
+    // 2️⃣ CREAR SESIÓN VÁLIDA EN EL NAVEGADOR
+    // =====================================================
+    (async () => {
+      const { error } = await supabase.auth.setSession({
+        access_token,
+        refresh_token
+      });
+
+      if (error) {
+        msg.textContent = "Error de sesión: " + error.message;
+      }
+    })();
+
+    // =====================================================
+    // 3️⃣ GUARDAR NUEVA CONTRASEÑA
+    // =====================================================
+    document.getElementById("btn").addEventListener("click", async () => {
+      const p1 = document.getElementById("p1").value;
+      const p2 = document.getElementById("p2").value;
+
+      if (!p1 || p1 !== p2) {
+        msg.textContent = "Las contraseñas no coinciden.";
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: p1
+      });
+
+      if (error) {
+        msg.textContent = "Error: " + error.message;
+        return;
+      }
+
+      msg.textContent = "✅ Contraseña actualizada correctamente. Ya podés cerrar esta página y volver al ADM.";
     });
+  </script>
 
-    if (error) {
-      msg.textContent = "Error creando sesión: " + error.message;
-    }
-  })();
+</body>
+</html>
 
-  // 3️⃣ Guardar nueva contraseña
-  document.getElementById("btn").onclick = async () => {
-    const p1 = document.getElementById("p1").value;
-    const p2 = document.getElementById("p2").value;
-
-    if (!p1 || p1 !== p2) {
-      msg.textContent = "Las contraseñas no coinciden";
-      return;
-    }
-
-    const { error } = await supabase.auth.updateUser({
-      password: p1
-    });
-
-    if (error) {
-      msg.textContent = "Error: " + error.message;
-    } else {
-      msg.textContent = "✅ Contraseña actualizada. Ya podés volver al ADM.";
-    }
-  };
-</script>
