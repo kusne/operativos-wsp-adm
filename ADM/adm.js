@@ -196,6 +196,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     adm.style.display = "none";
   }
 });
+const btnLogin = document.getElementById("btnLogin");
+const loginEmail = document.getElementById("loginEmail");
+const loginPassword = document.getElementById("loginPassword");
+const loginError = document.getElementById("loginError");
+
+if (btnLogin) {
+  btnLogin.addEventListener("click", async () => {
+    loginError.style.display = "none";
+
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value.trim();
+
+    if (!email || !password) {
+      loginError.textContent = "Complete email y contraseña";
+      loginError.style.display = "block";
+      return;
+    }
+
+    const { error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      loginError.textContent = "Credenciales inválidas";
+      loginError.style.display = "block";
+      return;
+    }
+
+    // login OK → mostrar ADM
+    document.getElementById("loginContainer").style.display = "none";
+    document.getElementById("admContainer").style.display = "block";
+  });
+}
+
+
 
 
 
