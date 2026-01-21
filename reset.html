@@ -1,41 +1,42 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <title>Restablecer contraseña</title>
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-</head>
-<body>
-  <h3>Restablecer contraseña</h3>
+<script>
+  const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+  const supabase = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
 
-  <input id="p1" type="password" placeholder="Nueva contraseña">
-  <input id="p2" type="password" placeholder="Repetir contraseña">
+  const msg = document.getElementById("msg");
 
-  <button id="btn">Guardar</button>
-  <p id="msg"></p>
+  // 1️⃣ Convertir token del mail en sesión
+  (async () => {
+    const { error } = await supabase.auth.exchangeCodeForSession(
+      window.location.href
+    );
+    if (error) {
+      msg.textContent = "Error de sesión. Abrí nuevamente el link del mail.";
+    }
+  })();
 
-  <script>
-    const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // 2️⃣ Guardar nueva contraseña
+  document.getElementById("btn").onclick = async () => {
+    const p1 = document.getElementById("p1").value;
+    const p2 = document.getElementById("p2").value;
 
-    document.getElementById("btn").onclick = async () => {
-      const p1 = p1.value;
-      const p2 = p2.value;
-      if (!p1 || p1 !== p2) {
-        msg.textContent = "Las contraseñas no coinciden";
-        return;
-      }
+    if (!p1 || p1 !== p2) {
+      msg.textContent = "Las contraseñas no coinciden";
+      return;
+    }
 
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        msg.textContent = "Sesión inválida. Abrí de nuevo el link del mail.";
-        return;
-      }
+    const { error } = await supabase.auth.updateUser({
+      password: p1
+    });
 
-      const { error } = await supabase.auth.updateUser({ password: p1 });
-      msg.textContent = error ? error.message : "Contraseña actualizada. Ya podés volver a ADM.";
-    };
-  </script>
-</body>
-</html>
+    if (error) {
+      msg.textContent = error.message;
+    } else {
+      msg.textContent = "Contraseña actualizada. Ya podés volver al ADM.";
+    }
+  };
+</script>
+
