@@ -82,21 +82,40 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================================================
   // OLVIDÉ MI CONTRASEÑA (CONTROLADO – SIN RECOVERY SUPABASE)
   // ======================================================
-  if (btnForgot) {
-    btnForgot.addEventListener("click", () => {
-      const email = loginEmail.value.trim();
+  //if (btnForgot) {
+    //btnForgot.addEventListener("click", () => {
+      //const email = loginEmail.value.trim();
 
-      if (!email) {
-        alert("Escribí tu email primero.");
-        return;
-      }
+      //if (!email) {
+        //alert("Escribí tu email primero.");
+        //return;
+      //}
 
-      alert(
-        "Recuperación de contraseña deshabilitada.\n" +
-        "Contactá al administrador para restablecer el acceso."
-      );
+      //alert(
+        //"Recuperación de contraseña deshabilitada.\n" +
+        //"Contactá al administrador para restablecer el acceso."
+      //);
+    //});
+  //}
+  btnForgot.addEventListener("click", async () => {
+    const email = loginEmail.value.trim();
+
+    if (!email) {
+      alert("Escribí tu email primero.");
+      return;
+    }
+
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://kusne.github.io/operativos-wsp-adm/reset.html"
     });
-  }
+
+    if (error) {
+      alert("Error enviando mail de recuperación: " + error.message);
+      return;
+    }
+
+    alert("Te enviamos un correo para restablecer la contraseña.");
+  });
 
   // ======================================================
   // ESTADO DE CAMBIOS / PUBLICACIÓN
@@ -213,6 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   actualizarEstadoPublicar();
 
 });
+
 
 
 
