@@ -1,3 +1,17 @@
+// ===== PUENTE GLOBAL (NO SE ROMPE CON DOMContentLoaded NI CON PISADAS) =====
+window.agregarOrden = function () {
+  if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
+  alert("ADM no inicializó agregarOrden. Hacé Ctrl+F5.");
+};
+
+window.publicarOrdenes = function () {
+  if (typeof window.__adm_publicarOrdenes === "function") return window.__adm_publicarOrdenes();
+  alert("ADM no inicializó publicarOrdenes. Hacé Ctrl+F5.");
+};
+
+// Marca de versión para comprobar que este archivo es el que está vivo
+console.log("ADM/adm.js cargado OK - puente global activo");
+
 // ===== CONFIG SUPABASE (SOLO ADM) =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
@@ -191,7 +205,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         limpiarCampos();
         return;
       }
-
+      
       const idx = Number(v);
       if (isNaN(idx)) return;
 
@@ -225,12 +239,41 @@ document.addEventListener("DOMContentLoaded", async () => {
     ordenSeleccionadaIdx = null;
     selectOrdenExistente.value = "";
   }
+    // ======================================================
+  // PARSE FRANJAS (HORARIO - LUGAR - TÍTULO)
+  // ======================================================
+  function parseFranjas(raw) {
+    const lines = String(raw || "")
+      .split("\n")
+      .map(x => x.trim())
+      .filter(Boolean);
+
+    const out = [];
+    const re = /^(.*?)\s*[-–—]\s*(.*?)\s*[-–—]\s*(.*?)$/;
+
+    for (let i = 0; i < lines.length; i++) {
+      const m = re.exec(lines[i]);
+      if (!m) return { ok: false, error: `Error en franja ${i + 1}` };
+      out.push({
+        horario: m[1].trim(),
+        lugar: m[2].trim(),
+        titulo: m[3].trim()
+      });
+    }
+
+    return out.length
+      ? { ok: true, franjas: out }
+      : { ok: false, error: "Franjas vacías" };
+  }
 
   function limpiarOrdenesCaducadas() {
     const ordenes = StorageApp.cargarOrdenes();
     const filtradas = OrdersSync.filtrarCaducadas(ordenes);
     StorageApp.guardarOrdenes(filtradas);
   }
+  document.addEventListener("DOMContentLoaded", async () => {
+   ...
+  });
 
   async function publicarOrdenes() {
     if (!puedePublicar()) {
@@ -264,6 +307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   actualizarEstadoPublicar();
 
 });
+
 
 
 
