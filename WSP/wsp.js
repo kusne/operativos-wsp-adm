@@ -27,15 +27,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
   async function syncOrdenesDesdeServidor() {
   try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/ordenes_store?select=payload&order=updated_at.desc&limit=1`,
-      {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: "Bearer " + SUPABASE_ANON_KEY
-        }
+    const url = `${SUPABASE_URL}/rest/v1/ordenes_store?select=payload&order=updated_at.desc&limit=1&ts=${Date.now()}`;
+
+    const r = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + SUPABASE_ANON_KEY,
+        "Accept": "application/json"
       }
-    );
+    });
+
+    
 
     if (!r.ok) return false;
 
@@ -376,7 +380,11 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
   selOrden.addEventListener("focus", syncAntesDeSeleccion);
+  selOrden.addEventListener("mousedown", syncAntesDeSeleccion);
+  selOrden.addEventListener("click", syncAntesDeSeleccion);
+  selOrden.addEventListener("touchstart", syncAntesDeSeleccion, { passive: true });  
   selOrden.addEventListener("change", cargarHorariosOrden);
+    
   selHorario.addEventListener("change", actualizarDatosFranja);
   selTipo.addEventListener("change", actualizarTipo);
   btnEnviar.addEventListener("click", enviar);
@@ -390,6 +398,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
