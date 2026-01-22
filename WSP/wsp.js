@@ -33,7 +33,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       url.searchParams.set("select", "payload");
       url.searchParams.set("order", "updated_at.desc");
       url.searchParams.set("limit", "1");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
+      //url.searchParams.set("ts", String(Date.now())); // anti-cache
 
       const r = await fetch(url.toString(), {
         method: "GET",
@@ -415,6 +415,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
