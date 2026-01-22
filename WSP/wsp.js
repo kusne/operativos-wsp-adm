@@ -31,7 +31,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
       url.searchParams.set("id", "eq.1");
       url.searchParams.set("select", "payload");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
+      //url.searchParams.set("ts", String(Date.now())); // anti-cache
 
       const r = await fetch(url.toString(), {
         method: "GET",
@@ -413,6 +413,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
