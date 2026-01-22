@@ -264,7 +264,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================================================
   async function publicarOrdenes() {
     const can = btnPublicar?.dataset?.canPublish === "1";
-    if (!habilitado) {
+    if (!can) {
       alert("Primero cargue una orden");
       return;
     }
@@ -368,6 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
