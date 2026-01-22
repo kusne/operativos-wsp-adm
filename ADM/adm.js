@@ -249,12 +249,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================================================
   // DISPARADORES DE CAMBIO (habilitan publicar)
   // ======================================================
-  const watchEls = [numOrdenEl, textoRefEl, franjasEl, fechaVigenciaEl, fechaCaducidadInput, chkFinalizar];
-  watchEls.forEach(el => {
-    if (!el) return;
-    const ev = (el.type === "checkbox") ? "change" : "input";
-    el.addEventListener(ev, () => marcarCambio());
-  });
+  //const watchEls = [numOrdenEl, textoRefEl, franjasEl, fechaVigenciaEl, fechaCaducidadInput, chkFinalizar];
+  //watchEls.forEach(el => {
+    //if (!el) return;
+    //const ev = (el.type === "checkbox") ? "change" : "input";
+    //el.addEventListener(ev, () => marcarCambio());
+  //});
 
   // ======================================================
   // PUBLICAR ÓRDENES
@@ -364,6 +364,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
