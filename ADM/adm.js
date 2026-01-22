@@ -249,15 +249,64 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+    // ======================================================
+  // ELIMINAR ORDEN (con confirmación)
   // ======================================================
-  // DISPARADORES DE CAMBIO (habilitan publicar)
-  // ======================================================
-  //const watchEls = [numOrdenEl, textoRefEl, franjasEl, fechaVigenciaEl, fechaCaducidadInput, chkFinalizar];
-  //watchEls.forEach(el => {
-    //if (!el) return;
-    //const ev = (el.type === "checkbox") ? "change" : "input";
-    //el.addEventListener(ev, () => marcarCambio());
-  //});
+  const btnEliminar = document.getElementById("btnEliminar");
+
+  function eliminarOrden() {
+    // 1) Validar selección
+    if (ordenSeleccionadaIdx === null || ordenSeleccionadaIdx === undefined) {
+      alert("Primero seleccioná una orden para eliminar.");
+      return;
+    }
+
+    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes || !StorageApp.guardarOrdenes) {
+      alert("Error: StorageApp no está disponible.");
+      return;
+    }
+
+    const ordenes = StorageApp.cargarOrdenes();
+    const o = ordenes[ordenSeleccionadaIdx];
+
+    if (!o) {
+      alert("La orden seleccionada no existe (puede haber cambiado).");
+      ordenSeleccionadaIdx = null;
+      actualizarSelector();
+      limpiarCampos();
+      return;
+    }
+
+    // 2) Confirmar
+    const ok = confirm(`¿Está seguro de eliminar la orden "${o.num}"?`);
+    if (!ok) return;
+
+    // 3) Eliminar
+    ordenes.splice(ordenSeleccionadaIdx, 1);
+    StorageApp.guardarOrdenes(ordenes);
+
+    // 4) Reset UI
+    ordenSeleccionadaIdx = null;
+    limpiarCampos();
+    actualizarSelector();
+
+    // 5) Marcar cambio (para habilitar Publicar)
+    marcarCambio();
+
+    alert("Orden eliminada.");
+  }
+
+  // Soporta HTML con onclick="eliminarOrden()"
+  window.eliminarOrden = eliminarOrden;
+
+  // Soporta botón con id="btnEliminar"
+  if (btnEliminar) {
+    btnEliminar.addEventListener("click", (e) => {
+      e.preventDefault();
+      eliminarOrden();
+    });
+  }
+
 
   // ======================================================
   // PUBLICAR ÓRDENES
@@ -367,6 +416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
