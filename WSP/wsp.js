@@ -55,7 +55,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const data = await r.json();
 
       // Esperamos: [{ payload: [...] }]
-      const payload = Array.isArray(data) ? data[0]?.payload : null;
+      if (!Array.isArray(data) || data.length === 0) {
+      // No hay filas (servidor aún sin datos / fila no existe / policies)
+        console.warn("Supabase WSP: sin datos (respuesta vacía).");
+        return false;
+      }
+
+      const payload = data[0]?.payload;
       if (!Array.isArray(payload)) {
         console.error("Supabase WSP: payload inválido. Data:", data);
         return false;
@@ -415,6 +421,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
