@@ -81,7 +81,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function actualizarEstadoPublicar() {
     if (!btnPublicar) return;
-    btnPublicar.disabled = !puedePublicar();
+    const habilitado = puedePublicar();
+    btnPublicar.dataset.canPublish = habilitado ? "1" : "0";
+    btnPublicar.classList.toggle("disabled", !habilitado);
+    
   }
 
   // ======================================================
@@ -260,7 +263,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // PUBLICAR ÓRDENES
   // ======================================================
   async function publicarOrdenes() {
-    if (!puedePublicar()) {
+    const can = btnPublicar?.dataset?.canPublish === "1";
+    if (!habilitado) {
       alert("Primero cargue una orden");
       return;
     }
@@ -364,6 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
