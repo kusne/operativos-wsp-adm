@@ -26,35 +26,50 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
   // ======================================================
   async function syncOrdenesDesdeServidor() {
-  try {
-    const url = `${SUPABASE_URL}/rest/v1/ordenes_store?select=payload&order=updated_at.desc&limit=1&ts=${Date.now()}`;
+    try {
+      // Lee EXACTAMENTE la fila id=1 (misma que actualiza el ADM)
+      const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
+      url.searchParams.set("id", "eq.1");
+      url.searchParams.set("select", "payload");
+      url.searchParams.set("ts", String(Date.now())); // anti-cache
 
-    const r = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + SUPABASE_ANON_KEY,
-        "Accept": "application/json"
+      const r = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: "Bearer " + SUPABASE_ANON_KEY,
+          Accept: "application/json"
+        }
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.error("Supabase WSP NO OK:", r.status, txt);
+        console.error("URL usada:", url.toString());
+        return false;
       }
-    });
+
+      const data = await r.json();
+
+      // Esperamos: [{ payload: [...] }]
+      const payload = Array.isArray(data) ? data[0]?.payload : null;
+      if (!Array.isArray(payload)) {
+        console.error("Supabase WSP: payload inválido. Data:", data);
+        return false;
+      }
+
+      StorageApp.guardarOrdenes(payload);
+      return true;
+
+    } catch (e) {
+      console.error("Error leyendo Supabase:", e);
+      return false;
+    }
+  }
+
 
     
-
-    if (!r.ok) return false;
-
-    const data = await r.json();
-    if (!Array.isArray(data) || !Array.isArray(data[0]?.payload)) return false;
-
-    // ✅ payload ES el array de órdenes
-    StorageApp.guardarOrdenes(data[0].payload);
-    return true;
-
-  } catch (e) {
-    console.error("Error leyendo Supabase:", e);
-    return false;
-  }
-}
 
 async function syncAntesDeSeleccion() {
   if (syncingOrdenes) return;
@@ -398,6 +413,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
