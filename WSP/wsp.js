@@ -402,10 +402,12 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   // ===== Eventos =====
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
-  selOrden.addEventListener("focus", syncAntesDeSeleccion);
-  selOrden.addEventListener("mousedown", syncAntesDeSeleccion);
-  selOrden.addEventListener("click", syncAntesDeSeleccion);
-  selOrden.addEventListener("touchstart", syncAntesDeSeleccion, { passive: true });  
+  
+  selOrden.addEventListener("focus", () => { console.log("selOrden focus"); syncAntesDeSeleccion(); });
+  selOrden.addEventListener("mousedown", () => { console.log("selOrden mousedown"); syncAntesDeSeleccion(); });
+  selOrden.addEventListener("click", () => { console.log("selOrden click"); syncAntesDeSeleccion(); });
+  selOrden.addEventListener("touchstart", () => { console.log("selOrden touchstart"); syncAntesDeSeleccion(); }, { passive: true });
+
   selOrden.addEventListener("change", cargarHorariosOrden);
     
   selHorario.addEventListener("change", actualizarDatosFranja);
@@ -421,6 +423,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
