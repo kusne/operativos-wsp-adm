@@ -1,4 +1,4 @@
-// ===== CONFIG SUPABASE (SOLO LECTURA WSP) ===== 
+// ===== CONFIG SUPABASE (SOLO LECTURA WSP) =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
@@ -22,151 +22,132 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let ordenSeleccionada = null;
   let franjaSeleccionada = null;
   let syncingOrdenes = false;
+
   // ======================================================
   // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
   // ======================================================
-  // ======================================================
-// ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
-// ======================================================
-async function syncOrdenesDesdeServidor() {
-  try {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
-    url.searchParams.set("id", "eq.1");
-    url.searchParams.set("select", "payload");
-    url.searchParams.set("ts", String(Date.now())); // anti-cache
+  async function syncOrdenesDesdeServidor() {
+    try {
+      // Lee SIEMPRE la fila id=1 (misma que actualiza el ADM)
+      const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
+      url.searchParams.set("id", "eq.1");
+      url.searchParams.set("select", "payload");
+      url.searchParams.set("ts", String(Date.now())); // anti-cache
 
-    const r = await fetch(url.toString(), {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + SUPABASE_ANON_KEY,
-        Accept: "application/json"
+      const r = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: "Bearer " + SUPABASE_ANON_KEY,
+          Accept: "application/json"
+        }
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.error("Supabase WSP NO OK:", r.status, txt);
+        console.error("URL usada:", url.toString());
+        return false;
       }
-    });
 
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      console.error("Supabase WSP NO OK:", r.status, txt);
-      console.error("URL usada:", url.toString());
-      return false;
-    }
+      const data = await r.json();
 
-    const data = await r.json();
+      // Si no existe la fila id=1 todavía, Supabase devuelve []
+      if (!Array.isArray(data) || data.length === 0) {
+        console.warn("Supabase WSP: sin fila id=1 (respuesta vacía).");
+        StorageApp.guardarOrdenes([]); // evita mostrar viejo
+        return true;
+      }
 
-    if (!Array.isArray(data) || data.length === 0) {
-      console.warn("Supabase WSP: sin fila id=1 (respuesta vacía).");
-      StorageApp.guardarOrdenes([]); // evita mostrar viejo
+      const payload = data[0]?.payload;
+
+      if (!Array.isArray(payload)) {
+        console.error("Supabase WSP: payload inválido. Data:", data);
+        return false;
+      }
+
+      StorageApp.guardarOrdenes(payload);
+      console.log("Supabase WSP OK. Ordenes:", payload.length);
       return true;
-    }
 
-    const payload = data[0]?.payload;
-
-    if (!Array.isArray(payload)) {
-      console.error("Supabase WSP: payload inválido. Data:", data);
+    } catch (e) {
+      console.error("Error leyendo Supabase:", e);
       return false;
     }
-
-    StorageApp.guardarOrdenes(payload);
-    console.log("Supabase WSP OK. Ordenes:", payload.length);
-    return true;
-
-  } catch (e) {
-    console.error("Error leyendo Supabase:", e);
-    return false;
   }
-}
 
-async function syncAntesDeSeleccion() {
-  if (syncingOrdenes) return false;
-  syncingOrdenes = true;
+  async function syncAntesDeSeleccion() {
+    if (syncingOrdenes) return false;
+    syncingOrdenes = true;
 
-  try {
-    const ok = await syncOrdenesDesdeServidor();
-    cargarOrdenesDisponibles();
-    limpiarSeleccionOrden();
-    return ok;
-  } finally {
-    syncingOrdenes = false;
+    try {
+      const ok = await syncOrdenesDesdeServidor();
+
+      // reconstruí SIEMPRE el selector desde Storage (haya cambios o no)
+      cargarOrdenesDisponibles();
+      limpiarSeleccionOrden();
+
+      return ok;
+    } finally {
+      syncingOrdenes = false;
+    }
   }
-}
-
-
-
-    
-
-async function syncAntesDeSeleccion() {
-  if (syncingOrdenes) return;
-  syncingOrdenes = true;
-
-  try {
-    const ok = await syncOrdenesDesdeServidor();
-    // reconstruí siempre el selector desde Storage (sea ok o no)
-    cargarOrdenesDisponibles();
-    limpiarSeleccionOrden();
-    return ok;
-  } finally {
-    syncingOrdenes = false;
-  }
-}
-
-  syncingOrdenes = false;
-}
 
   // ===== UI =====
-function toggleCargaOrdenes() {
-  elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
-}
+  function toggleCargaOrdenes() {
+    elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
+  }
 
-function limpiarSeleccionOrden() {
-  ordenSeleccionada = null;
-  franjaSeleccionada = null;
-  selOrden.value = "";
-  selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-}
+  function limpiarSeleccionOrden() {
+    ordenSeleccionada = null;
+    franjaSeleccionada = null;
+    selOrden.value = "";
+    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+  }
 
-function importarOrdenes() {
-  const texto = elImportBox.value.trim();
-  if (!texto) return;
+  function importarOrdenes() {
+    const texto = elImportBox.value.trim();
+    if (!texto) return;
 
-  let data;
-  try { data = JSON.parse(texto); }
-  catch { return; }
+    let data;
+    try { data = JSON.parse(texto); }
+    catch { return; }
 
-  if (!Array.isArray(data)) return;
+    if (!Array.isArray(data)) return;
 
-  StorageApp.guardarOrdenes(data);
-  cargarOrdenesDisponibles();
-  limpiarSeleccionOrden();
-}
+    StorageApp.guardarOrdenes(data);
+    cargarOrdenesDisponibles();
+    limpiarSeleccionOrden();
+  }
 
   // ===== Guardia =====
-function getGuardiaInicio() {
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(6, 0, 0, 0);
-  if (now < start) start.setDate(start.getDate() - 1);
-  return start;
-}
+  function getGuardiaInicio() {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(6, 0, 0, 0);
+    if (now < start) start.setDate(start.getDate() - 1);
+    return start;
+  }
 
-function extraerHoraInicio(h) {
-  const m = String(h || "").match(/(\d{1,2})/);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
-  return (n >= 0 && n <= 23) ? n : null;
-}
+  function extraerHoraInicio(h) {
+    const m = String(h || "").match(/(\d{1,2})/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return (n >= 0 && n <= 23) ? n : null;
+  }
 
-function franjaEnGuardia(h) {
-  const hi = extraerHoraInicio(h);
-  if (hi === null) return true;
+  function franjaEnGuardia(h) {
+    const hi = extraerHoraInicio(h);
+    if (hi === null) return true;
 
-  const inicio = getGuardiaInicio();
-  const fin = new Date(inicio.getTime() + 86400000);
-  const f = new Date(inicio);
-  f.setHours(hi, 0, 0, 0);
-  if (f < inicio) f.setDate(f.getDate() + 1);
-  return f >= inicio && f < fin;
-}
+    const inicio = getGuardiaInicio();
+    const fin = new Date(inicio.getTime() + 86400000);
+    const f = new Date(inicio);
+    f.setHours(hi, 0, 0, 0);
+    if (f < inicio) f.setDate(f.getDate() + 1);
+    return f >= inicio && f < fin;
+  }
 
   function cargarOrdenesDisponibles() {
     const hoy = new Date();
@@ -235,131 +216,112 @@ function franjaEnGuardia(h) {
       .map(e => e.value);
     return v.length ? v.join(" " + sep + " ") : "/";
   }
+
   function normalizarTextoWhatsApp(texto) {
-  return texto
-    // pasar todo a minúscula
-    .toLowerCase()
-
-    // quitar símbolos no permitidos
-    .replace(/[*_\-•—–]/g, "")
-    .replace(/[.]{2,}/g, ".")
-
-    // normalizar espacios
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-
-    // capitalizar inicio de oración
-    .replace(/(^|\n|\.\s+)([a-záéíóúñ])/g, (m, p1, p2) => {
-      return p1 + p2.toUpperCase();
-    })
-
-    .trim();
-}
-// ===== NORMALIZADORES DE SALIDA (SOLO WSP) =====
-function normalizarTituloOperativo(txt) {
-  if (!txt) return "";
-
-  let t = txt.toLowerCase().trim();
-
-  // Capitalizar palabras
-  t = t.replace(/\b\w/g, l => l.toUpperCase());
-
-  // Normalizar OP
-  t = t.replace(
-    /\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i,
-    "O.Op. $2"
-  );
-
-  return t;
-}
-
-function normalizarLugar(txt) {
-  if (!txt) return "";
-  return txt
-    .toLowerCase()
-    .trim()
-    .replace(/\b\w/g, l => l.toUpperCase());
-}
-
-function normalizarHorario(txt) {
-  if (!txt) return "";
-
-  let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
-
-  // Solo Finalizar con mayúscula
-  t = t.replace(/\bfinalizar\b/g, "Finalizar");
-
-  return t;
-}
-function resetUI() {
-  // estado interno
-  ordenSeleccionada = null;
-  franjaSeleccionada = null;
-
-  // selects
-  selTipo.value = "";
-  selOrden.value = "";
-  selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-
-  // checkboxes
-  document
-    .querySelectorAll('input[type="checkbox"]')
-    .forEach(c => (c.checked = false));
-
-  // inputs numéricos y textos
-  document
-    .querySelectorAll('input[type="number"], input[type="text"], textarea')
-    .forEach(i => (i.value = ""));
-
-  // observaciones default
-  const obs = document.getElementById("obs");
-  if (obs) obs.value = "";
-
-  // ocultar bloques dependientes
-  divFinaliza.classList.add("hidden");
-  divDetalles.classList.add("hidden");
-}
-function haySeleccion(clase) {
-  return document.querySelectorAll("." + clase + ":checked").length > 0;
-}
-// ===== ENVIAR A WHATSAPP =====
-function enviar() { 
-  if (!ordenSeleccionada || !franjaSeleccionada)return;
-    
-  if (!seleccion("personal")) {
-    alert("Debe seleccionar personal policial.");
-    return;
+    return texto
+      .toLowerCase()
+      .replace(/[*_\-•—–]/g, "")
+      .replace(/[.]{2,}/g, ".")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/(^|\n|\.\s+)([a-záéíóúñ])/g, (m, p1, p2) => p1 + p2.toUpperCase())
+      .trim();
   }
-  if (seleccionLinea("movil", "/") === "/") {
-    alert("Debe seleccionar al menos un móvil.");
-    return;
+
+  // ===== NORMALIZADORES DE SALIDA (SOLO WSP) =====
+  function normalizarTituloOperativo(txt) {
+    if (!txt) return "";
+
+    let t = txt.toLowerCase().trim();
+    t = t.replace(/\b\w/g, l => l.toUpperCase());
+
+    t = t.replace(
+      /\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i,
+      "O.Op. $2"
+    );
+
+    return t;
   }
-  const fecha = new Date().toLocaleDateString("es-AR");
 
-  let bloqueResultados = "";
-  let textoDetalles = "";
-  // ⬇️ SOLO si es FINALIZA agregamos los numerales
-  if (selTipo.value === "FINALIZA") {
-    const vehiculos = document.getElementById("vehiculos")?.value || 0;
-    const personas = document.getElementById("personas")?.value || 0;
-    const testalom = document.getElementById("testalom")?.value || 0;
-    const alco = document.getElementById("Alcotest")?.value || 0;
-    const posSan = document.getElementById("positivaSancionable")?.value || 0;
-    const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
-    const actas = document.getElementById("actas")?.value || 0;
-    const requisa = document.getElementById("Requisa")?.value || 0;
-    const qrz = document.getElementById("qrz")?.value || 0;
-    const dominio = document.getElementById("dominio")?.value || 0;
+  function normalizarLugar(txt) {
+    if (!txt) return "";
+    return txt
+      .toLowerCase()
+      .trim()
+      .replace(/\b\w/g, l => l.toUpperCase());
+  }
 
-    const remision = document.getElementById("Remision")?.value || 0;
-    const retencion = document.getElementById("Retencion")?.value || 0;
-    const prohibicion = document.getElementById("Prohibicion")?.value || 0;
-    const cesion = document.getElementById("Cesion")?.value || 0;
-    
-    
-    
-    
-    bloqueResultados =
+  function normalizarHorario(txt) {
+    if (!txt) return "";
+
+    let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
+    t = t.replace(/\bfinalizar\b/g, "Finalizar");
+    return t;
+  }
+
+  function resetUI() {
+    ordenSeleccionada = null;
+    franjaSeleccionada = null;
+
+    selTipo.value = "";
+    selOrden.value = "";
+    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+
+    document
+      .querySelectorAll('input[type="checkbox"]')
+      .forEach(c => (c.checked = false));
+
+    document
+      .querySelectorAll('input[type="number"], input[type="text"], textarea')
+      .forEach(i => (i.value = ""));
+
+    const obs = document.getElementById("obs");
+    if (obs) obs.value = "";
+
+    divFinaliza.classList.add("hidden");
+    divDetalles.classList.add("hidden");
+  }
+
+  function haySeleccion(clase) {
+    return document.querySelectorAll("." + clase + ":checked").length > 0;
+  }
+
+  // ===== ENVIAR A WHATSAPP =====
+  function enviar() {
+    if (!ordenSeleccionada || !franjaSeleccionada) return;
+
+    if (!seleccion("personal")) {
+      alert("Debe seleccionar personal policial.");
+      return;
+    }
+    if (seleccionLinea("movil", "/") === "/") {
+      alert("Debe seleccionar al menos un móvil.");
+      return;
+    }
+
+    const fecha = new Date().toLocaleDateString("es-AR");
+
+    let bloqueResultados = "";
+    let textoDetalles = "";
+
+    if (selTipo.value === "FINALIZA") {
+      const vehiculos = document.getElementById("vehiculos")?.value || 0;
+      const personas = document.getElementById("personas")?.value || 0;
+      const testalom = document.getElementById("testalom")?.value || 0;
+      const alco = document.getElementById("Alcotest")?.value || 0;
+      const posSan = document.getElementById("positivaSancionable")?.value || 0;
+      const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
+      const actas = document.getElementById("actas")?.value || 0;
+      const requisa = document.getElementById("Requisa")?.value || 0;
+      const qrz = document.getElementById("qrz")?.value || 0;
+      const dominio = document.getElementById("dominio")?.value || 0;
+
+      const remision = document.getElementById("Remision")?.value || 0;
+      const retencion = document.getElementById("Retencion")?.value || 0;
+      const prohibicion = document.getElementById("Prohibicion")?.value || 0;
+      const cesion = document.getElementById("Cesion")?.value || 0;
+
+      bloqueResultados =
 `Resultados:
 Vehículos Fiscalizados: (${vehiculos})
 Personas Identificadas: (${personas})
@@ -377,15 +339,17 @@ Retención: (${retencion})
 Prohibición de Circulación: (${prohibicion})
 Cesión de Conducción: (${cesion})
 `;
- const detallesTexto = document.getElementById("detalles")?.value?.trim();
- if (detallesTexto) {
-    textoDetalles =
+
+      const detallesTexto = document.getElementById("detalles")?.value?.trim();
+      if (detallesTexto) {
+        textoDetalles =
 `Detalles:
 ${detallesTexto}
 `;
+      }
     }
-  }
-  const texto =
+
+    const texto =
 `Policia de la Provincia de Santa Fe - Guardia Provincial
 Brigada Motorizada Centro Norte
 Tercio Charly
@@ -408,41 +372,29 @@ ${textoDetalles}
 Observaciones:
 ${document.getElementById("obs")?.value || "Sin novedad"}`;
 
-  
-  const textoFinal = texto.replace(/\n{2,}/g, "\n");
-  // 🔹 RESET DE LA UI
-  resetUI();
-  // 🔹 ENVÍO A WHATSAPP
-  // 🔹 permitir repaint antes de salir
-  setTimeout(() => {
-    window.location.href =
-      "https://wa.me/?text=" + encodeURIComponent(textoFinal);
-  }, 0);
- }
+    const textoFinal = texto.replace(/\n{2,}/g, "\n");
+
+    resetUI();
+
+    setTimeout(() => {
+      window.location.href =
+        "https://wa.me/?text=" + encodeURIComponent(textoFinal);
+    }, 0);
+  }
 
   // ===== Eventos =====
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
 
-  selOrden.addEventListener("pointerdown", async (e) => {
-    // frena que se abra con opciones viejas
-    e.preventDefault();
-
-    await syncAntesDeSeleccion();
-
-    // ahora sí, abrilo
-    selOrden.focus();
-    selOrden.click();
-  });
- 
-  
+  // Refresca ANTES de intentar elegir una orden (sin hacks de preventDefault)
+  selOrden.addEventListener("focus", syncAntesDeSeleccion);
+  selOrden.addEventListener("click", syncAntesDeSeleccion);
+  selOrden.addEventListener("touchstart", syncAntesDeSeleccion, { passive: true });
 
   selOrden.addEventListener("change", cargarHorariosOrden);
-    
   selHorario.addEventListener("change", actualizarDatosFranja);
   selTipo.addEventListener("change", actualizarTipo);
   btnEnviar.addEventListener("click", enviar);
-  
 
   // ===== Init =====
   (async function init() {
@@ -452,27 +404,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
