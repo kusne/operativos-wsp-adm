@@ -29,11 +29,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     try {
       // Lee EXACTAMENTE la fila id=1 (misma que actualiza el ADM)
       const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
-      //url.searchParams.set("id", "eq.1");
+      url.searchParams.set("id", "eq.1");
       url.searchParams.set("select", "payload");
-      url.searchParams.set("order", "updated_at.desc");
-      url.searchParams.set("limit", "1");
-      //url.searchParams.set("ts", String(Date.now())); // anti-cache
+      //url.searchParams.set("order", "updated_at.desc");
+      //url.searchParams.set("limit", "1");
+      url.searchParams.set("ts", String(Date.now())); // anti-cache
 
       const r = await fetch(url.toString(), {
         method: "GET",
@@ -57,7 +57,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       // Esperamos: [{ payload: [...] }]
       if (!Array.isArray(data) || data.length === 0) {
       // No hay filas (servidor aún sin datos / fila no existe / policies)
-        console.warn("Supabase WSP: sin datos (respuesta vacía).");
+        console.warn("Supabase WSP: sin fila id=1  (respuesta vacía).");
         StorageApp.guardarOrdenes([]);   // imp
         return false;
       }
@@ -84,11 +84,16 @@ async function syncAntesDeSeleccion() {
   if (syncingOrdenes) return;
   syncingOrdenes = true;
 
-  const ok = await syncOrdenesDesdeServidor();
-  if (ok) {
+  try {
+    const ok = await syncOrdenesDesdeServidor();
+    // reconstruí siempre el selector desde Storage (sea ok o no)
     cargarOrdenesDisponibles();
     limpiarSeleccionOrden();
+    return ok;
+  } finally {
+    syncingOrdenes = false;
   }
+}
 
   syncingOrdenes = false;
 }
@@ -403,11 +408,18 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   // ===== Eventos =====
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
+  selOrden.addEventListener("pointerdown", async (e) => {
+    // frena que se abra con opciones viejas
+    e.preventDefault();
+
+    await syncAntesDeSeleccion();
+
+    // ahora sí, abrilo
+    selOrden.focus();
+    selOrden.click();
+  });
+ 
   
-  selOrden.addEventListener("focus", () => { console.log("selOrden focus"); syncAntesDeSeleccion(); });
-  selOrden.addEventListener("mousedown", () => { console.log("selOrden mousedown"); syncAntesDeSeleccion(); });
-  selOrden.addEventListener("click", () => { console.log("selOrden click"); syncAntesDeSeleccion(); });
-  selOrden.addEventListener("touchstart", () => { console.log("selOrden touchstart"); syncAntesDeSeleccion(); }, { passive: true });
 
   selOrden.addEventListener("change", cargarHorariosOrden);
     
@@ -424,6 +436,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
