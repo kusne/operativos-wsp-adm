@@ -347,18 +347,36 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   }
 
   // ===== Eventos =====
-  elToggleCarga.addEventListener("change", toggleCargaOrdenes);
-  btnCargarOrdenes.addEventListener("click", importarOrdenes);
+  if (elToggleCarga) elToggleCarga.addEventListener("change", toggleCargaOrdenes);
+  if (btnCargarOrdenes) btnCargarOrdenes.addEventListener("click", importarOrdenes);
 
-  // Refresca antes de que el usuario abra / use el selector
-  selOrden.addEventListener("focus", syncAntesDeSeleccion);
-  selOrden.addEventListener("mousedown", syncAntesDeSeleccion);
-  selOrden.addEventListener("touchstart", syncAntesDeSeleccion, { passive: true });
+  if (selOrden) {
+    // Refresca ANTES de abrir el selector (mouse/touch)
+    selOrden.addEventListener("pointerdown", async (e) => {
+      // evita que el select se abra con opciones viejas
+      e.preventDefault();
 
-  selOrden.addEventListener("change", cargarHorariosOrden);
-  selHorario.addEventListener("change", actualizarDatosFranja);
-  selTipo.addEventListener("change", actualizarTipo);
-  btnEnviar.addEventListener("click", enviar);
+      await syncAntesDeSeleccion();
+
+      // abrir después del sync
+      selOrden.focus();
+      // setTimeout para evitar comportamientos raros en algunos browsers
+      setTimeout(() => selOrden.click(), 0);
+    });
+
+    // Respaldo por teclado (Tab). Evita duplicar si venís de pointerdown.
+    selOrden.addEventListener("focus", () => {
+      // si el sync ya está corriendo, syncAntesDeSeleccion() no hace nada (por syncingOrdenes)
+      syncAntesDeSeleccion();
+    });
+
+    selOrden.addEventListener("change", cargarHorariosOrden);
+  }
+
+  if (selHorario) selHorario.addEventListener("change", actualizarDatosFranja);
+  if (selTipo) selTipo.addEventListener("change", actualizarTipo);
+  if (btnEnviar) btnEnviar.addEventListener("click", enviar);
+
 
   // ===== Init =====
   (async function init() {
@@ -368,6 +386,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
