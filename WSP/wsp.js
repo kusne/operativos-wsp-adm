@@ -28,11 +28,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
   async function syncOrdenesDesdeServidor() {
     try {
-      // Lee SIEMPRE la fila id=1 (misma que actualiza el ADM)
+      // Siempre está en id=1 (según tu diseño del ADM)
       const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
       url.searchParams.set("select", "payload");
       url.searchParams.set("id", "eq.1");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
 
       const r = await fetch(url.toString(), {
         method: "GET",
@@ -40,7 +39,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: "Bearer " + SUPABASE_ANON_KEY,
-          Accept: "application/json"
+          Accept: "application/json",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache"
         }
       });
 
@@ -53,10 +54,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
       const data = await r.json();
 
-      // Si no existe la fila id=1 todavía, Supabase devuelve []
+      // Si NO existe la fila o viene vacía, limpiamos storage para que NO queden órdenes viejas
       if (!Array.isArray(data) || data.length === 0) {
-        console.warn("Supabase WSP: sin fila id=1 (respuesta vacía).");
-        StorageApp.guardarOrdenes([]); // evita mostrar viejo
+        console.warn("Supabase WSP: sin fila id=1 (respuesta vacía). Se limpia Storage.");
+        StorageApp.guardarOrdenes([]);
         return true;
       }
 
@@ -84,7 +85,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     try {
       const ok = await syncOrdenesDesdeServidor();
 
-      // reconstruí SIEMPRE el selector desde Storage (haya cambios o no)
+      // SIEMPRE reconstruimos el selector desde Storage (si vinieron 0, queda vacío correctamente)
       cargarOrdenesDisponibles();
       limpiarSeleccionOrden();
 
@@ -202,9 +203,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     divDetalles.classList.toggle("hidden", !fin);
   }
 
-  // ======================================================
-  // ===== FUNCIONES QUE FALTABAN (CLAVE) =================
-  // ======================================================
   function seleccion(clase) {
     return Array.from(document.querySelectorAll("." + clase + ":checked"))
       .map(e => e.value)
@@ -217,43 +215,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return v.length ? v.join(" " + sep + " ") : "/";
   }
 
-  function normalizarTextoWhatsApp(texto) {
-    return texto
-      .toLowerCase()
-      .replace(/[*_\-•—–]/g, "")
-      .replace(/[.]{2,}/g, ".")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/(^|\n|\.\s+)([a-záéíóúñ])/g, (m, p1, p2) => p1 + p2.toUpperCase())
-      .trim();
-  }
-
-  // ===== NORMALIZADORES DE SALIDA (SOLO WSP) =====
   function normalizarTituloOperativo(txt) {
     if (!txt) return "";
-
     let t = txt.toLowerCase().trim();
     t = t.replace(/\b\w/g, l => l.toUpperCase());
-
-    t = t.replace(
-      /\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i,
-      "O.Op. $2"
-    );
-
+    t = t.replace(/\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i, "O.Op. $2");
     return t;
   }
 
   function normalizarLugar(txt) {
     if (!txt) return "";
-    return txt
-      .toLowerCase()
-      .trim()
-      .replace(/\b\w/g, l => l.toUpperCase());
+    return txt.toLowerCase().trim().replace(/\b\w/g, l => l.toUpperCase());
   }
 
   function normalizarHorario(txt) {
     if (!txt) return "";
-
     let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
     t = t.replace(/\bfinalizar\b/g, "Finalizar");
     return t;
@@ -267,13 +243,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     selOrden.value = "";
     selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
 
-    document
-      .querySelectorAll('input[type="checkbox"]')
-      .forEach(c => (c.checked = false));
-
-    document
-      .querySelectorAll('input[type="number"], input[type="text"], textarea')
-      .forEach(i => (i.value = ""));
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => (c.checked = false));
+    document.querySelectorAll('input[type="number"], input[type="text"], textarea').forEach(i => (i.value = ""));
 
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
@@ -282,11 +253,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     divDetalles.classList.add("hidden");
   }
 
-  function haySeleccion(clase) {
-    return document.querySelectorAll("." + clase + ":checked").length > 0;
-  }
-
-  // ===== ENVIAR A WHATSAPP =====
   function enviar() {
     if (!ordenSeleccionada || !franjaSeleccionada) return;
 
@@ -377,8 +343,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     resetUI();
 
     setTimeout(() => {
-      window.location.href =
-        "https://wa.me/?text=" + encodeURIComponent(textoFinal);
+      window.location.href = "https://wa.me/?text=" + encodeURIComponent(textoFinal);
     }, 0);
   }
 
@@ -386,9 +351,9 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
 
-  // Refresca ANTES de intentar elegir una orden (sin hacks de preventDefault)
+  // Refresca antes de que el usuario abra / use el selector
   selOrden.addEventListener("focus", syncAntesDeSeleccion);
-  selOrden.addEventListener("click", syncAntesDeSeleccion);
+  selOrden.addEventListener("mousedown", syncAntesDeSeleccion);
   selOrden.addEventListener("touchstart", syncAntesDeSeleccion, { passive: true });
 
   selOrden.addEventListener("change", cargarHorariosOrden);
@@ -404,26 +369,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
