@@ -138,7 +138,7 @@
       const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
       url.searchParams.set("id", "eq.1");
       url.searchParams.set("select", "payload");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
+      
 
       const r = await fetch(url.toString(), {
         method: "GET",
@@ -190,8 +190,12 @@
   }
 
   async function syncAntesDeSeleccion() {
+    const now = Date.now();
     if (syncingOrdenes) return false;
+    if (now - lastSyncAt < 1500) return false; // debounce 1.5s
+    
     syncingOrdenes = true;
+    lastSyncAt = now;
 
     try {
       const ok = await syncOrdenesDesdeServidor();
@@ -202,6 +206,10 @@
       syncingOrdenes = false;
     }
   }
+  // SOLO UNO (no focus + no mousedown + no touchstart)
+  selOrden.addEventListener("pointerdown", () => {
+    syncAntesDeSeleccion();
+  });
 
   // ======================================================
   // ===== UI / selector ==================================
@@ -509,6 +517,7 @@ ${obs}`.replace(/\n{2,}/g, "\n");
     reconstruirSelectorDesdeStorage();
   })();
 })();
+
 
 
 
