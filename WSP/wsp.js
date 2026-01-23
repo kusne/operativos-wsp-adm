@@ -481,10 +481,7 @@ ${obs}`.replace(/\n{2,}/g, "\n");
 
   if (selOrden) {
     selOrden.addEventListener("pointerdown", async (e) => {
-      e.preventDefault();
-      await syncAntesDeSeleccion();
-      selOrden.focus();
-      setTimeout(() => selOrden.click(), 0);
+      syncAntesDeSeleccion(); // corre en background y actualiza el storage + opciones
     });
 
     // teclado (Tab)
@@ -517,6 +514,7 @@ ${obs}`.replace(/\n{2,}/g, "\n");
     reconstruirSelectorDesdeStorage();
   })();
 })();
+
 
 
 
