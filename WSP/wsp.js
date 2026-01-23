@@ -57,7 +57,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       // Si NO existe la fila o viene vacía, limpiamos storage para que NO queden órdenes viejas
       if (!Array.isArray(data) || data.length === 0) {
         console.warn("Supabase WSP: sin fila id=1 (respuesta vacía). Se limpia Storage.");
-        StorageApp.guardarOrdenes([]);
         return true;
       }
 
@@ -369,6 +368,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
