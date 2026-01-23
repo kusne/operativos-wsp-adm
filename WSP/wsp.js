@@ -25,57 +25,72 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
   // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
   // ======================================================
-  async function syncOrdenesDesdeServidor() {
-    try {
-      // Lee EXACTAMENTE la fila id=1 (misma que actualiza el ADM)
-      const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
-      url.searchParams.set("id", "eq.1");
-      url.searchParams.set("select", "payload");
-      //url.searchParams.set("order", "updated_at.desc");
-      //url.searchParams.set("limit", "1");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
+  // ======================================================
+// ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
+// ======================================================
+async function syncOrdenesDesdeServidor() {
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
+    url.searchParams.set("id", "eq.1");
+    url.searchParams.set("select", "payload");
+    url.searchParams.set("ts", String(Date.now())); // anti-cache
 
-      const r = await fetch(url.toString(), {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: "Bearer " + SUPABASE_ANON_KEY,
-          Accept: "application/json"
-        }
-      });
-
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("Supabase WSP NO OK:", r.status, txt);
-        console.error("URL usada:", url.toString());
-        return false;
+    const r = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + SUPABASE_ANON_KEY,
+        Accept: "application/json"
       }
+    });
 
-      const data = await r.json();
-
-      // Esperamos: [{ payload: [...] }]
-      if (!Array.isArray(data) || data.length === 0) {
-      // No hay filas (servidor aún sin datos / fila no existe / policies)
-        console.warn("Supabase WSP: sin fila id=1  (respuesta vacía).");
-        StorageApp.guardarOrdenes([]);   // imp
-        return false;
-      }
-
-      const payload = data[0]?.payload;
-      if (!Array.isArray(payload)) {
-        console.error("Supabase WSP: payload inválido. Data:", data);
-        return false;
-      }
-
-      StorageApp.guardarOrdenes(payload);
-      return true;
-
-    } catch (e) {
-      console.error("Error leyendo Supabase:", e);
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.error("Supabase WSP NO OK:", r.status, txt);
+      console.error("URL usada:", url.toString());
       return false;
     }
+
+    const data = await r.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      console.warn("Supabase WSP: sin fila id=1 (respuesta vacía).");
+      StorageApp.guardarOrdenes([]); // evita mostrar viejo
+      return true;
+    }
+
+    const payload = data[0]?.payload;
+
+    if (!Array.isArray(payload)) {
+      console.error("Supabase WSP: payload inválido. Data:", data);
+      return false;
+    }
+
+    StorageApp.guardarOrdenes(payload);
+    console.log("Supabase WSP OK. Ordenes:", payload.length);
+    return true;
+
+  } catch (e) {
+    console.error("Error leyendo Supabase:", e);
+    return false;
   }
+}
+
+async function syncAntesDeSeleccion() {
+  if (syncingOrdenes) return false;
+  syncingOrdenes = true;
+
+  try {
+    const ok = await syncOrdenesDesdeServidor();
+    cargarOrdenesDisponibles();
+    limpiarSeleccionOrden();
+    return ok;
+  } finally {
+    syncingOrdenes = false;
+  }
+}
+
 
 
     
@@ -408,6 +423,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
   // ===== Eventos =====
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
+
   selOrden.addEventListener("pointerdown", async (e) => {
     // frena que se abra con opciones viejas
     e.preventDefault();
@@ -436,6 +452,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
