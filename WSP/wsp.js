@@ -114,59 +114,59 @@ async function syncAntesDeSeleccion() {
 }
 
   // ===== UI =====
-  function toggleCargaOrdenes() {
-    elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
-  }
+function toggleCargaOrdenes() {
+  elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
+}
 
-  function limpiarSeleccionOrden() {
-    ordenSeleccionada = null;
-    franjaSeleccionada = null;
-    selOrden.value = "";
-    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-  }
+function limpiarSeleccionOrden() {
+  ordenSeleccionada = null;
+  franjaSeleccionada = null;
+  selOrden.value = "";
+  selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+}
 
-  function importarOrdenes() {
-    const texto = elImportBox.value.trim();
-    if (!texto) return;
+function importarOrdenes() {
+  const texto = elImportBox.value.trim();
+  if (!texto) return;
 
-    let data;
-    try { data = JSON.parse(texto); }
-    catch { return; }
+  let data;
+  try { data = JSON.parse(texto); }
+  catch { return; }
 
-    if (!Array.isArray(data)) return;
+  if (!Array.isArray(data)) return;
 
-    StorageApp.guardarOrdenes(data);
-    cargarOrdenesDisponibles();
-    limpiarSeleccionOrden();
-  }
+  StorageApp.guardarOrdenes(data);
+  cargarOrdenesDisponibles();
+  limpiarSeleccionOrden();
+}
 
   // ===== Guardia =====
-  function getGuardiaInicio() {
-    const now = new Date();
-    const start = new Date(now);
-    start.setHours(6, 0, 0, 0);
-    if (now < start) start.setDate(start.getDate() - 1);
-    return start;
-  }
+function getGuardiaInicio() {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(6, 0, 0, 0);
+  if (now < start) start.setDate(start.getDate() - 1);
+  return start;
+}
 
-  function extraerHoraInicio(h) {
-    const m = String(h || "").match(/(\d{1,2})/);
-    if (!m) return null;
-    const n = parseInt(m[1], 10);
-    return (n >= 0 && n <= 23) ? n : null;
-  }
+function extraerHoraInicio(h) {
+  const m = String(h || "").match(/(\d{1,2})/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return (n >= 0 && n <= 23) ? n : null;
+}
 
-  function franjaEnGuardia(h) {
-    const hi = extraerHoraInicio(h);
-    if (hi === null) return true;
+function franjaEnGuardia(h) {
+  const hi = extraerHoraInicio(h);
+  if (hi === null) return true;
 
-    const inicio = getGuardiaInicio();
-    const fin = new Date(inicio.getTime() + 86400000);
-    const f = new Date(inicio);
-    f.setHours(hi, 0, 0, 0);
-    if (f < inicio) f.setDate(f.getDate() + 1);
-    return f >= inicio && f < fin;
-  }
+  const inicio = getGuardiaInicio();
+  const fin = new Date(inicio.getTime() + 86400000);
+  const f = new Date(inicio);
+  f.setHours(hi, 0, 0, 0);
+  if (f < inicio) f.setDate(f.getDate() + 1);
+  return f >= inicio && f < fin;
+}
 
   function cargarOrdenesDisponibles() {
     const hoy = new Date();
@@ -452,6 +452,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
