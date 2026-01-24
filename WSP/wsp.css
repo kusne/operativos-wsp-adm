@@ -5,10 +5,10 @@
 
 :root{
   /* Ajustes finos (tocá solo estos 2 si querés calibrar) */
-  --check-col-x: 62%;   /* columna de checks: 55% a 70% suele ser ideal */
-  --check-col-y: 6px;   /* baja/sube la columna entera (probá 4px / 8px) */
+  --check-col-x: 100%;   /* columna de checks: 55% a 70% suele ser ideal */
+  --check-col-y: 35px;   /* baja/sube la columna entera (probá 4px / 8px) */
 
-  --check-scale: 1.2;
+  --check-scale: 1.5;
 }
 
 body {
@@ -131,3 +131,4 @@ label.check > input[type="checkbox"]{
   position: relative;
   top: var(--check-col-y);
 }
+
