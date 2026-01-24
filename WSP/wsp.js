@@ -121,11 +121,29 @@ async function syncAntesDeSeleccion() {
   }
 
   function extraerHoraInicio(h) {
-    const m = String(h || "").match(/(\d{1,2})/);
+    const s = String(h || "").toLowerCase();
+
+    // Buscar hh:mm primero
+    let m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return (n >= 0 && n <= 23) ? n : null;
+    }
+
+    // Buscar primer hora "al inicio" o después de palabras típicas
+    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return (n >= 0 && n <= 23) ? n : null;
+    }
+
+    // Fallback: primer número del string
+    m = s.match(/\b(\d{1,2})\b/);
     if (!m) return null;
     const n = parseInt(m[1], 10);
     return (n >= 0 && n <= 23) ? n : null;
   }
+
 
   function franjaEnGuardia(h) {
     const hi = extraerHoraInicio(h);
@@ -138,6 +156,23 @@ async function syncAntesDeSeleccion() {
     if (f < inicio) f.setDate(f.getDate() + 1);
     return f >= inicio && f < fin;
   }
+  function parseVigenciaFlexible(v) {
+    // 1) intentar con el parser existente
+    try {
+      const d = Dates?.parseVigenciaToDate?.(v);
+      if (d instanceof Date && !isNaN(d)) return d;
+    } catch {}
+
+    // 2) aceptar YYYY-MM-DD
+    const iso = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+    // 3) aceptar DD/MM/YYYY
+    const latam = String(v || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (latam) return new Date(Number(latam[3]), Number(latam[2]) - 1, Number(latam[1]));
+
+    return null;
+  }
 
   function cargarOrdenesDisponibles() {
     const hoy = new Date();
@@ -149,8 +184,8 @@ async function syncAntesDeSeleccion() {
     selOrden.innerHTML = '<option value="">Seleccionar</option>';
 
     ordenes.forEach((o, i) => {
-      //const v = Dates.parseVigenciaToDate(o.vigencia);
-      //if (!v || v > hoy) return;
+      const v = parseVigenciaFlexible(o.vigencia);
+      if (!v || v > hoy) return;
       if (!o.franjas?.some(f => franjaEnGuardia(f.horario))) return;
 
       const op = document.createElement("option");
@@ -411,6 +446,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
