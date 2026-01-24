@@ -1,13 +1,9 @@
-// ===== CONFIG SUPABASE (SOLO LECTURA WSP) =====
+// ===== CONFIG SUPABASE (SOLO LECTURA WSP) ===== 
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 (function () {
-  "use strict";
-
-  // ======================================================
-  // ===== DOM refs =======================================
-  // ======================================================
+  // ===== DOM refs =====
   const elToggleCarga = document.getElementById("toggleCarga");
   const elBloqueCarga = document.getElementById("bloqueCargaOrdenes");
   const elImportBox = document.getElementById("importBox");
@@ -22,168 +18,54 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const btnEnviar = document.getElementById("btnEnviar");
 
-  // Validación mínima de IDs críticos
-  const required = [
-    ["toggleCarga", elToggleCarga],
-    ["bloqueCargaOrdenes", elBloqueCarga],
-    ["importBox", elImportBox],
-    ["btnCargarOrdenes", btnCargarOrdenes],
-    ["tipo", selTipo],
-    ["orden", selOrden],
-    ["horario", selHorario],
-    ["finaliza", divFinaliza],
-    ["bloqueDetalles", divDetalles],
-    ["btnEnviar", btnEnviar]
-  ];
-
-  const faltantes = required.filter(([, el]) => !el).map(([id]) => id);
-  if (faltantes.length) {
-    console.error("WSP: faltan IDs en el HTML:", faltantes.join(", "));
-    return;
-  }
-
-  // ======================================================
-  // ===== Estado =========================================
-  // ======================================================
+  // ===== Estado =====
   let ordenSeleccionada = null;
   let franjaSeleccionada = null;
-
   let syncingOrdenes = false;
-  let lastSyncAt = 0;
-  const MIN_SYNC_INTERVAL_MS = 1500;
-
-  // ======================================================
-  // ===== Helpers de dependencias (robustez) ==============
-  // ======================================================
-  function safeCargarOrdenes() {
-    try {
-      return (typeof StorageApp !== "undefined" && StorageApp.cargarOrdenes)
-        ? (StorageApp.cargarOrdenes() || [])
-        : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function safeGuardarOrdenes(arr) {
-    try {
-      if (typeof StorageApp !== "undefined" && StorageApp.guardarOrdenes) {
-        StorageApp.guardarOrdenes(Array.isArray(arr) ? arr : []);
-      }
-    } catch (e) {
-      console.warn("WSP: no pude guardar en StorageApp:", e);
-    }
-  }
-
-  function safeFiltrarCaducadas(arr) {
-    try {
-      if (typeof OrdersSync !== "undefined" && OrdersSync.filtrarCaducadas) {
-        return OrdersSync.filtrarCaducadas(arr);
-      }
-      return arr;
-    } catch {
-      return arr;
-    }
-  }
-
-  function safeParseVigenciaToDate(vigencia) {
-    try {
-      if (typeof Dates !== "undefined" && Dates.parseVigenciaToDate) {
-        return Dates.parseVigenciaToDate(vigencia);
-      }
-    } catch {}
-    // fallback: intenta YYYY-MM-DD
-    if (typeof vigencia === "string" && /^\d{4}-\d{2}-\d{2}$/.test(vigencia)) {
-      const d = new Date(vigencia + "T00:00:00");
-      return isNaN(d.getTime()) ? null : d;
-    }
-    return null;
-  }
-
   // ======================================================
   // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
   // ======================================================
   async function syncOrdenesDesdeServidor() {
-    try {
-      const url = new URL(`${SUPABASE_URL}/rest/v1/ordenes_store`);
-      url.searchParams.set("select", "payload");
-      url.searchParams.set("id", "eq.1");
-      url.searchParams.set("ts", String(Date.now())); // anti-cache
-
-      const r = await fetch(url.toString(), {
-        method: "GET",
-        cache: "no-store",
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/ordenes_store?select=payload&order=updated_at.desc&limit=1`,
+      {
         headers: {
           apikey: SUPABASE_ANON_KEY,
-          Authorization: "Bearer " + SUPABASE_ANON_KEY,
-          Accept: "application/json",
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache"
+          Authorization: "Bearer " + SUPABASE_ANON_KEY
         }
-      });
-
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("Supabase WSP NO OK:", r.status, txt);
-        console.error("URL usada:", url.toString());
-        return false;
       }
+    );
 
-      const data = await r.json();
+    if (!r.ok) return false;
 
-      // CLAVE (pedido tuyo): si viene vacío, NO borro el storage local
-      if (!Array.isArray(data) || data.length === 0) {
-        console.warn("Supabase WSP: respuesta vacía (sin fila id=1). Mantengo Storage local.");
-        return true;
-      }
+    const data = await r.json();
+    if (!Array.isArray(data) || !Array.isArray(data[0]?.payload)) return false;
 
-      const payload = data[0]?.payload;
+    // ✅ payload ES el array de órdenes
+    StorageApp.guardarOrdenes(data[0].payload);
+    return true;
 
-      if (!Array.isArray(payload)) {
-        console.error("Supabase WSP: payload inválido. Data:", data);
-        return false;
-      }
+  } catch (e) {
+    console.error("Error leyendo Supabase:", e);
+    return false;
+  }
+}
 
-      // Guardamos EXACTO lo que viene (incluye vigencia/caducidad para que WSP gestione)
-      safeGuardarOrdenes(payload);
+async function syncAntesDeSeleccion() {
+  if (syncingOrdenes) return;
+  syncingOrdenes = true;
 
-      console.log("Supabase WSP OK. Ordenes:", payload.length);
-      return true;
-
-    } catch (e) {
-      console.error("Error leyendo Supabase:", e);
-      return false;
-    }
+  const ok = await syncOrdenesDesdeServidor();
+  if (ok) {
+    cargarOrdenesDisponibles();
+    limpiarSeleccionOrden();
   }
 
-  async function syncAntesDeSeleccion() {
-    const now = Date.now();
+  syncingOrdenes = false;
+}
 
-    if (syncingOrdenes) return false;
-
-    // throttle para evitar loops y 400/requests duplicadas
-    if (now - lastSyncAt < MIN_SYNC_INTERVAL_MS) {
-      cargarOrdenesDisponibles();
-      return true;
-    }
-
-    syncingOrdenes = true;
-    try {
-      const ok = await syncOrdenesDesdeServidor();
-      lastSyncAt = Date.now();
-
-      // reconstruyo SIEMPRE desde storage local (sea ok o no)
-      cargarOrdenesDisponibles();
-      limpiarSeleccionOrden();
-      return ok;
-    } finally {
-      syncingOrdenes = false;
-    }
-  }
-
-  // ======================================================
-  // ===== UI =============================================
-  // ======================================================
+  // ===== UI =====
   function toggleCargaOrdenes() {
     elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
   }
@@ -196,30 +78,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function importarOrdenes() {
-    const texto = (elImportBox.value || "").trim();
+    const texto = elImportBox.value.trim();
     if (!texto) return;
 
     let data;
-    try {
-      data = JSON.parse(texto);
-    } catch {
-      console.warn("Import: JSON inválido");
-      return;
-    }
+    try { data = JSON.parse(texto); }
+    catch { return; }
 
-    if (!Array.isArray(data)) {
-      console.warn("Import: se esperaba un array de órdenes");
-      return;
-    }
+    if (!Array.isArray(data)) return;
 
-    safeGuardarOrdenes(data);
+    StorageApp.guardarOrdenes(data);
     cargarOrdenesDisponibles();
     limpiarSeleccionOrden();
   }
 
-  // ======================================================
-  // ===== Guardia ========================================
-  // ======================================================
+  // ===== Guardia =====
   function getGuardiaInicio() {
     const now = new Date();
     const start = new Date(now);
@@ -241,11 +114,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const inicio = getGuardiaInicio();
     const fin = new Date(inicio.getTime() + 86400000);
-
     const f = new Date(inicio);
     f.setHours(hi, 0, 0, 0);
     if (f < inicio) f.setDate(f.getDate() + 1);
-
     return f >= inicio && f < fin;
   }
 
@@ -253,30 +124,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    // 1) leo del storage local
-    let ordenes = safeCargarOrdenes();
+    let ordenes = OrdersSync.filtrarCaducadas(StorageApp.cargarOrdenes());
+    StorageApp.guardarOrdenes(ordenes);
 
-    // 2) filtro caducadas (si tu OrdersSync lo soporta)
-    ordenes = safeFiltrarCaducadas(ordenes);
-
-    // 3) guardo lo filtrado para que se “limpie” localmente con caducidad
-    safeGuardarOrdenes(ordenes);
-
-    // 4) poblo selector
     selOrden.innerHTML = '<option value="">Seleccionar</option>';
 
     ordenes.forEach((o, i) => {
-      const v = safeParseVigenciaToDate(o.vigencia);
-
-      // mostrar a partir de vigencia (incluye hoy)
+      const v = Dates.parseVigenciaToDate(o.vigencia);
       if (!v || v > hoy) return;
-
-      // debe tener franjas dentro de la guardia actual
       if (!o.franjas?.some(f => franjaEnGuardia(f.horario))) return;
 
       const op = document.createElement("option");
-      op.value = String(i);
-      op.text = `${o.num || ""} ${o.textoRef || ""}`.trim();
+      op.value = i;
+      op.text = `${o.num} ${o.textoRef || ""}`.trim();
       selOrden.appendChild(op);
     });
   }
@@ -285,19 +145,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     ordenSeleccionada = null;
     franjaSeleccionada = null;
 
-    const ordenes = safeCargarOrdenes();
+    const ordenes = StorageApp.cargarOrdenes();
     const idx = Number(selOrden.value);
-    if (!Number.isFinite(idx) || !ordenes[idx]) return;
+    if (!ordenes[idx]) return;
 
     ordenSeleccionada = ordenes[idx];
     selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
 
-    (ordenSeleccionada.franjas || []).forEach((f, i) => {
-      if (!f) return;
+    ordenSeleccionada.franjas.forEach((f, i) => {
       if (franjaEnGuardia(f.horario)) {
         const o = document.createElement("option");
-        o.value = String(i);
-        o.text = f.horario || "";
+        o.value = i;
+        o.text = f.horario;
         selHorario.appendChild(o);
       }
     });
@@ -305,8 +164,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function actualizarDatosFranja() {
     if (!ordenSeleccionada) return;
-    const idx = Number(selHorario.value);
-    franjaSeleccionada = (ordenSeleccionada.franjas || [])[idx] || null;
+    franjaSeleccionada = ordenSeleccionada.franjas[Number(selHorario.value)] || null;
   }
 
   function actualizarTipo() {
@@ -316,7 +174,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   // ======================================================
-  // ===== Selección / Normalización ======================
+  // ===== FUNCIONES QUE FALTABAN (CLAVE) =================
   // ======================================================
   function seleccion(clase) {
     return Array.from(document.querySelectorAll("." + clase + ":checked"))
@@ -329,86 +187,131 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .map(e => e.value);
     return v.length ? v.join(" " + sep + " ") : "/";
   }
+  function normalizarTextoWhatsApp(texto) {
+  return texto
+    // pasar todo a minúscula
+    .toLowerCase()
 
-  function normalizarTituloOperativo(txt) {
-    if (!txt) return "";
-    let t = String(txt).toLowerCase().trim();
-    t = t.replace(/\b\w/g, l => l.toUpperCase());
-    t = t.replace(/\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i, "O.Op. $2");
-    return t;
+    // quitar símbolos no permitidos
+    .replace(/[*_\-•—–]/g, "")
+    .replace(/[.]{2,}/g, ".")
+
+    // normalizar espacios
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+
+    // capitalizar inicio de oración
+    .replace(/(^|\n|\.\s+)([a-záéíóúñ])/g, (m, p1, p2) => {
+      return p1 + p2.toUpperCase();
+    })
+
+    .trim();
+}
+// ===== NORMALIZADORES DE SALIDA (SOLO WSP) =====
+function normalizarTituloOperativo(txt) {
+  if (!txt) return "";
+
+  let t = txt.toLowerCase().trim();
+
+  // Capitalizar palabras
+  t = t.replace(/\b\w/g, l => l.toUpperCase());
+
+  // Normalizar OP
+  t = t.replace(
+    /\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i,
+    "O.Op. $2"
+  );
+
+  return t;
+}
+
+function normalizarLugar(txt) {
+  if (!txt) return "";
+  return txt
+    .toLowerCase()
+    .trim()
+    .replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function normalizarHorario(txt) {
+  if (!txt) return "";
+
+  let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
+
+  // Solo Finalizar con mayúscula
+  t = t.replace(/\bfinalizar\b/g, "Finalizar");
+
+  return t;
+}
+function resetUI() {
+  // estado interno
+  ordenSeleccionada = null;
+  franjaSeleccionada = null;
+
+  // selects
+  selTipo.value = "";
+  selOrden.value = "";
+  selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+
+  // checkboxes
+  document
+    .querySelectorAll('input[type="checkbox"]')
+    .forEach(c => (c.checked = false));
+
+  // inputs numéricos y textos
+  document
+    .querySelectorAll('input[type="number"], input[type="text"], textarea')
+    .forEach(i => (i.value = ""));
+
+  // observaciones default
+  const obs = document.getElementById("obs");
+  if (obs) obs.value = "";
+
+  // ocultar bloques dependientes
+  divFinaliza.classList.add("hidden");
+  divDetalles.classList.add("hidden");
+}
+function haySeleccion(clase) {
+  return document.querySelectorAll("." + clase + ":checked").length > 0;
+}
+// ===== ENVIAR A WHATSAPP =====
+function enviar() { 
+  if (!ordenSeleccionada || !franjaSeleccionada)return;
+    
+  if (!seleccion("personal")) {
+    alert("Debe seleccionar personal policial.");
+    return;
   }
-
-  function normalizarLugar(txt) {
-    if (!txt) return "";
-    return String(txt)
-      .toLowerCase()
-      .trim()
-      .replace(/\b\w/g, l => l.toUpperCase());
+  if (seleccionLinea("movil", "/") === "/") {
+    alert("Debe seleccionar al menos un móvil.");
+    return;
   }
+  const fecha = new Date().toLocaleDateString("es-AR");
 
-  function normalizarHorario(txt) {
-    if (!txt) return "";
-    let t = String(txt).toLowerCase().replace(/\s+/g, " ").trim();
-    t = t.replace(/\bfinalizar\b/g, "Finalizar");
-    return t;
-  }
+  let bloqueResultados = "";
+  let textoDetalles = "";
+  // ⬇️ SOLO si es FINALIZA agregamos los numerales
+  if (selTipo.value === "FINALIZA") {
+    const vehiculos = document.getElementById("vehiculos")?.value || 0;
+    const personas = document.getElementById("personas")?.value || 0;
+    const testalom = document.getElementById("testalom")?.value || 0;
+    const alco = document.getElementById("Alcotest")?.value || 0;
+    const posSan = document.getElementById("positivaSancionable")?.value || 0;
+    const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
+    const actas = document.getElementById("actas")?.value || 0;
+    const requisa = document.getElementById("Requisa")?.value || 0;
+    const qrz = document.getElementById("qrz")?.value || 0;
+    const dominio = document.getElementById("dominio")?.value || 0;
 
-  function resetUI() {
-    ordenSeleccionada = null;
-    franjaSeleccionada = null;
-
-    selTipo.value = "";
-    selOrden.value = "";
-    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-
-    document.querySelectorAll('input[type="checkbox"]').forEach(c => (c.checked = false));
-    document.querySelectorAll('input[type="number"], input[type="text"], textarea').forEach(i => (i.value = ""));
-
-    const obs = document.getElementById("obs");
-    if (obs) obs.value = "";
-
-    divFinaliza.classList.add("hidden");
-    divDetalles.classList.add("hidden");
-  }
-
-  // ======================================================
-  // ===== ENVIAR A WHATSAPP ==============================
-  // ======================================================
-  function enviar() {
-    if (!ordenSeleccionada || !franjaSeleccionada) return;
-
-    if (!seleccion("personal")) {
-      alert("Debe seleccionar personal policial.");
-      return;
-    }
-    if (seleccionLinea("movil", "/") === "/") {
-      alert("Debe seleccionar al menos un móvil.");
-      return;
-    }
-
-    const fecha = new Date().toLocaleDateString("es-AR");
-
-    let bloqueResultados = "";
-    let textoDetalles = "";
-
-    if (selTipo.value === "FINALIZA") {
-      const vehiculos = document.getElementById("vehiculos")?.value || 0;
-      const personas = document.getElementById("personas")?.value || 0;
-      const testalom = document.getElementById("testalom")?.value || 0;
-      const alco = document.getElementById("Alcotest")?.value || 0;
-      const posSan = document.getElementById("positivaSancionable")?.value || 0;
-      const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
-      const actas = document.getElementById("actas")?.value || 0;
-      const requisa = document.getElementById("Requisa")?.value || 0;
-      const qrz = document.getElementById("qrz")?.value || 0;
-      const dominio = document.getElementById("dominio")?.value || 0;
-
-      const remision = document.getElementById("Remision")?.value || 0;
-      const retencion = document.getElementById("Retencion")?.value || 0;
-      const prohibicion = document.getElementById("Prohibicion")?.value || 0;
-      const cesion = document.getElementById("Cesion")?.value || 0;
-
-      bloqueResultados =
+    const remision = document.getElementById("Remision")?.value || 0;
+    const retencion = document.getElementById("Retencion")?.value || 0;
+    const prohibicion = document.getElementById("Prohibicion")?.value || 0;
+    const cesion = document.getElementById("Cesion")?.value || 0;
+    
+    
+    
+    
+    bloqueResultados =
 `Resultados:
 Vehículos Fiscalizados: (${vehiculos})
 Personas Identificadas: (${personas})
@@ -426,26 +329,19 @@ Retención: (${retencion})
 Prohibición de Circulación: (${prohibicion})
 Cesión de Conducción: (${cesion})
 `;
-
-      const detallesTexto = document.getElementById("detalles")?.value?.trim();
-      if (detallesTexto) {
-        textoDetalles =
+ const detallesTexto = document.getElementById("detalles")?.value?.trim();
+ if (detallesTexto) {
+    textoDetalles =
 `Detalles:
 ${detallesTexto}
 `;
-      }
     }
-
-    const tipoFmt =
-      selTipo.value
-        ? selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()
-        : "";
-
-    const texto =
+  }
+  const texto =
 `Policia de la Provincia de Santa Fe - Guardia Provincial
 Brigada Motorizada Centro Norte
 Tercio Charly
-${tipoFmt} ${normalizarTituloOperativo(franjaSeleccionada.titulo)} ${ordenSeleccionada.num || ""}
+${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(franjaSeleccionada.titulo)} ${ordenSeleccionada.num}
 Fecha: ${fecha}
 Horario: ${normalizarHorario(franjaSeleccionada.horario)}
 Lugar: ${normalizarLugar(franjaSeleccionada.lugar)}
@@ -459,56 +355,41 @@ Pda: ${seleccionLinea("PDA", "/")}
 Impresoras: ${seleccionLinea("IMPRESORA", "/")}
 Alómetros: ${seleccionLinea("Alometro", "/")}
 Alcoholímetros: ${seleccionLinea("Alcoholimetro", "/")}
-${bloqueResultados}${textoDetalles}Observaciones:
+${bloqueResultados}
+${textoDetalles}
+Observaciones:
 ${document.getElementById("obs")?.value || "Sin novedad"}`;
 
-    const textoFinal = texto.replace(/\n{2,}/g, "\n");
+  
+  const textoFinal = texto.replace(/\n{2,}/g, "\n");
+  // 🔹 RESET DE LA UI
+  resetUI();
+  // 🔹 ENVÍO A WHATSAPP
+  // 🔹 permitir repaint antes de salir
+  setTimeout(() => {
+    window.location.href =
+      "https://wa.me/?text=" + encodeURIComponent(textoFinal);
+  }, 0);
+ }
 
-    resetUI();
-
-    setTimeout(() => {
-      window.location.href = "https://wa.me/?text=" + encodeURIComponent(textoFinal);
-    }, 0);
-  }
-
-  // ======================================================
-  // ===== Eventos ========================================
-  // ======================================================
+  // ===== Eventos =====
   elToggleCarga.addEventListener("change", toggleCargaOrdenes);
   btnCargarOrdenes.addEventListener("click", importarOrdenes);
-
-  // refrescar antes de usar el selector (sin loops por throttle)
-  selOrden.addEventListener("pointerdown", () => {
-    syncAntesDeSeleccion();
-  });
-
-  selOrden.addEventListener("focus", () => {
-    syncAntesDeSeleccion();
-  });
-
+  selOrden.addEventListener("focus", syncAntesDeSeleccion);
   selOrden.addEventListener("change", cargarHorariosOrden);
   selHorario.addEventListener("change", actualizarDatosFranja);
   selTipo.addEventListener("change", actualizarTipo);
   btnEnviar.addEventListener("click", enviar);
+  
 
-  // ======================================================
-  // ===== Init ===========================================
-  // ======================================================
+  // ===== Init =====
   (async function init() {
     toggleCargaOrdenes();
     actualizarTipo();
-
-    // 1) primero muestro lo que haya en local (si existe)
-    cargarOrdenesDisponibles();
-
-    // 2) luego intento sincronizar (si supabase viene vacío, NO borra local)
     await syncOrdenesDesdeServidor();
     cargarOrdenesDisponibles();
   })();
 })();
-
-
-
 
 
 
