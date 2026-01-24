@@ -15,6 +15,8 @@ console.log("ADM/adm.js cargado OK - puente global activo");
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ===== NORMALIZADORES PARA PUBLICACIÓN =====
 function isoToLatam(iso) {
   // "2026-01-20" -> "20/01/2026"
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -109,7 +111,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const habilitado = puedePublicar();
     btnPublicar.dataset.canPublish = habilitado ? "1" : "0";
     btnPublicar.classList.toggle("disabled", !habilitado);
-    
   }
 
   // ======================================================
@@ -274,7 +275,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-    // ======================================================
+  // ======================================================
   // ELIMINAR ORDEN (con confirmación)
   // ======================================================
   const btnEliminar = document.getElementById("btnEliminar");
@@ -332,9 +333,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-
   // ======================================================
-  // PUBLICAR ÓRDENES
+  // PUBLICAR ÓRDENES (REPARADO)
   // ======================================================
   async function publicarOrdenes() {
     if (!puedePublicar()) {
@@ -346,34 +346,57 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    // Verificar sesión real (RLS write suele exigir authenticated)
+    const { data: sessionData, error: sessionErr } = await supabaseClient.auth.getSession();
+    const session = sessionData?.session;
+
+    if (sessionErr || !session) {
+      console.error("[ADM] No hay sesión válida:", sessionErr);
+      alert("No hay sesión iniciada. Inicie sesión antes de publicar.");
+      return;
+    }
+
     const ordenes = StorageApp.cargarOrdenes();
-    console.log("[ADM] Ordenes local:", ordenes.length, ordenes[0]);
-    // ✅ normalizar vigencia (y opcionalmente caducidad si algún día también viene ISO)
+    console.log("[ADM] ordenes a publicar:", Array.isArray(ordenes) ? ordenes.length : "no-array", ordenes);
+
+    if (!Array.isArray(ordenes) || ordenes.length === 0) {
+      alert("No hay órdenes cargadas para publicar.");
+      return;
+    }
+
+    // ✅ Normalizar vigencia ISO -> DD/MM/YYYY antes de publicar
     const payloadPublicar = ordenes.map(normalizarOrdenParaPublicar);
+    console.log("[ADM] primera orden normalizada:", payloadPublicar[0]);
 
-    const payloadPublicar = ordenes.map(normalizarOrdenParaPublicar);
+    // ✅ Upsert robusto en id=1
+    const { data, error } = await supabaseClient
+      .from("ordenes_store")
+      .upsert(
+        { id: 1, payload: payloadPublicar, updated_at: new Date().toISOString() },
+        { onConflict: "id" }
+      )
+      .select("id, updated_at");
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1&select=id,updated_at`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Prefer": "return=representation",
-        apikey: SUPABASE_ANON_KEY,
-        // IMPORTANTE: acá NO uses la publishable key como Bearer (ver punto 2).
-        // Authorization: "Bearer " + SUPABASE_ANON_KEY
-      },
-      body: JSON.stringify({ payload: payloadPublicar, updated_at: new Date().toISOString() })
-    });
+    if (error) {
+      console.error("[ADM] Error publicando:", error);
+      alert("Error publicando: " + error.message);
+      return;
+    }
 
-    const txt = await resp.text();
-    console.log("[ADM] PATCH status:", resp.status);
-    console.log("[ADM] PATCH body:", txt);
-    const r2 = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?select=id,updated_at,payload&order=updated_at.desc&limit=1`, {
-      headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }
-    });
-    console.log("[ADM] READBACK:", await r2.json());
+    console.log("[ADM] Publicado OK:", data);
 
+    // Readback (para confirmar que quedó guardado)
+    const { data: rb, error: rbErr } = await supabaseClient
+      .from("ordenes_store")
+      .select("id, updated_at, payload")
+      .eq("id", 1)
+      .single();
+
+    if (rbErr) {
+      console.warn("[ADM] Readback error:", rbErr);
+    } else {
+      console.log("[ADM] READBACK:", rb);
+    }
 
     ultimoPublicadoId = cambiosId;
     actualizarEstadoPublicar();
@@ -458,11 +481,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
-
-
-
-
-
 
 
 
