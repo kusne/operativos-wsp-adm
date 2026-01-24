@@ -107,13 +107,14 @@ label.check > input[type="checkbox"] {
 
   /* ajuste fino: el scale suele “subir” visualmente el checkbox */
   position: relative;
-  top: 2px;              /* si querés más abajo: 3px; si menos: 1px */
+  top: 3px;              /* si querés más abajo: 3px; si menos: 1px */
 }
 
 /* Ocultos */
 .hidden {
   display: none;
 }
+
 
 
 
