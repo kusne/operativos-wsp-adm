@@ -1,4 +1,4 @@
-/* wsp/wsp.css */
+/* WSP/wsp.css */
 
 /* Reset básico */
 * {
@@ -61,7 +61,7 @@ textarea {
   margin-bottom: 6px;
 }
 
-/* Base para cualquier checkbox dentro de section */
+/* Checkbox base */
 .section input[type="checkbox"] {
   transform: scale(1.2);
   margin: 0;
@@ -77,48 +77,45 @@ textarea {
   border: 2px solid #c62828;
 }
 
-/* ===== CHECKBOX: TEXTO IZQ + CHECK A LA DERECHA (SIN TOCAR HTML) =====
-   Requisitos tuyos:
-   - texto a la izquierda
-   - checkbox a la derecha del texto
-   - checkbox alineados verticalmente en columna
-   - columna NO pegada al borde derecho (un poco hacia adentro)
-   - checkbox alineado en eje Y con el texto (bajar apenas el checkbox)
-*/
+/* =========================================================
+   CHECKBOX (Personal / Móviles / etc.)
+   Requisitos:
+   - Texto a la izquierda
+   - Checkbox a la derecha del texto
+   - Columna de checkbox alineada verticalmente
+   - Columna NO pegada al borde derecho (queda más al medio)
+   - Checkbox alineado en eje Y con el texto (bajar apenas)
+   ========================================================= */
+
+/* Cada fila "label.check" es una grilla de 2 columnas:
+   col1 = texto, col2 = checkbox */
 label.check {
   display: grid;
-  grid-template-columns: 1fr 28px;              /* texto | checkbox */
-  align-items: center;                          /* centra por fila */
-  column-gap: 10px;
-  width: 100%;
-  margin: 6px 0;
-  font-size: 16px;
+  grid-template-columns: 1fr 34px; /* texto | checkbox */
+  align-items: center;
+  column-gap: 12px;
 
-  /* Esto mete “aire” a la derecha para que la columna de checks
-     NO quede en el extremo derecho del cuadro */
-  padding-right: clamp(40px, 18vw, 140px);
+  /* IMPORTANTE: esto hace que la columna de checks no quede
+     en el extremo derecho del cuadro, sino más “al medio”. */
+  width: 100%;
+  max-width: 360px;   /* probá 340 / 360 / 380 si querés más o menos al medio */
+  margin: 6px 0;
+
+  font-size: 16px;
 }
 
-/* Checkbox: misma columna siempre + ajuste fino eje Y */
+/* El input está primero en el HTML; lo mandamos a la columna 2.
+   El texto (nodo de texto) queda automáticamente en la columna 1. */
 label.check > input[type="checkbox"] {
   grid-column: 2;
-  justify-self: start;   /* mantiene una columna vertical consistente */
-  margin: 0;
+  justify-self: center;
 
-  /* ajuste fino: el scale suele “subir” visualmente el checkbox */
-  position: relative;
-  top: 3px;              /* si querés más abajo: 3px; si menos: 1px */
+  /* Ajuste fino eje Y: baja apenas el checkbox */
+  transform: translateY(2px) scale(1.2);
+  margin: 0;
 }
 
 /* Ocultos */
 .hidden {
   display: none;
 }
-
-
-
-
-
-
-
-
