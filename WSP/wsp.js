@@ -4,11 +4,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 (function () {
   // ===== DOM refs =====
-  const elToggleCarga = document.getElementById("toggleCarga");
-  const elBloqueCarga = document.getElementById("bloqueCargaOrdenes");
-  const elImportBox = document.getElementById("importBox");
-  const btnCargarOrdenes = document.getElementById("btnCargarOrdenes");
-
   const selTipo = document.getElementById("tipo");
   const selOrden = document.getElementById("orden");
   const selHorario = document.getElementById("horario");
@@ -85,30 +80,12 @@ async function syncAntesDeSeleccion() {
 }
 
   // ===== UI =====
-  function toggleCargaOrdenes() {
-    elBloqueCarga.classList.toggle("hidden", !elToggleCarga.checked);
-  }
-
+  
   function limpiarSeleccionOrden() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
     selOrden.value = "";
     selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-  }
-
-  function importarOrdenes() {
-    const texto = elImportBox.value.trim();
-    if (!texto) return;
-
-    let data;
-    try { data = JSON.parse(texto); }
-    catch { return; }
-
-    if (!Array.isArray(data)) return;
-
-    guardarOrdenesSeguro(data);
-    cargarOrdenesDisponibles();
-    limpiarSeleccionOrden();
   }
 
   // ===== Guardia =====
@@ -427,8 +404,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
  }
 
   // ===== Eventos =====
-  elToggleCarga.addEventListener("change", toggleCargaOrdenes);
-  btnCargarOrdenes.addEventListener("click", importarOrdenes);
   selOrden.addEventListener("focus", syncAntesDeSeleccion);
   selOrden.addEventListener("change", cargarHorariosOrden);
   selHorario.addEventListener("change", actualizarDatosFranja);
@@ -438,7 +413,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
 
   // ===== Init =====
   (async function init() {
-    toggleCargaOrdenes();
     actualizarTipo();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
@@ -446,6 +420,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
