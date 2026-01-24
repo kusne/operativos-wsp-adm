@@ -149,8 +149,8 @@ async function syncAntesDeSeleccion() {
     selOrden.innerHTML = '<option value="">Seleccionar</option>';
 
     ordenes.forEach((o, i) => {
-      const v = Dates.parseVigenciaToDate(o.vigencia);
-      if (!v || v > hoy) return;
+      //const v = Dates.parseVigenciaToDate(o.vigencia);
+      //if (!v || v > hoy) return;
       if (!o.franjas?.some(f => franjaEnGuardia(f.horario))) return;
 
       const op = document.createElement("option");
@@ -411,6 +411,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
