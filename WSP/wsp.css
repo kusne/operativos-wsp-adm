@@ -1,4 +1,4 @@
-/* WSP/wsp.css */
+/* wsp/wsp.css */
 
 /* Reset básico */
 * {
@@ -61,7 +61,7 @@ textarea {
   margin-bottom: 6px;
 }
 
-/* Checkbox base */
+/* Base para cualquier checkbox dentro de section */
 .section input[type="checkbox"] {
   transform: scale(1.2);
   margin: 0;
@@ -77,42 +77,39 @@ textarea {
   border: 2px solid #c62828;
 }
 
-/* =========================================================
-   CHECKBOX (Personal / Móviles / etc.)
-   Requisitos:
+/* ===== CHECKBOX: TEXTO IZQ + CHECK A LA DERECHA (SIN TOCAR HTML) =====
    - Texto a la izquierda
    - Checkbox a la derecha del texto
-   - Columna de checkbox alineada verticalmente
-   - Columna NO pegada al borde derecho (queda más al medio)
-   - Checkbox alineado en eje Y con el texto (bajar apenas)
-   ========================================================= */
+   - Checkbox alineados verticalmente en columna
+   - Columna NO pegada al borde derecho (un poco hacia adentro)
+   - Alineación vertical: se ajusta bajando el texto (no el checkbox)
+*/
 
-/* Cada fila "label.check" es una grilla de 2 columnas:
-   col1 = texto, col2 = checkbox */
+/* ===== AJUSTE: BAJAR TEXTO PARA CALZAR CON CHECKBOX (SIN TOCAR HTML) ===== */
 label.check {
   display: grid;
-  grid-template-columns: 1fr 34px; /* texto | checkbox */
-  align-items: center;
-  column-gap: 12px;
-
-  /* IMPORTANTE: esto hace que la columna de checks no quede
-     en el extremo derecho del cuadro, sino más “al medio”. */
+  grid-template-columns: 1fr 28px;     /* texto | checkbox */
+  column-gap: 10px;
   width: 100%;
-  max-width: 360px;   /* probá 340 / 360 / 380 si querés más o menos al medio */
   margin: 6px 0;
-
   font-size: 16px;
+
+  /* “aire” a la derecha para que la columna de checks NO quede al borde */
+  padding-right: clamp(40px, 18vw, 140px);
+
+  /* CLAVE: fija altura de fila y baja el texto */
+  min-height: 28px;
+  line-height: 28px;
+  align-items: stretch;
 }
 
-/* El input está primero en el HTML; lo mandamos a la columna 2.
-   El texto (nodo de texto) queda automáticamente en la columna 1. */
+/* Checkbox fijo en su columna, sin empujarlo con top */
 label.check > input[type="checkbox"] {
   grid-column: 2;
-  justify-self: center;
-
-  /* Ajuste fino eje Y: baja apenas el checkbox */
-  transform: translateY(2px) scale(1.2);
+  justify-self: start;
   margin: 0;
+  position: relative;
+  top: 0;
 }
 
 /* Ocultos */
