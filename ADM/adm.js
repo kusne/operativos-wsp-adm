@@ -14,8 +14,33 @@ console.log("ADM/adm.js cargado OK - puente global activo");
 // ===== CONFIG SUPABASE (SOLO ADM) =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
-
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+function isoToLatam(iso) {
+  // "2026-01-20" -> "20/01/2026"
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso || "";
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function normalizarOrdenParaPublicar(o) {
+  // copia defensiva
+  const out = { ...o };
+
+  // vigencia viene de <input type="date"> => ISO
+  out.vigencia = isoToLatam(out.vigencia);
+
+  // (opcional) si tuvieras caducidad ISO también, aplicalo igual:
+  // out.caducidad = isoToLatam(out.caducidad);
+
+  // asegurar franjas array
+  if (Array.isArray(out.franjas)) {
+    out.franjas = out.franjas.map(f => ({ ...f }));
+  } else {
+    out.franjas = [];
+  }
+
+  return out;
+}
 
 // ======================================================
 // TODO EL CÓDIGO DEPENDIENTE DEL DOM VA ACÁ
@@ -323,6 +348,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const ordenes = StorageApp.cargarOrdenes();
 
+    // ✅ normalizar vigencia (y opcionalmente caducidad si algún día también viene ISO)
+    const payloadPublicar = ordenes.map(normalizarOrdenParaPublicar);
+
     await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1`, {
       method: "PATCH",
       headers: {
@@ -330,7 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         apikey: SUPABASE_ANON_KEY,
         Authorization: "Bearer " + SUPABASE_ANON_KEY
       },
-      body: JSON.stringify({ payload: ordenes })
+      body: JSON.stringify({ payload: payloadPublicar, updated_at: new Date().toISOString() })
     });
 
     ultimoPublicadoId = cambiosId;
@@ -416,6 +444,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
