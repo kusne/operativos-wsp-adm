@@ -313,8 +313,11 @@ function enviar() {
     alert("Debe seleccionar personal policial.");
     return;
   }
-  if (seleccionLinea("movil", "/") === "/") {
-    alert("Debe seleccionar al menos un móvil.");
+  const mov = seleccionLinea("movil", "/");
+  const mot = seleccionLinea("moto", "/");
+
+  if (mov === "/" && mot === "/") {
+    alert("Debe seleccionar al menos un móvil o moto.");
     return;
   }
   const fecha = new Date().toLocaleDateString("es-AR");
@@ -378,7 +381,7 @@ Horario: ${normalizarHorario(franjaSeleccionada.horario)}
 Lugar: ${normalizarLugar(franjaSeleccionada.lugar)}
 Personal Policial:
 ${seleccion("personal")}
-Móviles: ${seleccionLinea("movil", "/")}
+Móviles: ${[seleccionLinea("movil","/"), seleccionLinea("moto","/")].filter(v => v !== "/").join(" / ") || "/"}
 Elementos:
 Escopetas: ${seleccionLinea("ESCOPETA", "/")}
 Ht: ${seleccionLinea("HT", "/")}
@@ -420,6 +423,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
