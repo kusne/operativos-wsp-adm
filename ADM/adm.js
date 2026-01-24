@@ -347,19 +347,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const ordenes = StorageApp.cargarOrdenes();
-
+    console.log("[ADM] Ordenes local:", ordenes.length, ordenes[0]);
     // ✅ normalizar vigencia (y opcionalmente caducidad si algún día también viene ISO)
     const payloadPublicar = ordenes.map(normalizarOrdenParaPublicar);
 
-    await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1`, {
+    const payloadPublicar = ordenes.map(normalizarOrdenParaPublicar);
+
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1&select=id,updated_at`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Prefer": "return=representation",
         apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + SUPABASE_ANON_KEY
+        // IMPORTANTE: acá NO uses la publishable key como Bearer (ver punto 2).
+        // Authorization: "Bearer " + SUPABASE_ANON_KEY
       },
       body: JSON.stringify({ payload: payloadPublicar, updated_at: new Date().toISOString() })
     });
+
+    const txt = await resp.text();
+    console.log("[ADM] PATCH status:", resp.status);
+    console.log("[ADM] PATCH body:", txt);
+    const r2 = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?select=id,updated_at,payload&order=updated_at.desc&limit=1`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }
+    });
+    console.log("[ADM] READBACK:", await r2.json());
+
 
     ultimoPublicadoId = cambiosId;
     actualizarEstadoPublicar();
@@ -444,6 +458,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
 });
+
 
 
 
