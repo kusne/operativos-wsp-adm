@@ -98,22 +98,7 @@ textarea {
 .hidden {
   display: none;
 }
-/* ===== FIX: CHECKBOX ALINEADOS CON SU TEXTO ===== */
-label.check {
-  display: flex !important;
-  flex-direction: row !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  gap: 10px;
-  margin: 6px 0;
-  font-weight: normal;
-}
 
-label.check input[type="checkbox"] {
-  margin: 0 !important;
-  flex: 0 0 auto;
-  transform: scale(1.2);
-}
 
 
 
