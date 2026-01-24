@@ -131,4 +131,56 @@ label.check > input[type="checkbox"]{
   position: relative;
   top: var(--check-col-y);
 }
+/* ====== MOVILES/MOTOS EN GRILLA (SOLO #bloqueMovil) ====== */
+#bloqueMovil .subtitulo{
+  margin-top: 10px;
+}
+
+/* 3 móviles en 1 renglón */
+#bloqueMovil .grid-moviles{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* motos en 2 renglones de 4 (se acomoda solo) */
+#bloqueMovil .grid-motos{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* “chip” de cada número + checkbox a la derecha */
+#bloqueMovil label.check.check-chip{
+  position: static !important;     /* anula tu absolute global */
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 8px 10px !important;
+  margin: 0 !important;
+  line-height: normal !important;
+  min-height: 34px !important;
+
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* texto del número */
+#bloqueMovil label.check.check-chip > span{
+  font-weight: 600;
+}
+
+/* checkbox normal (sin left/top absolute) */
+#bloqueMovil label.check.check-chip > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: scale(var(--check-scale)) !important;
+  margin: 0 !important;
+}
+
 
