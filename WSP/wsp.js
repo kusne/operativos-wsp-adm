@@ -3,57 +3,6 @@ const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 (function () {
-
-// ===== Dependencias globales (compat) =====
-// Este módulo depende de StorageApp, OrdersSync y Dates.
-// Si los helpers los exponen con otros nombres, acá los aliasamos para que coincidan.
-function _resolveGlobal(primaryName, candidates) {
-  const g = window;
-  for (const k of candidates) {
-    if (g[k]) return g[k];
-  }
-  return null;
-}
-
-function _aliasOrFail(primaryName, candidates, requiredFns) {
-  const resolved = _resolveGlobal(primaryName, [primaryName, ...candidates]);
-  if (resolved) {
-    // asegurar nombre "canónico"
-    if (!window[primaryName]) window[primaryName] = resolved;
-
-    // validar funciones mínimas si se proveen
-    if (requiredFns && requiredFns.length) {
-      const missing = requiredFns.filter(fn => typeof resolved[fn] !== "function");
-      if (missing.length) {
-        throw new Error(
-          `[WSP] ${primaryName} existe pero le faltan funciones: ${missing.join(", ")}`
-        );
-      }
-    }
-    return resolved;
-  }
-
-  // diagnóstico: listar globals "parecidos" para ubicar el nombre real
-  const hay = Object.keys(window)
-    .filter(k => {
-      const kk = k.toLowerCase();
-      return kk.includes(primaryName.toLowerCase().slice(0, 5)) ||
-             kk.includes("storage") || kk.includes("order") || kk.includes("date");
-    })
-    .slice(0, 50)
-    .sort();
-
-  throw new Error(
-    `[WSP] Falta dependencia global "${primaryName}". ` +
-    `Revisá que el helper esté cargado ANTES de wsp.js. ` +
-    (hay.length ? `Globals similares detectados: ${hay.join(", ")}` : "")
-  );
-}
-
-const StorageApp = _aliasOrFail("StorageApp", ["Storage", "storageApp", "storage", "StorageAPI"], ["guardarOrdenes", "cargarOrdenes"]);
-const OrdersSync = _aliasOrFail("OrdersSync", ["ordersSync", "Orders", "OrdenesSync", "orders"], ["filtrarCaducadas"]);
-const Dates = _aliasOrFail("Dates", ["dates", "DateUtils", "Fechas", "FechaUtils"], ["parseVigenciaToDate"]);
-
   // ===== DOM refs =====
   const elToggleCarga = document.getElementById("toggleCarga");
   const elBloqueCarga = document.getElementById("bloqueCargaOrdenes");
@@ -69,32 +18,27 @@ const Dates = _aliasOrFail("Dates", ["dates", "DateUtils", "Fechas", "FechaUtils
 
   const btnEnviar = document.getElementById("btnEnviar");
 
-
-// ===== Guardas DOM (evita null-addEventListener) =====
-const _requiredEls = {
-  toggleCarga: elToggleCarga,
-  bloqueCargaOrdenes: elBloqueCarga,
-  importBox: elImportBox,
-  btnCargarOrdenes,
-  tipo: selTipo,
-  orden: selOrden,
-  horario: selHorario,
-  finaliza: divFinaliza,
-  bloqueDetalles: divDetalles,
-  btnEnviar
-};
-const _missingIds = Object.entries(_requiredEls)
-  .filter(([, el]) => !el)
-  .map(([id]) => id);
-if (_missingIds.length) {
-  throw new Error(`[WSP] Faltan elementos en el HTML: ${_missingIds.join(", ")}`);
-}
-
   // ===== Estado =====
   let ordenSeleccionada = null;
   let franjaSeleccionada = null;
   let syncingOrdenes = false;
-  // ======================================================
+
+  // Cache en memoria (respaldo si StorageApp no está o no guarda/lee como se espera)
+  let ordenesCache = [];
+  function guardarOrdenesSeguro(arr) {
+    ordenesCache = Array.isArray(arr) ? arr : [];
+    try { StorageApp && StorageApp.guardarOrdenes && StorageApp.guardarOrdenes(ordenesCache); }
+    catch (e) { console.warn("[WSP] No se pudo guardar en StorageApp, uso cache en memoria.", e); }
+  }
+  function cargarOrdenesSeguro() {
+    try {
+      const arr = StorageApp && StorageApp.cargarOrdenes && StorageApp.cargarOrdenes();
+      if (Array.isArray(arr)) return arr;
+    } catch (e) {
+      console.warn("[WSP] No se pudo leer de StorageApp, uso cache en memoria.", e);
+    }
+    return Array.isArray(ordenesCache) ? ordenesCache : [];
+  }// ======================================================
   // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
   // ======================================================
   async function syncOrdenesDesdeServidor() {
@@ -110,7 +54,7 @@ if (_missingIds.length) {
     );
 
     if (!r.ok) {
-      console.error("Supabase REST error:", r.status, await r.text());
+      console.error('[WSP] Supabase REST error:', r.status, await r.text());
       return false;
     }
 
@@ -118,7 +62,7 @@ if (_missingIds.length) {
     if (!Array.isArray(data) || !Array.isArray(data[0]?.payload)) return false;
 
     // ✅ payload ES el array de órdenes
-    StorageApp.guardarOrdenes(data[0].payload);
+    guardarOrdenesSeguro(data[0].payload);
     return true;
 
   } catch (e) {
@@ -162,7 +106,7 @@ async function syncAntesDeSeleccion() {
 
     if (!Array.isArray(data)) return;
 
-    StorageApp.guardarOrdenes(data);
+    guardarOrdenesSeguro(data);
     cargarOrdenesDisponibles();
     limpiarSeleccionOrden();
   }
@@ -199,8 +143,8 @@ async function syncAntesDeSeleccion() {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
-    let ordenes = OrdersSync.filtrarCaducadas(StorageApp.cargarOrdenes());
-    StorageApp.guardarOrdenes(ordenes);
+    let ordenes = OrdersSync.filtrarCaducadas(cargarOrdenesSeguro());
+    guardarOrdenesSeguro(ordenes);
 
     selOrden.innerHTML = '<option value="">Seleccionar</option>';
 
@@ -220,7 +164,7 @@ async function syncAntesDeSeleccion() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
 
-    const ordenes = StorageApp.cargarOrdenes();
+    const ordenes = cargarOrdenesSeguro();
     const idx = Number(selOrden.value);
     if (!ordenes[idx]) return;
 
@@ -462,9 +406,31 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     toggleCargaOrdenes();
     actualizarTipo();
     await syncOrdenesDesdeServidor();
+    const _tmp = cargarOrdenesSeguro();
+    console.log('[WSP] Órdenes en memoria/Storage:', Array.isArray(_tmp) ? _tmp.length : _tmp);
     cargarOrdenesDisponibles();
   })();
 })();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
