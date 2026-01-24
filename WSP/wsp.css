@@ -1,8 +1,14 @@
 /* wsp/wsp.css */
 
 /* Reset básico */
-* {
-  box-sizing: border-box;
+* { box-sizing: border-box; }
+
+:root{
+  /* Ajustes finos (tocá solo estos 2 si querés calibrar) */
+  --check-col-x: 62%;   /* columna de checks: 55% a 70% suele ser ideal */
+  --check-col-y: 6px;   /* baja/sube la columna entera (probá 4px / 8px) */
+
+  --check-scale: 1.2;
 }
 
 body {
@@ -54,65 +60,74 @@ textarea {
   margin-bottom: 8px;
 }
 
-/* Checkbox alineados en columna */
+/* Título dentro de secciones */
 .section > label {
   font-weight: bold;
   display: block;
   margin-bottom: 6px;
 }
 
-/* Base para cualquier checkbox dentro de section */
-.section input[type="checkbox"] {
-  transform: scale(1.2);
+/* ===== CHECKBOX: comportamiento base ===== */
+.section input[type="checkbox"]{
+  transform: scale(var(--check-scale));
   margin: 0;
 }
 
-/* Cada checkbox en su línea */
-.section br {
-  line-height: 1.6;
-}
-
 /* Obligatorios */
-.obligatorio {
-  border: 2px solid #c62828;
-}
+.obligatorio { border: 2px solid #c62828; }
 
-/* ===== CHECKBOX: TEXTO IZQ + CHECK A LA DERECHA (SIN TOCAR HTML) =====
-   - Texto a la izquierda
-   - Checkbox a la derecha del texto
-   - Checkbox alineados verticalmente en columna
-   - Columna NO pegada al borde derecho (un poco hacia adentro)
-   - Alineación vertical: se ajusta bajando el texto (no el checkbox)
-*/
+/* Ocultos */
+.hidden { display: none; }
 
-/* ===== AJUSTE: BAJAR TEXTO PARA CALZAR CON CHECKBOX (SIN TOCAR HTML) ===== */
-label.check {
-  display: grid;
-  grid-template-columns: 1fr 28px;     /* texto | checkbox */
-  column-gap: 10px;
+/* =========================================================
+   SOLUCIÓN ROBUSTA SIN “ARRUINAR” LA UI
+   - Si tus opciones están renderizadas como: <label class="check">TEXTO <input type="checkbox"></label>
+   - Entonces esto genera “fila” real por opción y alinea perfecto.
+   - Además coloca la columna de checks más adentro (no al borde) y la baja unos px.
+   ========================================================= */
+
+/* Cada opción = una fila */
+label.check{
+  position: relative;
+  display: block;
   width: 100%;
   margin: 6px 0;
   font-size: 16px;
 
-  /* “aire” a la derecha para que la columna de checks NO quede al borde */
-  padding-right: clamp(40px, 18vw, 140px);
+  /* fija una altura de renglón estable (evita drift) */
+  line-height: 26px;
+  min-height: 26px;
 
-  /* CLAVE: fija altura de fila y baja el texto */
-  min-height: 28px;
-  line-height: 28px;
-  align-items: stretch;
+  /* Deja espacio para que el checkbox no pise el texto */
+  padding-right: 42%;
 }
 
-/* Checkbox fijo en su columna, sin empujarlo con top */
-label.check > input[type="checkbox"] {
-  grid-column: 2;
-  justify-self: start;
+/* El texto queda a la izquierda (tal cual querés) */
+label.check{
+  /* No tocamos tu alineación de texto: queda natural a la izquierda */
+}
+
+/* Checkbox: columna fija “adentro” + ajuste vertical de columna */
+label.check > input[type="checkbox"]{
+  position: absolute;
+
+  /* Columna horizontal, más al centro/derecha (no al borde) */
+  left: var(--check-col-x);
+
+  /* Centro vertical del renglón + offset configurable para bajar toda la columna */
+  top: calc(50% + var(--check-col-y));
+
+  transform: translate(-50%, -50%) scale(var(--check-scale));
   margin: 0;
-  position: relative;
-  top: 0;
 }
 
-/* Ocultos */
-.hidden {
-  display: none;
+/* =========================================================
+   BACKUP por si algunas listas NO vienen en label.check
+   (por ejemplo: inputs sueltos con <br>)
+   Esto NO cambia layout, solo corrige el “arranque más arriba”
+   bajando el primer checkbox de cada .section.
+   ========================================================= */
+.section input[type="checkbox"]:first-of-type{
+  position: relative;
+  top: var(--check-col-y);
 }
