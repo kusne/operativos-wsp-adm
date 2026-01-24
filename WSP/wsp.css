@@ -79,25 +79,31 @@ textarea {
 .obligatorio {
   border: 2px solid #c62828;
 }
-/* ===== CHECKBOX BIEN ALINEADOS ===== */
+/* ===== CHECKBOX TEXTO IZQ + CHECK DER (SIN TOCAR HTML) ===== */
 
-.check {
-  display: flex;
+label.check {
+  display: grid;
+  grid-template-columns: 1fr auto;  /* texto | checkbox */
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  width: 100%;
   margin: 6px 0;
   font-size: 16px;
 }
 
-.check input[type="checkbox"] {
-  transform: scale(1.2);
+/* El checkbox siempre a la derecha */
+label.check > input[type="checkbox"] {
+  grid-column: 2;
+  justify-self: end;
   margin: 0;
+  transform: scale(1.2);
 }
 
 /* Ocultos */
 .hidden {
   display: none;
 }
+
 
 
 
