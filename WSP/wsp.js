@@ -10,8 +10,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const divFinaliza = document.getElementById("finaliza");
   const divDetalles = document.getElementById("bloqueDetalles");
-
-  const chkMismosElementos = document.getElementById("mismosElementos"); // NUEVO
+  
+  const divMismosElementos = document.getElementById("bloqueMismosElementos");
+  const chkMismosElementos = document.getElementById("mismosElementos"); 
   const btnEnviar = document.getElementById("btnEnviar");
 
   // ===== Estado =====
@@ -204,11 +205,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function actualizarTipo() {
     const fin = selTipo.value === "FINALIZA";
+
     divFinaliza.classList.toggle("hidden", !fin);
     divDetalles.classList.toggle("hidden", !fin);
 
-    // si cambia a INICIA, no tiene sentido “mismos elementos”
-    if (!fin && chkMismosElementos) chkMismosElementos.checked = false;
+    // mostrar/ocultar el bloque del checkbox
+    if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
+
+    if (!fin) {
+      // INICIA: checkbox off y elementos visibles
+      if (chkMismosElementos) chkMismosElementos.checked = false;
+      setElementosVisibles(true);
+      return;
+    }
+
+    // FINALIZA: por defecto, intentar usar “mismos elementos”
+    const payload = cargarElementosGuardados?.() || null;
+
+    if (chkMismosElementos) chkMismosElementos.checked = !!payload;
+
+    if (payload) {
+      aplicarElementos(payload);
+      setElementosVisibles(false); // ocultar elementos
+    } else {
+    setElementosVisibles(true);  // no hay guardado -> deja seleccionar manual
+    }
   }
 
   // ======================================================
@@ -280,6 +301,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return t;
   }
+  function setElementosVisibles(visible){
+    const ids = [
+      "bloqueEscopeta",
+      "bloqueHT",
+      "bloquePDA",
+      "bloqueImpresora",
+      "bloqueAlometro",
+      "bloqueAlcoholimetro"
+    ];
+
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle("hidden", !visible);
+    });
+  }
 
   function resetUI() {
     // estado interno
@@ -306,6 +343,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     // ocultar bloques dependientes
     divFinaliza.classList.add("hidden");
     divDetalles.classList.add("hidden");
+    // reset “mismos elementos” + visibilidad
+    if (chkMismosElementos) chkMismosElementos.checked = false;
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    setElementosVisibles(true);
   }
 
   // ======================================================
@@ -382,17 +423,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   if (chkMismosElementos) {
     chkMismosElementos.addEventListener("change", () => {
-      if (!chkMismosElementos.checked) return; // destildar: queda manual, no tocamos nada
+      if (!chkMismosElementos.checked) {
+        // modo manual
+        setElementosVisibles(true);
+        return;
+      }
 
       const payload = cargarElementosGuardados();
       if (!payload) {
         alert("No hay elementos guardados del INICIA.");
         chkMismosElementos.checked = false;
+        setElementosVisibles(true);
         return;
       }
 
-      // aplica visualmente (evita que tengas que re-marcar todo)
       aplicarElementos(payload);
+      setElementosVisibles(false); // ocultar elementos cuando usa los mismos
     });
   }
 
@@ -537,6 +583,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
