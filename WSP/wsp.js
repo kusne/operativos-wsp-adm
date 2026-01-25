@@ -316,27 +316,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
 
   function guardarElementosDeInicio() {
-    const payload = {
-      ts: Date.now(),
-      ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
-      HT: leerSeleccionPorClase("HT"),
-      PDA: leerSeleccionPorClase("PDA"),
-      IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
-      Alometro: leerSeleccionPorClase("Alometro"),
-      Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
-    };
+  const payload = {
+    ts: Date.now(),
+    ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
+    HT: leerSeleccionPorClase("HT"),
+    PDA: leerSeleccionPorClase("PDA"),
+    IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
+    Alometro: leerSeleccionPorClase("Alometro"),
+    Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
+  };
 
-    // usar StorageApp si existe (tu proyecto)
-    try {
-      StorageApp?.guardarElementosInicio?.(payload);
+  // 1) Si existe StorageApp y tiene la función, usalo
+  try {
+    if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
+      StorageApp.guardarElementosInicio(payload);
       return;
-    } catch {}
-
-    // fallback localStorage
-    try {
-      localStorage.setItem("elementos_inicio", JSON.stringify(payload));
-    } catch {}
+    }
+  } catch (e) {
+    console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
   }
+
+  // 2) Fallback seguro: localStorage
+  try {
+    localStorage.setItem("elementos_inicio", JSON.stringify(payload));
+  } catch (e) {
+    console.warn("[WSP] No se pudo guardar en localStorage.", e);
+  }
+}
 
   function cargarElementosGuardados() {
     try {
@@ -531,6 +537,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
