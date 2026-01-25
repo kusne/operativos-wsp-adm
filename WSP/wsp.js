@@ -397,7 +397,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return null;
     }
   }
-
+  function limpiarSeleccionElementos(){
+    const clases = ["ESCOPETA","HT","PDA","IMPRESORA","Alometro","Alcoholimetro"];
+    clases.forEach(clase => {
+      document.querySelectorAll("." + clase).forEach(inp => { inp.checked = false; });
+    });
+  }
   function aplicarElementos(payload) {
     if (!payload) return;
 
@@ -423,22 +428,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   if (chkMismosElementos) {
     chkMismosElementos.addEventListener("change", () => {
+
+      // ✅ SI DESTILDA: modo manual + limpiar selección
       if (!chkMismosElementos.checked) {
-        // modo manual
+        limpiarSeleccionElementos();   // <- NUEVO
         setElementosVisibles(true);
         return;
       }
 
+      // si tilda: cargar guardados + ocultar
       const payload = cargarElementosGuardados();
       if (!payload) {
         alert("No hay elementos guardados del INICIA.");
         chkMismosElementos.checked = false;
+        limpiarSeleccionElementos();   // <- para que quede limpio también
         setElementosVisibles(true);
         return;
       }
 
       aplicarElementos(payload);
-      setElementosVisibles(false); // ocultar elementos cuando usa los mismos
+      setElementosVisibles(false);
     });
   }
 
@@ -583,6 +592,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
