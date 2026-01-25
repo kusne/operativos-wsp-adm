@@ -712,31 +712,7 @@ label.top-label{
   font-weight: 700;
   opacity: 1 !important;
 }
-/* ===== LOGO: fondo dorado ===== */
-.brand-logo{
-  background: var(--gold);       /* fondo dorado */
-  padding: 10px;                /* grosor del “aro” dorado */
-  border: 2px solid #0B3D91;    /* borde azul fuerte (opcional) */
-  box-shadow: 0 8px 18px rgba(0,0,0,0.35);
-}
-/* Logo sin anillo / sin fondo */
-.brand-logo{
-  width: 96px;          /* ajustá tamaño */
-  height: 96px;
-  object-fit: contain;
-  display: block;
 
-  /* sin aro */
-  border: 0;
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-
-  /* “tint” dorado del contenido */
-  filter: brightness(0) saturate(100%)
-          invert(72%) sepia(45%) saturate(680%)
-          hue-rotate(6deg) brightness(98%) contrast(98%);
-}
 
 
 
