@@ -407,6 +407,16 @@ label.check > input[type="checkbox"]{
   margin: 0 !important;
 }
 
+/* ===== mismos elementos (bloque) ===== */
+#bloqueMismosElementos{
+  padding: 8px 10px;
+}
+
+#bloqueMismosElementos #wrapMismosElementos{
+  margin: 0;
+  font-weight: 600;
+}
+
 
 
 
