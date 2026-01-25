@@ -37,3 +37,22 @@ select {
 .obligatorio {
   border: 2px solid #c62828;
 }
+/* ===== secciones destacadas ===== */
+.section.destacado{
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(0,0,0,.03);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+/* Título del bloque un poco más fuerte */
+.section.destacado > label:first-child{
+  font-weight: 700;
+}
+
+/* Si querés que resalte también cuando el usuario hace click dentro */
+.section.destacado:focus-within{
+  border-color: rgba(0,0,0,.25);
+  background: rgba(0,0,0,.05);
+}
+
