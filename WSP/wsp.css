@@ -435,8 +435,8 @@ label.check > input[type="checkbox"]{
 }
 
 .brand-logo{
-  width: 56px;
-  height: 56px;
+  width: 90px;
+  height: 90px;
   object-fit: contain;
   display: block;
 
@@ -445,6 +445,7 @@ label.check > input[type="checkbox"]{
   border: 1px solid #2b2b2b;
   padding: 3px;
 }
+
 
 
 
