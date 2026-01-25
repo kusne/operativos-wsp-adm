@@ -435,16 +435,18 @@ label.check > input[type="checkbox"]{
 }
 
 .brand-logo{
-  width: 90px;
+  width: 90px;          /* más grande (probá 80 / 90 / 100) */
   height: 90px;
   object-fit: contain;
   display: block;
 
-  border-radius: 50%;
-  background: #fff;
-  border: 1px solid #2b2b2b;
-  padding: 3px;
+  /* QUITA el “aro” exterior */
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;     /* opcional: por si querés evitar redondeo extra */
 }
+
 
 
 
