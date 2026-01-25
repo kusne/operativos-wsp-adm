@@ -446,6 +446,124 @@ label.check > input[type="checkbox"]{
   padding: 0;
   border-radius: 0;     /* opcional: por si querés evitar redondeo extra */
 }
+/* =========================
+   TEMA PREMIUM (Opción C)
+   ========================= */
+:root{
+  --bg-app: #EEF2F7;
+  --card-bg: #FFFFFF;
+
+  --text: #111827;
+  --text-2: #4B5563;
+
+  --border: #C9D2DE;
+  --border-strong: #1F3A5F;     /* azul acero institucional */
+  --danger: #A61B1B;            /* rojo institucional */
+
+  --focus: rgba(31, 58, 95, 0.18);
+}
+
+/* Fondo general */
+body{
+  background: var(--bg-app);
+  color: var(--text);
+}
+
+/* Contenedor */
+.app{
+  max-width: 520px;              /* un poco más “premium” en desktop */
+  padding: 14px;
+}
+
+/* Tarjetas (secciones) */
+.section{
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
+}
+
+/* Destacados (tu clase) */
+.section.destacado{
+  background: #F5F8FC;           /* leve azul gris */
+  border: 2px solid var(--border-strong);
+}
+
+/* Obligatorios (tu clase) */
+.obligatorio{
+  border: 2px solid var(--danger) !important;
+}
+
+/* Títulos y subtítulos */
+.section > label{
+  color: var(--text);
+}
+
+.brand-text h3{
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.brand-sub{
+  color: var(--text-2);
+}
+
+/* Selects, inputs, textarea: look “institucional” */
+select,
+input[type="number"],
+textarea{
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  outline: none;
+}
+
+select:focus,
+input[type="number"]:focus,
+textarea:focus{
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+/* Botón principal */
+button#btnEnviar{
+  background: var(--border-strong);
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 10px 20px rgba(31, 58, 95, 0.18);
+}
+
+button#btnEnviar:hover{
+  filter: brightness(1.05);
+}
+
+button#btnEnviar:active{
+  transform: translateY(1px);
+}
+
+/* Chips (móviles/motos/elementos): un poco más premium */
+#bloqueMovil label.check.check-chip,
+#bloqueEscopeta label.check.check-chip,
+#bloqueHT label.check.check-chip,
+#bloquePDA label.check.check-chip,
+#bloqueImpresora label.check.check-chip,
+#bloqueAlometro label.check.check-chip,
+#bloqueAlcoholimetro label.check.check-chip{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.05);
+}
+
+/* Logo: queda limpio (sin aro) y grande (ya lo tenés así) */
+.brand-logo{
+  width: 96px;     /* ajustá 90/96/110 */
+  height: 96px;
+}
+
 
 
 
