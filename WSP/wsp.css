@@ -686,6 +686,33 @@ button#btnEnviar:active{
   width: 96px;
   height: 96px;
 }
+/* ===== DORADO (labels superiores + título + subtítulo) ===== */
+:root{
+  --gold: #D4AF37;          /* dorado */
+  --gold-2: #B8890A;        /* dorado más oscuro (si querés) */
+}
+
+/* Labels: Tipo / Orden Operacional / Horario */
+label.top-label{
+  color: var(--gold);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;  /* opcional */
+}
+
+/* Título "Informe Operativo" */
+.brand-text h3{
+  color: var(--gold) !important;
+  font-weight: 900;
+}
+
+/* Subtítulo "Brigada Motorizada..." */
+.brand-sub{
+  color: var(--gold) !important;
+  font-weight: 700;
+  opacity: 1 !important;
+}
+
 
 
 
