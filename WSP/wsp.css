@@ -563,6 +563,130 @@ button#btnEnviar:active{
   width: 96px;     /* ajustá 90/96/110 */
   height: 96px;
 }
+/* =========================
+   TEMA PLATA + AZUL FUERTE
+   (pegar al FINAL de wsp.css)
+   ========================= */
+:root{
+  --bg-app: #2B2F36;          /* gris oscuro */
+  --card-bg: #D7DCE3;         /* plata */
+  --card-bg-2: #C9D0DA;       /* plata un poco más oscuro */
+
+  --text: #0B1220;            /* texto oscuro sobre plata */
+  --text-2: #1F2937;
+
+  --blue-strong: #0B3D91;     /* azul fuerte */
+  --blue-strong-2: #072E6D;   /* azul más profundo (hover/focus) */
+
+  --border: #8E99A8;          /* borde neutro */
+  --focus: rgba(11, 61, 145, 0.25);
+
+  --danger: #B11A1A;
+}
+
+/* Fondo general */
+body{
+  background: var(--bg-app);
+  color: var(--text);
+}
+
+/* Contenedor */
+.app{
+  max-width: 520px;
+  padding: 14px;
+}
+
+/* Tarjetas */
+.section{
+  background: var(--card-bg);
+  border: 3px solid var(--blue-strong);     /* MÁS ANCHO + AZUL */
+  border-radius: 14px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+/* Destacados */
+.section.destacado{
+  background: var(--card-bg-2);
+  border: 4px solid var(--blue-strong);     /* aún más ancho */
+}
+
+/* Obligatorios */
+.obligatorio{
+  border: 3px solid var(--danger) !important;
+}
+
+/* Títulos */
+.section > label{
+  color: var(--text);
+}
+
+.brand-text h3{
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.brand-sub{
+  color: var(--text-2);
+  opacity: 0.9;
+}
+
+/* Inputs */
+select,
+input[type="number"],
+textarea{
+  background: #EEF1F6;                     /* plata claro */
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  outline: none;
+}
+
+select:focus,
+input[type="number"]:focus,
+textarea:focus{
+  border-color: var(--blue-strong);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+/* Botón principal */
+button#btnEnviar{
+  background: var(--blue-strong);
+  color: #fff;
+  border: 0;
+  border-radius: 14px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  box-shadow: 0 14px 28px rgba(11, 61, 145, 0.30);
+}
+
+button#btnEnviar:hover{
+  background: var(--blue-strong-2);
+}
+
+button#btnEnviar:active{
+  transform: translateY(1px);
+}
+
+/* Chips: coherentes con el tema */
+#bloqueMovil label.check.check-chip,
+#bloqueEscopeta label.check.check-chip,
+#bloqueHT label.check.check-chip,
+#bloquePDA label.check.check-chip,
+#bloqueImpresora label.check.check-chip,
+#bloqueAlometro label.check.check-chip,
+#bloqueAlcoholimetro label.check.check-chip{
+  background: #EDF1F7;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+}
+
+/* Logo */
+.brand-logo{
+  width: 96px;
+  height: 96px;
+}
+
 
 
 
