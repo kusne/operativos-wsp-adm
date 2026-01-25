@@ -712,6 +712,15 @@ label.top-label{
   font-weight: 700;
   opacity: 1 !important;
 }
+/* ===== LOGO: fondo dorado ===== */
+.brand-logo{
+  background: var(--gold);       /* fondo dorado */
+  padding: 10px;                /* grosor del “aro” dorado */
+  border-radius: 50%;           /* circular */
+  border: 2px solid #0B3D91;    /* borde azul fuerte (opcional) */
+  box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+}
+
 
 
 
