@@ -771,8 +771,9 @@ label.top-label{
 /* Alinear contenido arriba y controlar con padding */
 #bloquePersonal label.check.check-chip{
   align-items: flex-start;
-  padding-top: 10px;     /* sube/baja todo el contenido */
+  padding-top: 18px;     /* sube/baja todo el contenido */
 }
+
 
 
 
