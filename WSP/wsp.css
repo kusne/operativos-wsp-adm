@@ -737,6 +737,37 @@ label.top-label{
   margin: 0;
   flex: 0 0 auto;
 }
+/* ===== PERSONAL como chips VERTICALES + checkbox alineado ===== */
+#bloquePersonal .grid-personal{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#bloquePersonal label.check.check-chip{
+  display: flex;
+  align-items: center;          /* centra verticalmente */
+  justify-content: space-between;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 10px 12px;
+}
+
+/* texto */
+#bloquePersonal label.check.check-chip > span{
+  flex: 1 1 auto;
+}
+
+/* checkbox: anula el "absolute" que lo bajaba */
+#bloquePersonal label.check.check-chip > input[type="checkbox"]{
+  position: static !important;  /* clave: lo saca de abajo/derecha */
+  margin: 0 !important;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
 
 
 
