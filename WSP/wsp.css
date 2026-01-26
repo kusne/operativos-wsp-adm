@@ -776,6 +776,20 @@ label.top-label{
 #bloquePersonal label.check.check-chip input[type="checkbox"]{
   margin-top: 10px;           /* <-- SUBÍ este número para bajarlo más (4/6/8/10) */
 }
+/* ===== PERSONAL: bajar checkbox (forzado) ===== */
+
+/* 1) Asegura el layout del chip */
+#bloquePersonal label.check.check-chip{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* referencia arriba */
+}
+
+/* 2) Baja SOLO los checkbox del personal */
+#bloquePersonal input[type="checkbox"].personal{
+  transform: translateY(6px) !important; /* <-- subí/bajá este valor */
+  margin: 0 !important;
+}
 
 
 
