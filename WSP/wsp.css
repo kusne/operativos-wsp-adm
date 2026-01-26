@@ -362,7 +362,7 @@ label.check.check-chip{
 }
 
 /* =========================
-   11) PERSONAL POLICIAL (CHIPS VERTICALES + CALIBRACIÓN)
+   11) PERSONAL POLICIAL (CHIPS VERTICALES CENTRADOS)
    ========================= */
 #bloquePersonal .grid-personal{
   display: flex;
@@ -370,11 +370,12 @@ label.check.check-chip{
   gap: 10px;
 }
 
-/* Chip vertical: texto izq + checkbox der */
-#bloquePersonal label.check.check-chip{
+/* Chip vertical: texto izq + checkbox der (centrado) */
+#bloquePersonal .grid-personal label.check.check-chip{
   position: static !important;
-  display: flex;
-  justify-content: space-between;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;     /* CLAVE: centra verticalmente */
 
   width: 100%;
   box-sizing: border-box;
@@ -382,55 +383,25 @@ label.check.check-chip{
   padding: 10px 12px;
   margin: 0;
 
-  /* clave: permite “bajar” el checkbox sin mover el texto */
-  align-items: flex-start;
+  line-height: normal !important;
+  min-height: 52px;                  /* ajustable (48/52/56) */
 }
 
-#bloquePersonal label.check.check-chip > span{
+/* texto */
+#bloquePersonal .grid-personal label.check.check-chip > span{
   flex: 1 1 auto;
 }
 
-/* checkbox del personal (calibración) */
-#bloquePersonal input[type="checkbox"].personal{
+/* checkbox: sin absolute + sin translateY */
+#bloquePersonal .grid-personal label.check.check-chip > input[type="checkbox"].personal{
   position: static !important;
+  left: auto !important;
+  top: auto !important;
+
   margin: 0 !important;
 
-  /* ===== AJUSTE: bajá/subí SOLO este valor ===== */
-  transform: translateY(6px) scale(var(--check-scale)) !important;
+  transform: scale(var(--check-scale)) !important; /* SIN translateY */
 }
-/* ===== FIX: PERSONAL -> checkbox centrado y alineado dentro del chip ===== */
-
-#bloquePersonal label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;      /* <-- centra verticalmente */
-  gap: 10px;
-
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 10px 12px !important;
-
-  line-height: normal !important;      /* evita “saltos” raros */
-  min-height: 44px;                    /* altura estable (ajustable) */
-}
-
-/* El texto ocupa la izquierda */
-#bloquePersonal label.check.check-chip > span{
-  flex: 1 1 auto;
-}
-
-/* Checkbox: sin absolute, sin translateY, sólo escala */
-#bloquePersonal input[type="checkbox"].personal{
-  position: static !important;
-  margin: 0 !important;
-  transform: scale(var(--check-scale)) !important;  /* <-- sin translateY */
-}
-
-
-
-
-
 
 
 
