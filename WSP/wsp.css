@@ -774,8 +774,9 @@ label.top-label{
 }
 
 #bloquePersonal label.check.check-chip input[type="checkbox"]{
-  margin-top: 6px;           /* <-- SUBÍ este número para bajarlo más (4/6/8/10) */
+  margin-top: 10px;           /* <-- SUBÍ este número para bajarlo más (4/6/8/10) */
 }
+
 
 
 
