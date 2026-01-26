@@ -768,10 +768,13 @@ label.top-label{
   height: 18px;
   flex: 0 0 auto;
 }
-/* Alinear contenido arriba y controlar con padding */
+/* ===== OPCIÓN B: bajar checkbox SOLO en PERSONAL ===== */
 #bloquePersonal label.check.check-chip{
-  align-items: flex-start;
-  padding-top: 18px;     /* sube/baja todo el contenido */
+  align-items: flex-start;   /* permite bajar el checkbox sin desalinear el texto */
+}
+
+#bloquePersonal label.check.check-chip input[type="checkbox"]{
+  margin-top: 6px;           /* <-- SUBÍ este número para bajarlo más (4/6/8/10) */
 }
 
 
