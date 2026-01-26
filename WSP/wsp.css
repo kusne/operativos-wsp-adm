@@ -712,6 +712,32 @@ label.top-label{
   font-weight: 700;
   opacity: 1 !important;
 }
+/* ===== PERSONAL POLICIAL como chips (vertical) ===== */
+#bloquePersonal label.check.check-chip{
+  display: flex;            /* chip */
+  align-items: center;
+  gap: 10px;
+
+  width: 100%;              /* ocupa toda la fila => verticalidad */
+  box-sizing: border-box;
+
+  padding: 10px 12px;
+  margin: 8px 0;            /* separación vertical */
+
+  background: #EDF1F7;      /* similar a tus chips */
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.14);
+}
+
+/* checkbox prolijo */
+#bloquePersonal label.check.check-chip input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
 
 
 
