@@ -398,6 +398,34 @@ label.check.check-chip{
   /* ===== AJUSTE: bajá/subí SOLO este valor ===== */
   transform: translateY(6px) scale(var(--check-scale)) !important;
 }
+/* ===== FIX: PERSONAL -> checkbox centrado y alineado dentro del chip ===== */
+
+#bloquePersonal label.check.check-chip{
+  position: static !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;      /* <-- centra verticalmente */
+  gap: 10px;
+
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 10px 12px !important;
+
+  line-height: normal !important;      /* evita “saltos” raros */
+  min-height: 44px;                    /* altura estable (ajustable) */
+}
+
+/* El texto ocupa la izquierda */
+#bloquePersonal label.check.check-chip > span{
+  flex: 1 1 auto;
+}
+
+/* Checkbox: sin absolute, sin translateY, sólo escala */
+#bloquePersonal input[type="checkbox"].personal{
+  position: static !important;
+  margin: 0 !important;
+  transform: scale(var(--check-scale)) !important;  /* <-- sin translateY */
+}
 
 
 
