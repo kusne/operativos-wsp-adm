@@ -402,6 +402,37 @@ label.check.check-chip{
 
   transform: scale(var(--check-scale)) !important; /* SIN translateY */
 }
+/* ===== FIX DEFINITIVO PERSONAL: 1 FILA + CHECKBOX DERECHA CENTRADO ===== */
+#bloquePersonal .grid-personal label.check.check-chip{
+  /* pisa la regla global label.check */
+  padding-right: 0 !important;
+  line-height: normal !important;
+  min-height: 48px;                 /* ajustá 44/48/52 si querés */
+  
+  /* layout 1 fila */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px;
+}
+
+/* texto en UNA sola línea */
+#bloquePersonal .grid-personal label.check.check-chip > span{
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;          /* por si algún nombre es largo */
+}
+
+/* checkbox bien a la derecha, centrado (sin absolute) */
+#bloquePersonal .grid-personal label.check.check-chip > input.personal{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto;
+  transform: scale(var(--check-scale)) !important;
+}
 
 
 
