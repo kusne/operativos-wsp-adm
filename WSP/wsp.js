@@ -560,7 +560,7 @@ ${textoDetalles}
 Observaciones:
 ${document.getElementById("obs")?.value || "Sin novedad"}`;
 
-    const textoFinal = texto.replace(/\n{2,}/g, "\n");
+    const textoFinal = texto.replace(/\n{3,}/g, "\n\n");
 
     // ===== PASO 2: guardar elementos SOLO al enviar INICIA =====
     if (selTipo.value === "INICIA") {
@@ -592,6 +592,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
