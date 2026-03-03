@@ -800,6 +800,10 @@ label[for="obs"]{
   font-weight: 800;
 }
 
+.gold-title{
+  color: var(--gold) !important;
+  font-weight: 800;
+}
 
 
 
