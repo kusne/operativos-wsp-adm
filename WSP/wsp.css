@@ -790,18 +790,17 @@ label.top-label{
   transform: translateY(6px) !important; /* <-- subí/bajá este valor */
   margin: 0 !important;
 }
-/* ===== TITULOS DE SECCIONES EN DORADO ===== */
-/* Afecta: Personal policial, Moviles, Motos, Elementos (escopeta/HT/PDA/impresora/alometro/alcoholimetro),
-   Resultados, Medidas, Detalles, Observaciones, etc. */
+/* Títulos principales de cada sección (los que antes te cambiaban) */
 .section > label{
   color: var(--gold) !important;
 }
 
-/* Si "Motos" es un subtítulo dentro del bloque de móviles */
-#bloqueMovil .subtitulo{
+/* Observaciones: tu HTML es <label>Observaciones:</label> (sin class/for)
+   Esto lo toma solo si el label está inmediatamente antes del textarea de observaciones. */
+label:has(+ textarea#observaciones){
   color: var(--gold) !important;
-  font-weight: 800;
 }
+
 
 
 
