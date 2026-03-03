@@ -540,7 +540,7 @@ ${detallesTexto}
     // ===== Texto principal =====
     const texto = `Policia de la Provincia de Santa Fe - Guardia Provincial
 Brigada Motorizada Centro Norte
-Tercio Charly
+Tercio Charlie
 
 ${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(franjaSeleccionada.titulo)} ${ordenSeleccionada.num}
 
@@ -597,6 +597,7 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
+
 
 
 
