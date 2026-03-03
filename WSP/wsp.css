@@ -794,14 +794,15 @@ label.top-label{
 /* Afecta: Personal policial, Moviles, Motos, Elementos (escopeta/HT/PDA/impresora/alometro/alcoholimetro),
    Resultados, Medidas, Detalles, Observaciones, etc. */
 .section > label{
-  color: var(--gold) !important;
+  color: var(--red) !important;
 }
 
 /* Si "Motos" es un subtítulo dentro del bloque de móviles */
 #bloqueMovil .subtitulo{
-  color: var(--gold) !important;
+  color: var(--red) !important;
   font-weight: 800;
 }
+
 
 
 
