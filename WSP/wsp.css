@@ -802,11 +802,8 @@ label.top-label{
   color: var(--gold) !important;
   font-weight: 800;
 }
-/* Observaciones en dorado (cuando el label NO es hijo directo de .section) */
-.section label[for="obs"]{
-  color: var(--gold) !important;
-  font-weight: 800;
-}
+
+
 
 
 
