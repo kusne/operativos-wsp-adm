@@ -795,13 +795,7 @@ label.top-label{
   color: var(--gold) !important;
 }
 
-
-/* Observaciones (tu caso: <label>Observaciones:</label> + <textarea id="obs">) */
-label + textarea#obs{
-  /* este bloque no cambia el textarea; solo asegura que el selector matchee */
-}
-
-label:has(+ textarea#obs){
+label[for="obs"]{
   color: var(--gold) !important;
   font-weight: 800;
 }
