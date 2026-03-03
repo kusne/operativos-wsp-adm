@@ -797,9 +797,10 @@ label.top-label{
 
 /* Observaciones: tu HTML es <label>Observaciones:</label> (sin class/for)
    Esto lo toma solo si el label está inmediatamente antes del textarea de observaciones. */
-label:has(+ textarea#observaciones){
+label:has(+ textarea#obs){
   color: var(--gold) !important;
 }
+
 
 
 
