@@ -213,12 +213,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function obtenerLugarCortoFranja(franja) {
     let lugar = limpiarTextoSimple(franja?.lugar || "");
-    if (!lugar) return "Sin lugar";
+    if (!lugar) return "sin lugar";
 
     lugar = lugar
       .replace(/^qth\s*[:\-]?\s*/i, "")
       .replace(/^lugar\s*[:\-]?\s*/i, "")
-      .trim();
+      .trim()
+      .toLowerCase();
 
     if (lugar.length > 30) {
       return lugar.slice(0, 30).trim() + "...";
