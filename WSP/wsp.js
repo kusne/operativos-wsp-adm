@@ -379,7 +379,7 @@ ${bold("Moviles:")}
     const prohibicion = document.getElementById("Prohibicion")?.value || 0;
     const cesion = document.getElementById("Cesion")?.value || 0;
 
-    return `Resultados:
+    return `${bold("Resultados:")}
 Vehículos Fiscalizados: (${vehiculos})
 Personas Identificadas: (${personas})
 Test de Alómetro: (${testalom})
