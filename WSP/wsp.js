@@ -20,7 +20,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let franjaSeleccionada = null;
   let syncingOrdenes = false;
 
-  // Cache en memoria (respaldo si StorageApp no está o no guarda/lee como se espera)
+  // Cache en memoria
   let ordenesCache = [];
 
   function guardarOrdenesSeguro(arr) {
@@ -43,7 +43,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   // ======================================================
-  // ===== LECTURA DESDE SUPABASE (FUENTE REAL) ============
+  // ===== LECTURA DESDE SUPABASE ==========================
   // ======================================================
   async function syncOrdenesDesdeServidor() {
     try {
@@ -252,22 +252,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
   // ===== NORMALIZADORES DE SALIDA =======================
   // ======================================================
-  function normalizarTextoWhatsApp(texto) {
-    return texto
-      .toLowerCase()
-      .replace(/[*_\-•—–]/g, "")
-      .replace(/[.]{2,}/g, ".")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/(^|\n|\.\s+)([a-záéíóúñ])/g, (m, p1, p2) => p1 + p2.toUpperCase())
-      .trim();
-  }
-
   function normalizarTituloOperativo(txt) {
     if (!txt) return "";
 
     let t = txt.toLowerCase().trim();
-
     t = t.replace(/\b\w/g, (l) => l.toUpperCase());
     t = t.replace(/\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i, "O.Op. $2");
 
@@ -323,33 +311,51 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return `${bold("Personal UOR 3:")}
 
-${bold("Moviles:")}
-
-`;
+${bold("Moviles:")}`;
   }
 
+  // ======================================================
+  // ===== DETALLES ========================================
+  // Formato final:
+  // (01) 13018 Rto
+  // <cantidad> <codigo> <descripcion>
+  // cantidad: 1 o 2 dígitos
+  // código: 4 o 5 dígitos
+  // ======================================================
   function normalizarLineaDetalle(linea) {
     let s = String(linea || "").trim();
     if (!s) return "";
 
-    s = s.replace(/\s+/g, " ");
+    s = s.replace(/\s+/g, " ").trim();
 
-    const matchConCantidad = s.match(/^\(?\s*(\d+)\s*\)?\s*([a-zA-Z0-9]+)\s*:?\s*(.+)$/);
-    if (matchConCantidad) {
-      const cantidad = String(matchConCantidad[1]).padStart(2, "0");
-      const codigo = matchConCantidad[2].trim();
-      const descripcion = matchConCantidad[3].trim().replace(/^:\s*/, "");
-      return `(${cantidad}) ${codigo} ${descripcion}`.replace(/\s+/g, " ").trim();
+    // Caso correcto: (01) 13018 Rto
+    let m = s.match(/^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})\s+(.+)$/i);
+    if (m) {
+      const cantidad = m[1].padStart(2, "0");
+      const codigo = m[2];
+      const descripcion = m[3].trim().replace(/^:\s*/, "");
+      return `(${cantidad}) ${codigo} ${descripcion}`;
     }
 
-    const matchCodigoDescripcion = s.match(/^([a-zA-Z0-9]+)\s*:?\s*(.+)$/);
-    if (matchCodigoDescripcion) {
-      const codigo = matchCodigoDescripcion[1].trim();
-      const descripcion = matchCodigoDescripcion[2].trim().replace(/^:\s*/, "");
-      return `(01) ${codigo} ${descripcion}`.replace(/\s+/g, " ").trim();
+    // Caso: 01 13018 Rto
+    m = s.match(/^(\d{1,2})\s+(\d{4,5})\s+(.+)$/i);
+    if (m) {
+      const cantidad = m[1].padStart(2, "0");
+      const codigo = m[2];
+      const descripcion = m[3].trim().replace(/^:\s*/, "");
+      return `(${cantidad}) ${codigo} ${descripcion}`;
     }
 
-    return `(01) ${s}`.replace(/\s+/g, " ").trim();
+    // Caso sin cantidad: 13018: Rto  | 13018 Rto
+    m = s.match(/^(\d{4,5})\s*:?\s*(.+)$/i);
+    if (m) {
+      const codigo = m[1];
+      const descripcion = m[2].trim().replace(/^:\s*/, "");
+      return `(01) ${codigo} ${descripcion}`;
+    }
+
+    // Si no cumple estructura válida, dejarlo limpio sin inventar cantidad/código raros
+    return s;
   }
 
   function normalizarDetallesTexto(texto) {
@@ -363,7 +369,7 @@ ${bold("Moviles:")}
       .join("\n");
   }
 
-  function construirBloqueResultados() {
+  function construirLineasResultados() {
     const vehiculos = document.getElementById("vehiculos")?.value || 0;
     const personas = document.getElementById("personas")?.value || 0;
     const testalom = document.getElementById("testalom")?.value || 0;
@@ -379,22 +385,23 @@ ${bold("Moviles:")}
     const prohibicion = document.getElementById("Prohibicion")?.value || 0;
     const cesion = document.getElementById("Cesion")?.value || 0;
 
-    return `${bold("Resultados:")}
-Vehículos Fiscalizados: (${vehiculos})
-Personas Identificadas: (${personas})
-Test de Alómetro: (${testalom})
-Test de Alcoholímetro: (${alco})
-Positiva Sancionable: (${posSan})
-Positiva no Sancionable: (${posNo})
-Actas Labradas: (${actas})
-Requisas: (${requisa})
-Qrz: (${qrz})
-Dominio: (${dominio})
-Medidas Cautelares:
-Remisión: (${remision})
-Retención: (${retencion})
-Prohibición de Circulación: (${prohibicion})
-Cesión de Conducción: (${cesion})`;
+    return [
+      `Vehículos Fiscalizados: (${vehiculos})`,
+      `Personas Identificadas: (${personas})`,
+      `Test de Alómetro: (${testalom})`,
+      `Test de Alcoholímetro: (${alco})`,
+      `Positiva Sancionable: (${posSan})`,
+      `Positiva no Sancionable: (${posNo})`,
+      `Actas Labradas: (${actas})`,
+      `Requisas: (${requisa})`,
+      `Qrz: (${qrz})`,
+      `Dominio: (${dominio})`,
+      `Medidas Cautelares:`,
+      `Remisión: (${remision})`,
+      `Retención: (${retencion})`,
+      `Prohibición de Circulación: (${prohibicion})`,
+      `Cesión de Conducción: (${cesion})`,
+    ];
   }
 
   function setElementosVisibles(visible) {
@@ -618,7 +625,7 @@ Cesión de Conducción: (${cesion})`;
 
     const extraConjunto = bloqueConjuntoExtra();
     if (extraConjunto) {
-      partes.push(extraConjunto.trimEnd());
+      partes.push(extraConjunto);
       partes.push("");
     }
 
@@ -632,7 +639,8 @@ Cesión de Conducción: (${cesion})`;
 
     if (esFinaliza) {
       partes.push("");
-      partes.push(construirBloqueResultados());
+      partes.push(bold("Resultados:"));
+      partes.push(...construirLineasResultados());
 
       const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
       if (detallesNormalizados) {
