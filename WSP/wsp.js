@@ -10,9 +10,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const divFinaliza = document.getElementById("finaliza");
   const divDetalles = document.getElementById("bloqueDetalles");
-  
+
   const divMismosElementos = document.getElementById("bloqueMismosElementos");
-  const chkMismosElementos = document.getElementById("mismosElementos"); 
+  const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
 
   // ===== Estado =====
@@ -22,6 +22,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   // Cache en memoria (respaldo si StorageApp no está o no guarda/lee como se espera)
   let ordenesCache = [];
+
   function guardarOrdenesSeguro(arr) {
     ordenesCache = Array.isArray(arr) ? arr : [];
     try {
@@ -30,6 +31,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.warn("[WSP] No se pudo guardar en StorageApp, uso cache en memoria.", e);
     }
   }
+
   function cargarOrdenesSeguro() {
     try {
       const arr = StorageApp && StorageApp.cargarOrdenes && StorageApp.cargarOrdenes();
@@ -63,7 +65,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const data = await r.json();
       if (!Array.isArray(data) || !Array.isArray(data[0]?.payload)) return false;
 
-      // ✅ payload ES el array de órdenes
       guardarOrdenesSeguro(data[0].payload);
       return true;
     } catch (e) {
@@ -105,23 +106,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function extraerHoraInicio(h) {
     const s = String(h || "").toLowerCase();
 
-    // Buscar hh:mm primero
     let m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
     if (m) {
       const n = parseInt(m[1], 10);
       return n >= 0 && n <= 23 ? n : null;
     }
 
-    // Buscar primer hora "al inicio" o después de palabras típicas
     m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/);
     if (m) {
       const n = parseInt(m[1], 10);
       return n >= 0 && n <= 23 ? n : null;
     }
 
-    // Fallback: primer número del string
     m = s.match(/\b(\d{1,2})\b/);
     if (!m) return null;
+
     const n = parseInt(m[1], 10);
     return n >= 0 && n <= 23 ? n : null;
   }
@@ -135,21 +134,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const f = new Date(inicio);
     f.setHours(hi, 0, 0, 0);
     if (f < inicio) f.setDate(f.getDate() + 1);
+
     return f >= inicio && f < fin;
   }
 
   function parseVigenciaFlexible(v) {
-    // 1) intentar con el parser existente
     try {
       const d = Dates?.parseVigenciaToDate?.(v);
       if (d instanceof Date && !isNaN(d)) return d;
     } catch {}
 
-    // 2) aceptar YYYY-MM-DD
     const iso = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
 
-    // 3) aceptar DD/MM/YYYY
     const latam = String(v || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (latam) return new Date(Number(latam[3]), Number(latam[2]) - 1, Number(latam[1]));
 
@@ -209,31 +206,28 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     divFinaliza.classList.toggle("hidden", !fin);
     divDetalles.classList.toggle("hidden", !fin);
 
-    // mostrar/ocultar el bloque del checkbox
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
 
     if (!fin) {
-      // INICIA: checkbox off y elementos visibles
       if (chkMismosElementos) chkMismosElementos.checked = false;
       setElementosVisibles(true);
       return;
     }
 
-    // FINALIZA: por defecto, intentar usar “mismos elementos”
     const payload = cargarElementosGuardados?.() || null;
 
     if (chkMismosElementos) chkMismosElementos.checked = !!payload;
 
     if (payload) {
       aplicarElementos(payload);
-      setElementosVisibles(false); // ocultar elementos
+      setElementosVisibles(false);
     } else {
-    setElementosVisibles(true);  // no hay guardado -> deja seleccionar manual
+      setElementosVisibles(true);
     }
   }
 
   // ======================================================
-  // ===== SELECCIONES (CLAVE) ============================
+  // ===== SELECCIONES =====================================
   // ======================================================
   function seleccion(clase) {
     return Array.from(document.querySelectorAll("." + clase + ":checked"))
@@ -256,7 +250,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   // ======================================================
-  // ===== NORMALIZADORES DE SALIDA (SOLO WSP) ============
+  // ===== NORMALIZADORES DE SALIDA =======================
   // ======================================================
   function normalizarTextoWhatsApp(texto) {
     return texto
@@ -274,10 +268,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     let t = txt.toLowerCase().trim();
 
-    // Capitalizar palabras
     t = t.replace(/\b\w/g, (l) => l.toUpperCase());
-
-    // Normalizar OP
     t = t.replace(/\b(o\.?\s*op\.?|op)\s*0*(\d+\/\d+)\b/i, "O.Op. $2");
 
     return t;
@@ -295,23 +286,128 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!txt) return "";
 
     let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
-
-    // Solo Finalizar con mayúscula
     t = t.replace(/\bfinalizar\b/g, "Finalizar");
 
     return t;
   }
-  function setElementosVisibles(visible){
+
+  function bold(txt) {
+    return `*${String(txt || "").trim()}*`;
+  }
+
+  function valorObservacionPorDefecto() {
+    const txt = String(document.getElementById("obs")?.value || "").trim();
+    return txt || "Sin novedad";
+  }
+
+  function compactarSaltos(texto) {
+    return String(texto || "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function esOperativoConjunto() {
+    const fuente = [
+      franjaSeleccionada?.titulo || "",
+      ordenSeleccionada?.textoRef || "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return /\buor\s*3\b|\buor3\b|\bmunicipio\b|\bufiv\b/.test(fuente);
+  }
+
+  function bloqueConjuntoExtra() {
+    if (!esOperativoConjunto()) return "";
+
+    return `${bold("Personal UOR 3:")}
+
+${bold("Moviles:")}
+
+`;
+  }
+
+  function normalizarLineaDetalle(linea) {
+    let s = String(linea || "").trim();
+    if (!s) return "";
+
+    s = s.replace(/\s+/g, " ");
+
+    const matchConCantidad = s.match(/^\(?\s*(\d+)\s*\)?\s*([a-zA-Z0-9]+)\s*:?\s*(.+)$/);
+    if (matchConCantidad) {
+      const cantidad = String(matchConCantidad[1]).padStart(2, "0");
+      const codigo = matchConCantidad[2].trim();
+      const descripcion = matchConCantidad[3].trim().replace(/^:\s*/, "");
+      return `(${cantidad}) ${codigo} ${descripcion}`.replace(/\s+/g, " ").trim();
+    }
+
+    const matchCodigoDescripcion = s.match(/^([a-zA-Z0-9]+)\s*:?\s*(.+)$/);
+    if (matchCodigoDescripcion) {
+      const codigo = matchCodigoDescripcion[1].trim();
+      const descripcion = matchCodigoDescripcion[2].trim().replace(/^:\s*/, "");
+      return `(01) ${codigo} ${descripcion}`.replace(/\s+/g, " ").trim();
+    }
+
+    return `(01) ${s}`.replace(/\s+/g, " ").trim();
+  }
+
+  function normalizarDetallesTexto(texto) {
+    const limpio = String(texto || "").replace(/\r/g, "").trim();
+    if (!limpio) return "";
+
+    return limpio
+      .split("\n")
+      .map((linea) => normalizarLineaDetalle(linea))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function construirBloqueResultados() {
+    const vehiculos = document.getElementById("vehiculos")?.value || 0;
+    const personas = document.getElementById("personas")?.value || 0;
+    const testalom = document.getElementById("testalom")?.value || 0;
+    const alco = document.getElementById("Alcotest")?.value || 0;
+    const posSan = document.getElementById("positivaSancionable")?.value || 0;
+    const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
+    const actas = document.getElementById("actas")?.value || 0;
+    const requisa = document.getElementById("Requisa")?.value || 0;
+    const qrz = document.getElementById("qrz")?.value || 0;
+    const dominio = document.getElementById("dominio")?.value || 0;
+    const remision = document.getElementById("Remision")?.value || 0;
+    const retencion = document.getElementById("Retencion")?.value || 0;
+    const prohibicion = document.getElementById("Prohibicion")?.value || 0;
+    const cesion = document.getElementById("Cesion")?.value || 0;
+
+    return `Resultados:
+Vehículos Fiscalizados: (${vehiculos})
+Personas Identificadas: (${personas})
+Test de Alómetro: (${testalom})
+Test de Alcoholímetro: (${alco})
+Positiva Sancionable: (${posSan})
+Positiva no Sancionable: (${posNo})
+Actas Labradas: (${actas})
+Requisas: (${requisa})
+Qrz: (${qrz})
+Dominio: (${dominio})
+Medidas Cautelares:
+Remisión: (${remision})
+Retención: (${retencion})
+Prohibición de Circulación: (${prohibicion})
+Cesión de Conducción: (${cesion})`;
+  }
+
+  function setElementosVisibles(visible) {
     const ids = [
       "bloqueEscopeta",
       "bloqueHT",
       "bloquePDA",
       "bloqueImpresora",
       "bloqueAlometro",
-      "bloqueAlcoholimetro"
+      "bloqueAlcoholimetro",
     ];
 
-    ids.forEach(id => {
+    ids.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.classList.toggle("hidden", !visible);
@@ -319,71 +415,60 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function resetUI() {
-    // estado interno
     ordenSeleccionada = null;
     franjaSeleccionada = null;
 
-    // selects
     selTipo.value = "";
     selOrden.value = "";
     selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
 
-    // checkboxes
     document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
 
-    // inputs numéricos y textos
     document
       .querySelectorAll('input[type="number"], input[type="text"], textarea')
       .forEach((i) => (i.value = ""));
 
-    // observaciones default
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
 
-    // ocultar bloques dependientes
     divFinaliza.classList.add("hidden");
     divDetalles.classList.add("hidden");
-    // reset “mismos elementos” + visibilidad
+
     if (chkMismosElementos) chkMismosElementos.checked = false;
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
+
     setElementosVisibles(true);
   }
 
   // ======================================================
-  // ===== PASOS 2, 3 y 4: “mismos elementos” =============
-  // 2) Guardar elementos al enviar INICIA
-  // 3) Checkbox en FINALIZA: si tildado, cargar elementos guardados
-  // 4) En FINALIZA, imprimir elementos guardados si está tildado
+  // ===== MISMOS ELEMENTOS ================================
   // ======================================================
-
   function guardarElementosDeInicio() {
-  const payload = {
-    ts: Date.now(),
-    ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
-    HT: leerSeleccionPorClase("HT"),
-    PDA: leerSeleccionPorClase("PDA"),
-    IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
-    Alometro: leerSeleccionPorClase("Alometro"),
-    Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
-  };
+    const payload = {
+      ts: Date.now(),
+      ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
+      HT: leerSeleccionPorClase("HT"),
+      PDA: leerSeleccionPorClase("PDA"),
+      IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
+      Alometro: leerSeleccionPorClase("Alometro"),
+      Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
+    };
 
-  // 1) Si existe StorageApp y tiene la función, usalo
-  try {
-    if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
-      StorageApp.guardarElementosInicio(payload);
-      return;
+    try {
+      if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
+        StorageApp.guardarElementosInicio(payload);
+        return;
+      }
+    } catch (e) {
+      console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
     }
-  } catch (e) {
-    console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
-  }
 
-  // 2) Fallback seguro: localStorage
-  try {
-    localStorage.setItem("elementos_inicio", JSON.stringify(payload));
-  } catch (e) {
-    console.warn("[WSP] No se pudo guardar en localStorage.", e);
+    try {
+      localStorage.setItem("elementos_inicio", JSON.stringify(payload));
+    } catch (e) {
+      console.warn("[WSP] No se pudo guardar en localStorage.", e);
+    }
   }
-}
 
   function cargarElementosGuardados() {
     try {
@@ -397,12 +482,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return null;
     }
   }
-  function limpiarSeleccionElementos(){
-    const clases = ["ESCOPETA","HT","PDA","IMPRESORA","Alometro","Alcoholimetro"];
-    clases.forEach(clase => {
-      document.querySelectorAll("." + clase).forEach(inp => { inp.checked = false; });
+
+  function limpiarSeleccionElementos() {
+    const clases = ["ESCOPETA", "HT", "PDA", "IMPRESORA", "Alometro", "Alcoholimetro"];
+    clases.forEach((clase) => {
+      document.querySelectorAll("." + clase).forEach((inp) => {
+        inp.checked = false;
+      });
     });
   }
+
   function aplicarElementos(payload) {
     if (!payload) return;
 
@@ -419,7 +508,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const wanted = new Set(Array.isArray(map[clase]) ? map[clase] : []);
       const inputs = Array.from(document.querySelectorAll("." + clase));
 
-      // deja exactamente lo guardado
       inputs.forEach((inp) => {
         inp.checked = wanted.has(inp.value);
       });
@@ -428,20 +516,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   if (chkMismosElementos) {
     chkMismosElementos.addEventListener("change", () => {
-
-      // ✅ SI DESTILDA: modo manual + limpiar selección
       if (!chkMismosElementos.checked) {
-        limpiarSeleccionElementos();   // <- NUEVO
+        limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
 
-      // si tilda: cargar guardados + ocultar
       const payload = cargarElementosGuardados();
       if (!payload) {
         alert("No hay elementos guardados del INICIA.");
         chkMismosElementos.checked = false;
-        limpiarSeleccionElementos();   // <- para que quede limpio también
+        limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
@@ -460,7 +545,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return;
     }
 
-    // MÓVILES: obligatorios SIEMPRE (motos cuentan como móviles)
     const mov = seleccionLinea("movil", "/");
     const mot = seleccionLinea("moto", "/");
     if (mov === "/" && mot === "/") {
@@ -471,7 +555,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const esFinaliza = selTipo.value === "FINALIZA";
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
 
-    // Si en FINALIZA tilda “mismos elementos”, debe existir guardado del INICIA
     let elementosInicio = null;
     if (usarMismosElementos) {
       elementosInicio = cargarElementosGuardados();
@@ -483,99 +566,94 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const fecha = new Date().toLocaleDateString("es-AR");
 
-    let bloqueResultados = "";
-    let textoDetalles = "";
+    const escopetasTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
+      : seleccionLinea("ESCOPETA", "/");
+    const htTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.HT, "/")
+      : seleccionLinea("HT", "/");
+    const pdaTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.PDA, "/")
+      : seleccionLinea("PDA", "/");
+    const impTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.IMPRESORA, "/")
+      : seleccionLinea("IMPRESORA", "/");
+    const alomTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.Alometro, "/")
+      : seleccionLinea("Alometro", "/");
+    const alcoTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
+      : seleccionLinea("Alcoholimetro", "/");
 
-    // ⬇️ SOLO si es FINALIZA agregamos los numerales
+    const tituloPrincipal = `${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(
+      franjaSeleccionada.titulo
+    )} ${ordenSeleccionada.num}`.trim();
+
+    const mobilesTexto =
+      [seleccionLinea("movil", "/"), seleccionLinea("moto", "/")]
+        .filter((v) => v !== "/")
+        .join(" / ") || "/";
+
+    const partes = [];
+
+    partes.push(bold("Policia de la Provincia de Santa Fe - Guardia Provincial"));
+    partes.push(bold("Brigada Motorizada Centro Norte"));
+    partes.push(bold("Tercio Charlie"));
+    partes.push("");
+
+    partes.push(bold(tituloPrincipal));
+    partes.push("");
+
+    partes.push(`${bold("Fecha:")} ${fecha}`);
+    partes.push(`${bold("Horario:")} ${normalizarHorario(franjaSeleccionada.horario)}`);
+    partes.push(`${bold("Lugar:")} ${normalizarLugar(franjaSeleccionada.lugar)}`);
+    partes.push("");
+
+    partes.push(bold("Personal Policial:"));
+    partes.push(seleccion("personal") || "/");
+    partes.push("");
+
+    partes.push(`${bold("Móviles:")} ${mobilesTexto}`);
+    partes.push("");
+
+    const extraConjunto = bloqueConjuntoExtra();
+    if (extraConjunto) {
+      partes.push(extraConjunto.trimEnd());
+      partes.push("");
+    }
+
+    partes.push(bold("Elementos:"));
+    partes.push(`Escopetas: ${escopetasTXT}`);
+    partes.push(`Ht: ${htTXT}`);
+    partes.push(`Pda: ${pdaTXT}`);
+    partes.push(`Impresoras: ${impTXT}`);
+    partes.push(`Alómetros: ${alomTXT}`);
+    partes.push(`Alcoholímetros: ${alcoTXT}`);
+
     if (esFinaliza) {
-      const vehiculos = document.getElementById("vehiculos")?.value || 0;
-      const personas = document.getElementById("personas")?.value || 0;
-      const testalom = document.getElementById("testalom")?.value || 0;
-      const alco = document.getElementById("Alcotest")?.value || 0;
-      const posSan = document.getElementById("positivaSancionable")?.value || 0;
-      const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
-      const actas = document.getElementById("actas")?.value || 0;
-      const requisa = document.getElementById("Requisa")?.value || 0;
-      const qrz = document.getElementById("qrz")?.value || 0;
-      const dominio = document.getElementById("dominio")?.value || 0;
+      partes.push("");
+      partes.push(construirBloqueResultados());
 
-      const remision = document.getElementById("Remision")?.value || 0;
-      const retencion = document.getElementById("Retencion")?.value || 0;
-      const prohibicion = document.getElementById("Prohibicion")?.value || 0;
-      const cesion = document.getElementById("Cesion")?.value || 0;
-
-      bloqueResultados = `Resultados:
-Vehículos Fiscalizados: (${vehiculos})
-Personas Identificadas: (${personas})
-Test de Alómetro: (${testalom})
-Test de Alcoholímetro: (${alco})
-Positiva Sancionable: (${posSan})
-Positiva no Sancionable: (${posNo})
-Actas Labradas: (${actas})
-Requisas: (${requisa})
-Qrz: (${qrz})
-Dominio: (${dominio})
-Medidas Cautelares:
-Remisión: (${remision})
-Retención: (${retencion})
-Prohibición de Circulación: (${prohibicion})
-Cesión de Conducción: (${cesion})
-`;
-      const detallesTexto = document.getElementById("detalles")?.value?.trim();
-      if (detallesTexto) {
-        textoDetalles = `Detalles:
-${detallesTexto}
-`;
+      const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
+      if (detallesNormalizados) {
+        partes.push("");
+        partes.push(bold("Detalles:"));
+        partes.push(detallesNormalizados);
       }
     }
 
-    // ===== Elementos (según modo) =====
-    const escopetasTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.ESCOPETA, "/") : seleccionLinea("ESCOPETA", "/");
-    const htTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.HT, "/") : seleccionLinea("HT", "/");
-    const pdaTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.PDA, "/") : seleccionLinea("PDA", "/");
-    const impTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.IMPRESORA, "/") : seleccionLinea("IMPRESORA", "/");
-    const alomTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.Alometro, "/") : seleccionLinea("Alometro", "/");
-    const alcoTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/") : seleccionLinea("Alcoholimetro", "/");
+    partes.push("");
+    partes.push(bold("Observaciones:"));
+    partes.push(valorObservacionPorDefecto());
 
-    // ===== Texto principal =====
-    const texto = `Policia de la Provincia de Santa Fe - Guardia Provincial
-Brigada Motorizada Centro Norte
-Tercio Charlie
+    const textoFinal = compactarSaltos(partes.join("\n"));
 
-${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(franjaSeleccionada.titulo)} ${ordenSeleccionada.num}
-
-Fecha: ${fecha}
-Horario: ${normalizarHorario(franjaSeleccionada.horario)}
-Lugar: ${normalizarLugar(franjaSeleccionada.lugar)}
-
-Personal Policial:
-${seleccion("personal")}
-
-Móviles: ${[seleccionLinea("movil", "/"), seleccionLinea("moto", "/")].filter((v) => v !== "/").join(" / ") || "/"}
-
-Elementos:
-Escopetas: ${escopetasTXT}
-Ht: ${htTXT}
-Pda: ${pdaTXT}
-Impresoras: ${impTXT}
-Alómetros: ${alomTXT}
-Alcoholímetros: ${alcoTXT}
-${bloqueResultados}
-${textoDetalles}
-Observaciones:
-${document.getElementById("obs")?.value || "Sin novedad"}`;
-
-    const textoFinal = texto.replace(/\n{3,}/g, "\n\n");
-
-    // ===== PASO 2: guardar elementos SOLO al enviar INICIA =====
     if (selTipo.value === "INICIA") {
       guardarElementosDeInicio();
     }
 
-    // 🔹 RESET DE LA UI
     resetUI();
 
-    // 🔹 ENVÍO A WHATSAPP
     setTimeout(() => {
       window.location.href = "https://wa.me/?text=" + encodeURIComponent(textoFinal);
     }, 0);
@@ -597,26 +675,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
