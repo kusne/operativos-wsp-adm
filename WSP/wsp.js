@@ -314,6 +314,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 ${bold("Moviles:")}`;
   }
 
+  function esFinalizaSinResultados() {
+    const fuente = [
+      franjaSeleccionada?.titulo || "",
+      ordenSeleccionada?.textoRef || "",
+    ]
+      .join(" ")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return /\bordenamiento\b|\blimpieza\s*tunel\b|\bcustodia\b|\btraslado\b|\bmonitoreo\b/.test(fuente);
+  }
+
   // ======================================================
   // ===== DETALLES ========================================
   // Formato final:
@@ -328,7 +341,6 @@ ${bold("Moviles:")}`;
 
     s = s.replace(/\s+/g, " ").trim();
 
-    // Caso correcto: (01) 13018 Rto
     let m = s.match(/^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})\s+(.+)$/i);
     if (m) {
       const cantidad = m[1].padStart(2, "0");
@@ -337,7 +349,6 @@ ${bold("Moviles:")}`;
       return `(${cantidad}) ${codigo} ${descripcion}`;
     }
 
-    // Caso: 01 13018 Rto
     m = s.match(/^(\d{1,2})\s+(\d{4,5})\s+(.+)$/i);
     if (m) {
       const cantidad = m[1].padStart(2, "0");
@@ -346,7 +357,6 @@ ${bold("Moviles:")}`;
       return `(${cantidad}) ${codigo} ${descripcion}`;
     }
 
-    // Caso sin cantidad: 13018: Rto  | 13018 Rto
     m = s.match(/^(\d{4,5})\s*:?\s*(.+)$/i);
     if (m) {
       const codigo = m[1];
@@ -354,7 +364,6 @@ ${bold("Moviles:")}`;
       return `(01) ${codigo} ${descripcion}`;
     }
 
-    // Si no cumple estructura válida, dejarlo limpio sin inventar cantidad/código raros
     return s;
   }
 
@@ -560,6 +569,7 @@ ${bold("Moviles:")}`;
     }
 
     const esFinaliza = selTipo.value === "FINALIZA";
+    const finalizaSinResultados = esFinaliza && esFinalizaSinResultados();
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
 
     let elementosInicio = null;
@@ -637,11 +647,20 @@ ${bold("Moviles:")}`;
     partes.push(`Alómetros: ${alomTXT}`);
     partes.push(`Alcoholímetros: ${alcoTXT}`);
 
-    if (esFinaliza) {
+    if (esFinaliza && !finalizaSinResultados) {
       partes.push("");
       partes.push(bold("Resultados:"));
       partes.push(...construirLineasResultados());
 
+      const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
+      if (detallesNormalizados) {
+        partes.push("");
+        partes.push(bold("Detalles:"));
+        partes.push(detallesNormalizados);
+      }
+    }
+
+    if (esFinaliza && finalizaSinResultados) {
       const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
       if (detallesNormalizados) {
         partes.push("");
