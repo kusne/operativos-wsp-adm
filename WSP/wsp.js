@@ -174,6 +174,67 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     });
   }
 
+  function limpiarTextoSimple(txt) {
+    return String(txt || "")
+      .replace(/\s+/g, " ")
+      .replace(/[–—]/g, "-")
+      .trim();
+  }
+
+  function normalizarBasicoSinAcentos(txt) {
+    return limpiarTextoSimple(txt)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function obtenerTipoCortoFranja(franja) {
+    const fuente = normalizarBasicoSinAcentos(
+      [franja?.titulo || "", ordenSeleccionada?.textoRef || ""].join(" ")
+    );
+
+    if (/\balcoholemia\b|\balcoholimetr/i.test(fuente)) return "Alcoholemia";
+    if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
+    if (/\blimpieza\s*tunel\b/.test(fuente)) return "Limpieza Tunel";
+    if (/\bcustodia\b/.test(fuente)) return "Custodia";
+    if (/\btraslado\b/.test(fuente)) return "Traslado";
+    if (/\bmonitoreo\b/.test(fuente)) return "Monitoreo";
+    if (/\bpatrullaje\b/.test(fuente)) return "Patrullaje";
+    if (/\bocv\b/.test(fuente)) return "OCV";
+    if (/\bestablecido\b/.test(fuente)) return "Establecido";
+    if (/\bpuente\s*carretero\b/.test(fuente)) return "Puente Carretero";
+    if (/\bcontrol\b/.test(fuente)) return "Control";
+
+    const titulo = limpiarTextoSimple(franja?.titulo || "");
+    if (!titulo) return "Operativo";
+
+    return titulo.length > 22 ? titulo.slice(0, 22).trim() : titulo;
+  }
+
+  function obtenerLugarCortoFranja(franja) {
+    let lugar = limpiarTextoSimple(franja?.lugar || "");
+    if (!lugar) return "Sin lugar";
+
+    lugar = lugar
+      .replace(/^qth\s*[:\-]?\s*/i, "")
+      .replace(/^lugar\s*[:\-]?\s*/i, "")
+      .trim();
+
+    if (lugar.length > 30) {
+      return lugar.slice(0, 30).trim() + "...";
+    }
+
+    return lugar;
+  }
+
+  function construirTextoOpcionHorario(franja) {
+    const horario = limpiarTextoSimple(franja?.horario || "");
+    const tipo = obtenerTipoCortoFranja(franja);
+    const lugar = obtenerLugarCortoFranja(franja);
+
+    return `${horario} - ${tipo} - ${lugar}`;
+  }
+
   function cargarHorariosOrden() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
@@ -189,7 +250,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (franjaEnGuardia(f.horario)) {
         const o = document.createElement("option");
         o.value = i;
-        o.text = f.horario;
+        o.text = construirTextoOpcionHorario(f);
+        o.title = construirTextoOpcionHorario(f);
         selHorario.appendChild(o);
       }
     });
@@ -329,11 +391,6 @@ ${bold("Moviles:")}`;
 
   // ======================================================
   // ===== DETALLES ========================================
-  // Formato final:
-  // (01) 13018 Rto
-  // <cantidad> <codigo> <descripcion>
-  // cantidad: 1 o 2 dígitos
-  // código: 4 o 5 dígitos
   // ======================================================
   function normalizarLineaDetalle(linea) {
     let s = String(linea || "").trim();
