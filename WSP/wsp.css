@@ -1012,12 +1012,14 @@ label[for="obs"]{
 #finaliza .resultado-item input::placeholder,
 #finaliza .graduacion-slot input::placeholder,
 .casillero-dinamico input::placeholder,
-#detalles::placeholder{
+#detalles::placeholder,
+#obs::placeholder{
   color: rgba(7, 46, 109, 0.58);
   opacity: 1;
 }
 
-#detalles::placeholder{
+#detalles::placeholder,
+#obs::placeholder{
   white-space: pre-line;
 }
 
