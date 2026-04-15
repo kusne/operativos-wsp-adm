@@ -915,3 +915,36 @@ label[for="obs"]{
   border-color: var(--danger) !important;
   box-shadow: 0 0 0 4px rgba(177, 26, 26, 0.18) !important;
 }
+
+/* ===== VISIBILIDAD DE ENCABEZADOS ===== */
+#bloquePersonal > label,
+#bloqueMovil > label,
+#bloqueMovil .subtitulo,
+#bloqueEscopeta > label,
+#bloqueHT > label,
+#bloquePDA > label,
+#bloqueImpresora > label,
+#bloqueAlometro > label,
+#bloqueAlcoholimetro > label,
+label[for="obs"]{
+  color: #072E6D !important;
+  font-weight: 900 !important;
+  opacity: 1 !important;
+}
+
+#bloqueMovil .subtitulo{
+  display: block;
+  margin-bottom: 8px;
+}
+
+#bloquePersonal > label,
+#bloqueMovil > label,
+#bloqueEscopeta > label,
+#bloqueHT > label,
+#bloquePDA > label,
+#bloqueImpresora > label,
+#bloqueAlometro > label,
+#bloqueAlcoholimetro > label,
+label[for="obs"]{
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
