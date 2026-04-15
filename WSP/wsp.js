@@ -1307,6 +1307,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== Init =====
   (async function init() {
+    selTipo.value = "INICIA";
     actualizarTipo();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
