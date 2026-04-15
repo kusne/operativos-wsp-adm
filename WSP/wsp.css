@@ -1034,3 +1034,57 @@ label[for="obs"]{
 #finaliza .resultado-item input[type="number"]{
   text-align: left;
 }
+/* =========================================
+   NO CAMBIAR COLOR DEL CHIP AL MARCAR CHECKBOX
+   ========================================= */
+
+#bloquePersonal label.check.check-chip,
+#bloqueMovil label.check.check-chip,
+#bloqueEscopeta label.check.check-chip,
+#bloqueHT label.check.check-chip,
+#bloquePDA label.check.check-chip,
+#bloqueImpresora label.check.check-chip,
+#bloqueAlometro label.check.check-chip,
+#bloqueAlcoholimetro label.check.check-chip {
+  background: #EDF1F7 !important;
+  border: 2px solid var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.14) !important;
+}
+
+/* mismo aspecto aunque esté marcado */
+#bloquePersonal label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueMovil label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueEscopeta label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueHT label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloquePDA label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueImpresora label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueAlometro label.check.check-chip:has(input[type="checkbox"]:checked),
+#bloqueAlcoholimetro label.check.check-chip:has(input[type="checkbox"]:checked) {
+  background: #EDF1F7 !important;
+  border: 2px solid var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.14) !important;
+}
+
+/* mantener igual también al pasar el mouse o hacer foco */
+#bloquePersonal label.check.check-chip:hover,
+#bloqueMovil label.check.check-chip:hover,
+#bloqueEscopeta label.check.check-chip:hover,
+#bloqueHT label.check.check-chip:hover,
+#bloquePDA label.check.check-chip:hover,
+#bloqueImpresora label.check.check-chip:hover,
+#bloqueAlometro label.check.check-chip:hover,
+#bloqueAlcoholimetro label.check.check-chip:hover,
+#bloquePersonal label.check.check-chip:focus-within,
+#bloqueMovil label.check.check-chip:focus-within,
+#bloqueEscopeta label.check.check-chip:focus-within,
+#bloqueHT label.check.check-chip:focus-within,
+#bloquePDA label.check.check-chip:focus-within,
+#bloqueImpresora label.check.check-chip:focus-within,
+#bloqueAlometro label.check.check-chip:focus-within,
+#bloqueAlcoholimetro label.check.check-chip:focus-within {
+  background: #EDF1F7 !important;
+  border: 2px solid var(--border) !important;
+  color: var(--text) !important;
+}
