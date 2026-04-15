@@ -800,15 +800,21 @@ ${bold("Moviles:")}`;
   }
 
   function normalizarDetallesTexto(texto) {
-    const limpio = String(texto || "").replace(/
-/g, "").trim();
-    if (!limpio) return { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [] };
+    const limpio = String(texto || "").replace(/\r/g, "").trim();
+    if (!limpio) {
+      return {
+        detalles: "",
+        observaciones: [],
+        cantidadValidos: 0,
+        detalleItems: [],
+        tieneTexto: false,
+      };
+    }
 
     const detalles = [];
     const observaciones = [];
 
-    limpio.split("
-").forEach((linea) => {
+    limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
       if (!item || !item.texto) return;
       if (item.tipo === "detalle") detalles.push(item.texto);
@@ -816,12 +822,43 @@ ${bold("Moviles:")}`;
     });
 
     return {
-      detalles: detalles.join("
-"),
+      detalles: detalles.join("\n"),
       observaciones,
       cantidadValidos: detalles.length,
       detalleItems: detalles,
+      tieneTexto: true,
     };
+  }
+
+  function validarDetallesRequeridosPorActas(detallesProcesados) {
+    const detallesEl = document.getElementById("detalles");
+    const actasCargadas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
+
+    if (actasCargadas <= 0) return true;
+
+    const cantidadDetallesValidos = Array.isArray(detallesProcesados?.detalleItems)
+      ? detallesProcesados.detalleItems.length
+      : leerEnteroNoNegativo(detallesProcesados?.cantidadValidos);
+
+    const tieneTexto = !!String(detallesEl?.value || "").trim();
+
+    if (!tieneTexto) {
+      marcarErrorCampo(
+        detallesEl,
+        'Si "Actas Labradas" es mayor a cero, el cuadro Detalles no puede estar vacío. Debe cargar al menos un detalle válido. Ej: (03) 13018 Rto.'
+      );
+      return false;
+    }
+
+    if (cantidadDetallesValidos <= 0) {
+      marcarErrorCampo(
+        detallesEl,
+        'Si "Actas Labradas" es mayor a cero, Detalles debe contener al menos un detalle válido con formato como: (03) 13018 Rto.'
+      );
+      return false;
+    }
+
+    return true;
   }
 
   function construirLineasResultados() {
@@ -1125,18 +1162,9 @@ ${bold("Moviles:")}`;
 
     const detallesProcesados = esFinaliza
       ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
-      : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [] };
+      : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
-    const actasCargadas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
-    const cantidadDetallesValidos = Array.isArray(detallesProcesados.detalleItems)
-      ? detallesProcesados.detalleItems.length
-      : leerEnteroNoNegativo(detallesProcesados.cantidadValidos);
-
-    if (esFinaliza && !finalizaSinResultados && actasCargadas > 0 && cantidadDetallesValidos <= 0) {
-      marcarErrorCampo(
-        document.getElementById("detalles"),
-        'Si "Actas Labradas" es mayor a cero, el cuadro Detalles debe contener al menos un detalle válido. Ej: (03) 13018 Rto.'
-      );
+    if (esFinaliza && !finalizaSinResultados && !validarDetallesRequeridosPorActas(detallesProcesados)) {
       return;
     }
 
