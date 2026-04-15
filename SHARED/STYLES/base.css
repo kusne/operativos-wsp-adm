@@ -37,10 +37,11 @@ select {
 .obligatorio {
   border: 2px solid #c62828;
 }
+
 /* ===== secciones destacadas ===== */
 .section.destacado{
   border: 2px solid #2b2b2b;
-  background: rgba(255,193,7,.18);
+  background: #f7f7f7;
   border-radius: 10px;
   padding: 10px;
 }
@@ -50,13 +51,10 @@ select {
   font-weight: 700;
 }
 
-/* Si querés que resalte también cuando el usuario hace click dentro */
+/* Mantener fondo claro también cuando el usuario hace click dentro */
 .section.destacado:focus-within{
-  border-color: rgba(0,0,0,.25);
-  background: rgba(0,0,0,.05);
+  border-color: #2b2b2b;
+  background: #f7f7f7;
 }
-
-
-
 
 
