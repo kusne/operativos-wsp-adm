@@ -218,7 +218,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (alcotest !== sumaIngresada) {
       return {
         ok: false,
-        mensaje: 'Revisar Numerales: Test de Alcoholímetro debe coincidir con Positiva Sancionable + Positiva no Sancionable.',
+        mensaje: 'Revisar Numerales: Test de Alcoholímetro debe ser igual a Positiva Sancionable + Positiva no Sancionable.',
         input: inputAlcotest,
       };
     }
@@ -661,8 +661,8 @@ ${bold("Moviles:")}`;
   // ======================================================
   function limpiarDescripcionDetalle(txt) {
     return String(txt || "")
-      .replace(/^[\s:–—-]+/, "")
-      .replace(/\s*[:–—-]\s*/g, " ")
+      .replace(/^[\s:;,.–—-]+/, "")
+      .replace(/\s*[:;,.–—-]\s*/g, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -674,22 +674,24 @@ ${bold("Moviles:")}`;
     s = s.replace(/\s+/g, " ").trim();
 
     const patrones = [
-      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
-      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
-      /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
-      /^(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
+      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
+      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(.+)$/i,
+      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
+      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(.+)$/i,
+      /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
+      /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
     ];
 
     for (let i = 0; i < patrones.length; i += 1) {
       const m = s.match(patrones[i]);
       if (!m) continue;
 
-      const tieneCantidad = i < 3;
+      const tieneCantidad = i < 5;
       const cantidad = tieneCantidad ? formatearCantidad(m[1]) : formatearCantidad(1);
       const codigo = tieneCantidad ? m[2] : m[1];
       const descripcion = limpiarDescripcionDetalle(tieneCantidad ? m[3] : m[2]);
 
-      if (!descripcion) break;
+      if (!descripcion) continue;
 
       return {
         tipo: "detalle",
