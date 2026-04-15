@@ -990,7 +990,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     ordenSeleccionada = null;
     franjaSeleccionada = null;
 
-    selTipo.value = "";
+    selTipo.value = "INICIA";
     selOrden.value = "";
     selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
 
