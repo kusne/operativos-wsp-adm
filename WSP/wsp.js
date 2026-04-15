@@ -204,6 +204,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const posSan = leerEnteroInput(inputPositivaSancionable);
     const posNo = leerEnteroInput(inputPositivaNoSancionable);
+    const sumaIngresada = posSan + posNo;
 
     if (posSan <= 0 && posNo <= 0) {
       const el = inputPositivaSancionable || inputPositivaNoSancionable || inputAlcotest;
@@ -211,6 +212,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         ok: false,
         mensaje: 'Si "Test de Alcoholímetro" es mayor a 0, debe completar Positiva Sancionable o Positiva no Sancionable con un numeral mayor a cero.',
         input: el,
+      };
+    }
+
+    if (alcotest !== sumaIngresada) {
+      return {
+        ok: false,
+        mensaje: 'Revisar Numerales: Test de Alcoholímetro debe coincidir con Positiva Sancionable + Positiva no Sancionable.',
+        input: inputAlcotest,
       };
     }
 
@@ -229,19 +238,23 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       valoresNo = validacionNo.valores.filter((v) => !graduacionEsCero(v));
     }
 
-    if (valoresSan.length === 0 && valoresNo.length === 0) {
+    const totalValidos = valoresSan.length + valoresNo.length;
+    if (totalValidos === 0) {
       return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`] };
     }
 
-    const lineas = [`Test de Alcoholímetro: (${formatearCantidad(alcotest)})`];
+    const lineas = [
+      `Test de Alcoholímetro: (${formatearCantidad(totalValidos)})`,
+      `Positiva Sancionable: (${formatearCantidad(valoresSan.length)})`,
+    ];
 
     if (valoresSan.length > 0) {
-      lineas.push(`Positiva Sancionable: (${formatearCantidad(valoresSan.length)})`);
       lineas.push(construirLineaGraduaciones(valoresSan));
     }
 
+    lineas.push(`Positiva no Sancionable: (${formatearCantidad(valoresNo.length)})`);
+
     if (valoresNo.length > 0) {
-      lineas.push(`Positiva no Sancionable: (${formatearCantidad(valoresNo.length)})`);
       lineas.push(construirLineaGraduaciones(valoresNo));
     }
 
@@ -592,6 +605,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return txt || "Sin novedad";
   }
 
+  function construirObservacionesFinales(observacionesExtras = []) {
+    const usuario = String(document.getElementById("obs")?.value || "").trim();
+    const extras = Array.isArray(observacionesExtras)
+      ? observacionesExtras.map((linea) => limpiarTextoSimple(linea)).filter(Boolean)
+      : [];
+
+    if (usuario && extras.length) return `${usuario}\n${extras.join("\n")}`;
+    if (usuario) return usuario;
+    if (extras.length) return extras.join("\n");
+    return "Sin novedad";
+  }
+
   function compactarSaltos(texto) {
     return String(texto || "")
       .replace(/[ \t]+\n/g, "\n")
@@ -634,47 +659,68 @@ ${bold("Moviles:")}`;
   // ======================================================
   // ===== DETALLES ========================================
   // ======================================================
+  function limpiarDescripcionDetalle(txt) {
+    return String(txt || "")
+      .replace(/^[\s:–—-]+/, "")
+      .replace(/\s*[:–—-]\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function normalizarLineaDetalle(linea) {
-    let s = String(linea || "").trim();
-    if (!s) return "";
+    let s = String(linea || "").replace(/\r/g, "").trim();
+    if (!s) return null;
 
     s = s.replace(/\s+/g, " ").trim();
 
-    let m = s.match(/^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})\s+(.+)$/i);
-    if (m) {
-      const cantidad = m[1].padStart(2, "0");
-      const codigo = m[2];
-      const descripcion = m[3].trim().replace(/^:\s*/, "");
-      return `(${cantidad}) ${codigo} ${descripcion}`;
+    const patrones = [
+      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
+      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
+      /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
+      /^(\d{4,5})(?:\s*[-:–—]\s*|\s+)(.+)$/i,
+    ];
+
+    for (let i = 0; i < patrones.length; i += 1) {
+      const m = s.match(patrones[i]);
+      if (!m) continue;
+
+      const tieneCantidad = i < 3;
+      const cantidad = tieneCantidad ? formatearCantidad(m[1]) : formatearCantidad(1);
+      const codigo = tieneCantidad ? m[2] : m[1];
+      const descripcion = limpiarDescripcionDetalle(tieneCantidad ? m[3] : m[2]);
+
+      if (!descripcion) break;
+
+      return {
+        tipo: "detalle",
+        texto: `(${cantidad}) ${codigo} ${descripcion}`,
+      };
     }
 
-    m = s.match(/^(\d{1,2})\s+(\d{4,5})\s+(.+)$/i);
-    if (m) {
-      const cantidad = m[1].padStart(2, "0");
-      const codigo = m[2];
-      const descripcion = m[3].trim().replace(/^:\s*/, "");
-      return `(${cantidad}) ${codigo} ${descripcion}`;
-    }
-
-    m = s.match(/^(\d{4,5})\s*:?\s*(.+)$/i);
-    if (m) {
-      const codigo = m[1];
-      const descripcion = m[2].trim().replace(/^:\s*/, "");
-      return `(01) ${codigo} ${descripcion}`;
-    }
-
-    return s;
+    return {
+      tipo: "observacion",
+      texto: s,
+    };
   }
 
   function normalizarDetallesTexto(texto) {
     const limpio = String(texto || "").replace(/\r/g, "").trim();
-    if (!limpio) return "";
+    if (!limpio) return { detalles: "", observaciones: [] };
 
-    return limpio
-      .split("\n")
-      .map((linea) => normalizarLineaDetalle(linea))
-      .filter(Boolean)
-      .join("\n");
+    const detalles = [];
+    const observaciones = [];
+
+    limpio.split("\n").forEach((linea) => {
+      const item = normalizarLineaDetalle(linea);
+      if (!item || !item.texto) return;
+      if (item.tipo === "detalle") detalles.push(item.texto);
+      else observaciones.push(item.texto);
+    });
+
+    return {
+      detalles: detalles.join("\n"),
+      observaciones,
+    };
   }
 
   function construirLineasResultados() {
@@ -968,6 +1014,10 @@ ${bold("Moviles:")}`;
     partes.push(`Alómetros: ${alomTXT}`);
     partes.push(`Alcoholímetros: ${alcoTXT}`);
 
+    const detallesProcesados = esFinaliza
+      ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
+      : { detalles: "", observaciones: [] };
+
     if (esFinaliza && !finalizaSinResultados) {
       const lineasResultados = construirLineasResultados();
       if (!lineasResultados) return;
@@ -976,26 +1026,24 @@ ${bold("Moviles:")}`;
       partes.push(bold("Resultados:"));
       partes.push(...lineasResultados);
 
-      const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
-      if (detallesNormalizados) {
+      if (detallesProcesados.detalles) {
         partes.push("");
         partes.push(bold("Detalles:"));
-        partes.push(detallesNormalizados);
+        partes.push(detallesProcesados.detalles);
       }
     }
 
     if (esFinaliza && finalizaSinResultados) {
-      const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
-      if (detallesNormalizados) {
+      if (detallesProcesados.detalles) {
         partes.push("");
         partes.push(bold("Detalles:"));
-        partes.push(detallesNormalizados);
+        partes.push(detallesProcesados.detalles);
       }
     }
 
     partes.push("");
     partes.push(bold("Observaciones:"));
-    partes.push(valorObservacionPorDefecto());
+    partes.push(construirObservacionesFinales(detallesProcesados.observaciones));
 
     const textoFinal = compactarSaltos(partes.join("\n"));
 
