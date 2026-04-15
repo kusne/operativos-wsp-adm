@@ -23,6 +23,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const wrapGraduacionesNoSancionable = document.getElementById("wrapGraduacionesNoSancionable");
   const graduacionesSancionable = document.getElementById("graduacionesSancionable");
   const graduacionesNoSancionable = document.getElementById("graduacionesNoSancionable");
+  const unitGraduacionesSancionable = document.getElementById("unitGraduacionesSancionable");
+  const unitGraduacionesNoSancionable = document.getElementById("unitGraduacionesNoSancionable");
   const inputQrz = document.getElementById("qrz");
   const inputDominio = document.getElementById("dominio");
   const wrapQrzCasilleros = document.getElementById("wrapQrzCasilleros");
@@ -93,6 +95,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     input.inputMode = "decimal";
     input.autocomplete = "off";
     input.maxLength = 4;
+    input.placeholder = "0,86";
     input.value = valorInicial || "";
 
     input.addEventListener("input", () => limpiarErrorCampo(input));
@@ -153,7 +156,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (tipo === "qrz") {
       input.inputMode = "numeric";
       input.maxLength = 9;
-      input.placeholder = "Documento";
+      input.placeholder = "36459780";
       input.value = sanitizarValorQrz(valorInicial);
       input.addEventListener("input", () => {
         input.value = sanitizarValorQrz(input.value);
@@ -161,7 +164,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } else {
       input.inputMode = "text";
       input.maxLength = 16;
-      input.placeholder = "Dominio";
+      input.placeholder = "AA123QK Sedan";
       input.value = sanitizarValorDominio(valorInicial);
       input.addEventListener("input", () => {
         input.value = sanitizarValorDominio(input.value);
@@ -232,6 +235,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (inputPositivaNoSancionable) inputPositivaNoSancionable.value = "";
       wrapGraduacionesSancionable?.classList.add("hidden");
       wrapGraduacionesNoSancionable?.classList.add("hidden");
+      unitGraduacionesSancionable?.classList.add("hidden");
+      unitGraduacionesNoSancionable?.classList.add("hidden");
       limpiarGraduaciones(graduacionesSancionable);
       limpiarGraduaciones(graduacionesNoSancionable);
       return;
@@ -239,11 +244,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const mostrarGradSan = posSan > 0;
     wrapGraduacionesSancionable?.classList.toggle("hidden", !mostrarGradSan);
+    unitGraduacionesSancionable?.classList.toggle("hidden", !mostrarGradSan);
     if (mostrarGradSan) renderGraduaciones(graduacionesSancionable, posSan);
     else limpiarGraduaciones(graduacionesSancionable);
 
     const mostrarGradNo = posNo > 0;
     wrapGraduacionesNoSancionable?.classList.toggle("hidden", !mostrarGradNo);
+    unitGraduacionesNoSancionable?.classList.toggle("hidden", !mostrarGradNo);
     if (mostrarGradNo) renderGraduaciones(graduacionesNoSancionable, posNo);
     else limpiarGraduaciones(graduacionesNoSancionable);
   }
@@ -286,7 +293,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirLineaGraduaciones(valores) {
-    return `Graduaciones: ${valores.map((v) => `(${v})`).join("")}`;
+    return `Graduaciones: ${valores.map((v) => `(${v})`).join(" ")} g/l`;
   }
 
   function construirBloqueAlcoholimetro() {
@@ -961,6 +968,8 @@ ${bold("Moviles:")}`;
     if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
     if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
     if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
+    if (unitGraduacionesSancionable) unitGraduacionesSancionable.classList.add("hidden");
+    if (unitGraduacionesNoSancionable) unitGraduacionesNoSancionable.classList.add("hidden");
     if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
     if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
 
