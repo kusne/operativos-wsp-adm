@@ -972,3 +972,37 @@ label[for="obs"]{
   border-radius: 6px;
   background: rgba(255,255,255,0.45);
 }
+
+
+/* ===== QRZ Y DOMINIO DINÁMICOS ===== */
+#finaliza .resultado-item-sublista{
+  margin-top: -2px;
+}
+
+.casilleros-verticales{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.casillero-dinamico{
+  display: block;
+}
+
+.casillero-dinamico input[type="text"]{
+  width: 100%;
+  margin-bottom: 0 !important;
+  padding: 8px 10px;
+  background: #EEF1F6;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  outline: none;
+  text-transform: uppercase;
+}
+
+.casillero-dinamico input[type="text"]:focus{
+  border-color: var(--blue-strong);
+  box-shadow: 0 0 0 4px var(--focus);
+}
