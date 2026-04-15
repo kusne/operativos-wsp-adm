@@ -1006,3 +1006,29 @@ label[for="obs"]{
   border-color: var(--blue-strong);
   box-shadow: 0 0 0 4px var(--focus);
 }
+
+
+/* ===== PLACEHOLDERS DE REFERENCIA ===== */
+#finaliza .resultado-item input::placeholder,
+#finaliza .graduacion-slot input::placeholder,
+.casillero-dinamico input::placeholder,
+#detalles::placeholder{
+  color: rgba(7, 46, 109, 0.58);
+  opacity: 1;
+}
+
+#detalles::placeholder{
+  white-space: pre-line;
+}
+
+.graduaciones-unit{
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  font-weight: 800;
+  color: #072E6D;
+}
+
+#finaliza .resultado-item input[type="number"]{
+  text-align: left;
+}
