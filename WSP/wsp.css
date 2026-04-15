@@ -837,3 +837,81 @@ label[for="obs"]{
 
 
 
+
+
+/* ===== RESULTADOS DINÁMICOS ===== */
+#finaliza .resultado-item{
+  margin-bottom: 10px;
+}
+
+#finaliza .resultado-item input[type="number"]{
+  margin-bottom: 0;
+}
+
+#finaliza .resultado-subgrupo{
+  margin: 10px 0 14px 0;
+  padding: 12px;
+  background: rgba(255,255,255,0.38);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+}
+
+#finaliza .resultado-item-graduaciones{
+  margin-top: -2px;
+}
+
+#finaliza .medidas-cautelares-ui{
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 2px solid rgba(11, 61, 145, 0.18);
+}
+
+#finaliza .medidas-title{
+  display: block;
+  margin-bottom: 8px;
+}
+
+.graduaciones-inline{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.graduacion-slot{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: "Courier New", monospace;
+}
+
+.graduacion-paren{
+  font-family: "Courier New", monospace;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.graduacion-slot input[type="text"]{
+  width: 4.4ch;
+  min-width: 4.4ch;
+  max-width: 4.4ch;
+  padding: 6px 0;
+  margin-bottom: 0 !important;
+  text-align: center;
+  font-family: "Courier New", monospace;
+  background: #EEF1F6;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  outline: none;
+}
+
+.graduacion-slot input[type="text"]:focus{
+  border-color: var(--blue-strong);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.input-error{
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 4px rgba(177, 26, 26, 0.18) !important;
+}
