@@ -38,12 +38,15 @@ select {
   border: 2px solid #c62828;
 }
 
-/* ===== secciones destacadas ===== */
 .section.destacado{
   border: 2px solid #2b2b2b;
   background: #f7f7f7;
   border-radius: 10px;
   padding: 10px;
+}
+
+.section.destacado > label:first-child{
+  font-weight: 700;
 }
 
 .section.destacado:focus-within{
