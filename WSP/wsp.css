@@ -1035,37 +1035,37 @@ label[for="obs"]{
   text-align: left;
 }
 /* =========================================================
-   FIJAR FONDO CLARO EN BLOQUES Y CHIPS AL MARCAR CHECKBOX
+   BLOQUE FINAL DEFINITIVO
+   NO OSCURECER BLOQUES NI CHIPS AL TILDAR CHECKBOX
    PEGAR AL FINAL DE wsp.css
    ========================================================= */
 
-/* 1) el bloque grande NO debe oscurecerse al hacer foco dentro */
+/* bloque grande: mismo color siempre */
 .section.destacado,
 .section.destacado:focus-within,
-#bloquePersonal.section.destacado,
-#bloquePersonal.section.destacado:focus-within,
-#bloqueMovil.section.destacado,
-#bloqueMovil.section.destacado:focus-within,
-#bloqueEscopeta.section.destacado,
-#bloqueEscopeta.section.destacado:focus-within,
-#bloqueHT.section.destacado,
-#bloqueHT.section.destacado:focus-within,
-#bloquePDA.section.destacado,
-#bloquePDA.section.destacado:focus-within,
-#bloqueImpresora.section.destacado,
-#bloqueImpresora.section.destacado:focus-within,
-#bloqueAlometro.section.destacado,
-#bloqueAlometro.section.destacado:focus-within,
-#bloqueAlcoholimetro.section.destacado,
-#bloqueAlcoholimetro.section.destacado:focus-within {
+#bloquePersonal,
+#bloquePersonal:focus-within,
+#bloqueMovil,
+#bloqueMovil:focus-within,
+#bloqueEscopeta,
+#bloqueEscopeta:focus-within,
+#bloqueHT,
+#bloqueHT:focus-within,
+#bloquePDA,
+#bloquePDA:focus-within,
+#bloqueImpresora,
+#bloqueImpresora:focus-within,
+#bloqueAlometro,
+#bloqueAlometro:focus-within,
+#bloqueAlcoholimetro,
+#bloqueAlcoholimetro:focus-within {
   background: #d7dce3 !important;
-  border-color: var(--blue-strong) !important;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28) !important;
+  background-color: #d7dce3 !important;
   filter: none !important;
   opacity: 1 !important;
 }
 
-/* 2) cada chip debe quedar siempre claro */
+/* chips: mismo color siempre */
 #bloquePersonal label.check.check-chip,
 #bloqueMovil label.check.check-chip,
 #bloqueEscopeta label.check.check-chip,
@@ -1105,18 +1105,7 @@ label[for="obs"]{
 #bloquePDA label.check.check-chip:active,
 #bloqueImpresora label.check.check-chip:active,
 #bloqueAlometro label.check.check-chip:active,
-#bloqueAlcoholimetro label.check.check-chip:active {
-  background: #edf1f7 !important;
-  background-color: #edf1f7 !important;
-  color: var(--text) !important;
-  border: 2px solid var(--border) !important;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14) !important;
-  filter: none !important;
-  opacity: 1 !important;
-  transition: none !important;
-}
-
-/* 3) también cuando el checkbox esté marcado */
+#bloqueAlcoholimetro label.check.check-chip:active,
 #bloquePersonal label.check.check-chip:has(input[type="checkbox"]:checked),
 #bloqueMovil label.check.check-chip:has(input[type="checkbox"]:checked),
 #bloqueEscopeta label.check.check-chip:has(input[type="checkbox"]:checked),
@@ -1127,20 +1116,22 @@ label[for="obs"]{
 #bloqueAlcoholimetro label.check.check-chip:has(input[type="checkbox"]:checked) {
   background: #edf1f7 !important;
   background-color: #edf1f7 !important;
-  color: var(--text) !important;
   border: 2px solid var(--border) !important;
+  color: var(--text) !important;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14) !important;
   filter: none !important;
   opacity: 1 !important;
+  transition: none !important;
 }
 
-/* 4) que no aparezca highlight raro al tocar/clicar */
+/* checkbox marcado visible, pero sin alterar el chip */
+label.check.check-chip > input[type="checkbox"],
+.section input[type="checkbox"] {
+  accent-color: #0b3d91;
+}
+
+/* elimina highlight raro del click */
 label.check.check-chip,
 label.check.check-chip * {
   -webkit-tap-highlight-color: transparent;
-}
-
-/* 5) el checkbox puede verse marcado, pero sin alterar el fondo del chip */
-.section input[type="checkbox"] {
-  accent-color: #0b3d91;
 }
