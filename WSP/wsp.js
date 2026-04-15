@@ -800,13 +800,15 @@ ${bold("Moviles:")}`;
   }
 
   function normalizarDetallesTexto(texto) {
-    const limpio = String(texto || "").replace(/\r/g, "").trim();
-    if (!limpio) return { detalles: "", observaciones: [] };
+    const limpio = String(texto || "").replace(/
+/g, "").trim();
+    if (!limpio) return { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [] };
 
     const detalles = [];
     const observaciones = [];
 
-    limpio.split("\n").forEach((linea) => {
+    limpio.split("
+").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
       if (!item || !item.texto) return;
       if (item.tipo === "detalle") detalles.push(item.texto);
@@ -814,8 +816,11 @@ ${bold("Moviles:")}`;
     });
 
     return {
-      detalles: detalles.join("\n"),
+      detalles: detalles.join("
+"),
       observaciones,
+      cantidadValidos: detalles.length,
+      detalleItems: detalles,
     };
   }
 
@@ -1123,7 +1128,11 @@ ${bold("Moviles:")}`;
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [] };
 
     const actasCargadas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
-    if (esFinaliza && !finalizaSinResultados && actasCargadas > 0 && detallesProcesados.cantidadValidos <= 0) {
+    const cantidadDetallesValidos = Array.isArray(detallesProcesados.detalleItems)
+      ? detallesProcesados.detalleItems.length
+      : leerEnteroNoNegativo(detallesProcesados.cantidadValidos);
+
+    if (esFinaliza && !finalizaSinResultados && actasCargadas > 0 && cantidadDetallesValidos <= 0) {
       marcarErrorCampo(
         document.getElementById("detalles"),
         'Si "Actas Labradas" es mayor a cero, el cuadro Detalles debe contener al menos un detalle válido. Ej: (03) 13018 Rto.'
