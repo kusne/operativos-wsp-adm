@@ -39,6 +39,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   // Cache en memoria
   let ordenesCache = [];
+  let operativosCache = [];
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -429,21 +430,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (syncingOrdenes) return;
     syncingOrdenes = true;
 
+    const seleccionActual = selHorario?.value || "";
     const ok = await syncOrdenesDesdeServidor();
     if (ok) {
-      cargarOrdenesDisponibles();
-      limpiarSeleccionOrden();
+      cargarOperativosDisponibles(seleccionActual);
+      actualizarDatosFranja();
     }
 
     syncingOrdenes = false;
   }
 
   // ===== UI =====
-  function limpiarSeleccionOrden() {
+  function limpiarSeleccionOperativo() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
-    selOrden.value = "";
-    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+    if (selHorario) {
+      selHorario.value = "";
+      selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
+    }
   }
 
   // ===== Guardia =====
@@ -505,25 +509,49 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return null;
   }
 
-  function cargarOrdenesDisponibles() {
+  function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
+    return {
+      ...franja,
+      __key: `${idxOrden}-${idxFranja}`,
+      __ordenNum: limpiarTextoSimple(orden?.num || ""),
+      __ordenTextoRef: limpiarTextoSimple(orden?.textoRef || ""),
+    };
+  }
+
+  function cargarOperativosDisponibles(valorSeleccionado = "") {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
     let ordenes = OrdersSync.filtrarCaducadas(cargarOrdenesSeguro());
     guardarOrdenesSeguro(ordenes);
 
-    selOrden.innerHTML = '<option value="">Seleccionar</option>';
+    operativosCache = [];
+    if (selHorario) {
+      selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
+    }
 
-    ordenes.forEach((o, i) => {
-      const v = parseVigenciaFlexible(o.vigencia);
-      if (!v || v > hoy) return;
-      if (!o.franjas?.some((f) => franjaEnGuardia(f.horario))) return;
+    ordenes.forEach((orden, idxOrden) => {
+      const vigencia = parseVigenciaFlexible(orden.vigencia);
+      if (!vigencia || vigencia > hoy) return;
 
-      const op = document.createElement("option");
-      op.value = i;
-      op.text = `${o.num} ${o.textoRef || ""}`.trim();
-      selOrden.appendChild(op);
+      (orden.franjas || []).forEach((franja, idxFranja) => {
+        if (!franjaEnGuardia(franja.horario)) return;
+
+        const operativo = construirOperativoPlano(franja, orden, idxOrden, idxFranja);
+        operativosCache.push(operativo);
+
+        if (!selHorario) return;
+        const option = document.createElement("option");
+        option.value = operativo.__key;
+        option.text = construirTextoOpcionHorario(operativo);
+        option.title = construirTextoOpcionHorario(operativo);
+        selHorario.appendChild(option);
+      });
     });
+
+    if (selHorario && valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
+      selHorario.value = valorSeleccionado;
+    }
   }
 
   function limpiarTextoSimple(txt) {
@@ -540,9 +568,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/[\u0300-\u036f]/g, "");
   }
 
+  function obtenerTextoRefOrdenDeFranja(franja) {
+    return limpiarTextoSimple(franja?.__ordenTextoRef || "");
+  }
+
+  function obtenerNumeroOrdenDeFranja(franja) {
+    return limpiarTextoSimple(franja?.__ordenNum || "");
+  }
+
   function obtenerTipoCortoFranja(franja) {
     const fuente = normalizarBasicoSinAcentos(
-      [franja?.titulo || "", ordenSeleccionada?.textoRef || ""].join(" ")
+      [franja?.titulo || "", obtenerTextoRefOrdenDeFranja(franja)].join(" ")
     );
 
     if (/\balcoholemia\b|\balcoholimetr/i.test(fuente)) return "Alcoholemia";
@@ -584,35 +620,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const horario = limpiarTextoSimple(franja?.horario || "");
     const tipo = obtenerTipoCortoFranja(franja);
     const lugar = obtenerLugarCortoFranja(franja);
+    const numeroOrden = obtenerNumeroOrdenDeFranja(franja);
 
-    return `${horario} - ${tipo} - ${lugar}`;
-  }
-
-  function cargarHorariosOrden() {
-    ordenSeleccionada = null;
-    franjaSeleccionada = null;
-
-    const ordenes = cargarOrdenesSeguro();
-    const idx = Number(selOrden.value);
-    if (!ordenes[idx]) return;
-
-    ordenSeleccionada = ordenes[idx];
-    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
-
-    ordenSeleccionada.franjas.forEach((f, i) => {
-      if (franjaEnGuardia(f.horario)) {
-        const o = document.createElement("option");
-        o.value = i;
-        o.text = construirTextoOpcionHorario(f);
-        o.title = construirTextoOpcionHorario(f);
-        selHorario.appendChild(o);
-      }
-    });
+    return numeroOrden
+      ? `${horario} - ${tipo} - ${lugar} - ${numeroOrden}`
+      : `${horario} - ${tipo} - ${lugar}`;
   }
 
   function actualizarDatosFranja() {
-    if (!ordenSeleccionada) return;
-    franjaSeleccionada = ordenSeleccionada.franjas[Number(selHorario.value)] || null;
+    const key = selHorario?.value || "";
+    franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
+    ordenSeleccionada = null;
   }
 
   function actualizarTipo() {
@@ -761,7 +779,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function obtenerFuenteConjunto() {
     return normalizarBasicoSinAcentos([
       franjaSeleccionada?.titulo || "",
-      ordenSeleccionada?.textoRef || "",
+      obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
       franjaSeleccionada?.lugar || "",
     ].join(" "));
   }
@@ -798,7 +816,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function esFinalizaSinResultados() {
     const fuente = [
       franjaSeleccionada?.titulo || "",
-      ordenSeleccionada?.textoRef || "",
+      obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
     ]
       .join(" ")
       .toLowerCase()
@@ -991,8 +1009,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     franjaSeleccionada = null;
 
     selTipo.value = "INICIA";
-    selOrden.value = "";
-    selHorario.innerHTML = '<option value="">Seleccionar horario</option>';
+    limpiarSeleccionOperativo();
 
     document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
 
@@ -1127,7 +1144,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== ENVIAR A WHATSAPP =====
   function enviar() {
-    if (!ordenSeleccionada || !franjaSeleccionada) return;
+    if (!franjaSeleccionada) return;
 
     if (!seleccion("personal")) {
       alert("Debe seleccionar personal policial.");
@@ -1177,7 +1194,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const tituloPrincipal = `${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(
       franjaSeleccionada.titulo
-    )} ${ordenSeleccionada.num}`.trim();
+    )}`.trim();
 
     const mobilesTexto =
       [seleccionLinea("movil", "/"), seleccionLinea("moto", "/")]
@@ -1269,9 +1286,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   // ===== Eventos =====
-  selOrden.addEventListener("focus", syncAntesDeSeleccion);
-  selOrden.addEventListener("change", cargarHorariosOrden);
-  selHorario.addEventListener("change", actualizarDatosFranja);
+  if (selHorario) {
+    selHorario.addEventListener("focus", syncAntesDeSeleccion);
+    selHorario.addEventListener("change", actualizarDatosFranja);
+  }
   selTipo.addEventListener("change", actualizarTipo);
 
   [inputAlcotest, inputPositivaSancionable, inputPositivaNoSancionable].forEach((input) => {
@@ -1314,6 +1332,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
-    cargarOrdenesDisponibles();
+    cargarOperativosDisponibles();
   })();
 })();
