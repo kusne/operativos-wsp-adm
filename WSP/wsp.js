@@ -725,23 +725,74 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .trim();
   }
 
-  function esOperativoConjunto() {
-    const fuente = [
+  const ORGANISMOS_CONJUNTO = [
+    { nombre: "UOR 3", patrones: [/\buor\s*3\b/, /\buor3\b/] },
+    { nombre: "Municipalidad", patrones: [/\bmunicipalidad\b/, /\bmunicipio\b/, /\bmunicipal\b/] },
+    { nombre: "Tránsito", patrones: [/\btransito\b/, /\binspectores?\s+de\s+transito\b/] },
+    { nombre: "UFIV", patrones: [/\bufiv\b/] },
+    { nombre: "APSV", patrones: [/\bapsv\b/, /\bagencia\s+provincial\s+de\s+seguridad\s+vial\b/] },
+    { nombre: "DICEP", patrones: [/\bdicep\b/] },
+    { nombre: "ASSAL", patrones: [/\bassal\b/] },
+    { nombre: "SENASA", patrones: [/\bsenasa\b/] },
+    { nombre: "Gendarmería", patrones: [/\bgendarmeria\b/, /\bgna\b/] },
+    { nombre: "PDI", patrones: [/\bpdi\b/, /\bpolicia\s+de\s+investigaciones\b/] },
+    { nombre: "Comuna", patrones: [/\bcomuna\b/] },
+    { nombre: "ANSV", patrones: [/\bansv\b/, /\bagencia\s+nacional\s+de\s+seguridad\s+vial\b/] },
+    { nombre: "Comisaría", patrones: [/\bcomisaria\b/, /\bcria\b/, /\bcomisaria\s+\d+\b/] },
+    { nombre: "CRE", patrones: [/\bcre\b/] },
+    { nombre: "PAT", patrones: [/\bpat\b/] },
+  ];
+
+  const FRASES_CONJUNTO = [
+    /\ben\s+conjunto\s+con\b/,
+    /\boperativo\s+en\s+conjunto\s+con\b/,
+    /\bjunto\s+a\b/,
+    /\bjunto\s+con\b/,
+    /\bcon\s+apoyo\s+de\b/,
+    /\bcon\s+colaboracion\s+de\b/,
+    /\bcoordinado\s+con\b/,
+    /\bcon\s+participacion\s+de\b/,
+    /\bcon\s+personal\s+de\b/,
+    /\bcon\s+intervencion\s+de\b/,
+    /\bcon\s+presencia\s+de\b/,
+    /\boperativo\s+con\b/,
+  ];
+
+  function obtenerFuenteConjunto() {
+    return normalizarBasicoSinAcentos([
       franjaSeleccionada?.titulo || "",
       ordenSeleccionada?.textoRef || "",
-    ]
-      .join(" ")
-      .toLowerCase();
+      franjaSeleccionada?.lugar || "",
+    ].join(" "));
+  }
 
-    return /\buor\s*3\b|\buor3\b|\bmunicipio\b|\bufiv\b/.test(fuente);
+  function detectarOrganismosConjunto() {
+    const fuente = obtenerFuenteConjunto();
+    const hayFraseConjunto = FRASES_CONJUNTO.some((regex) => regex.test(fuente));
+
+    const organismos = ORGANISMOS_CONJUNTO
+      .filter((organismo) => organismo.patrones.some((regex) => regex.test(fuente)))
+      .map((organismo) => organismo.nombre)
+      .filter((nombre, idx, arr) => arr.indexOf(nombre) === idx);
+
+    const esConjunto = organismos.length > 0 && (hayFraseConjunto || organismos.length >= 1);
+
+    return { esConjunto, organismos };
+  }
+
+  function esOperativoConjunto() {
+    return detectarOrganismosConjunto().esConjunto;
   }
 
   function bloqueConjuntoExtra() {
-    if (!esOperativoConjunto()) return "";
+    const deteccion = detectarOrganismosConjunto();
+    if (!deteccion.esConjunto || !deteccion.organismos.length) return "";
 
-    return `${bold("Personal UOR 3:")}
+    return deteccion.organismos
+      .map((organismo) => `${bold(`Personal ${organismo}:`)}
 
-${bold("Moviles:")}`;
+${bold(`Moviles ${organismo}:`)}`)
+      .join("\n\n");
   }
 
   function esFinalizaSinResultados() {
