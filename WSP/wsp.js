@@ -23,6 +23,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const wrapGraduacionesNoSancionable = document.getElementById("wrapGraduacionesNoSancionable");
   const graduacionesSancionable = document.getElementById("graduacionesSancionable");
   const graduacionesNoSancionable = document.getElementById("graduacionesNoSancionable");
+  const inputQrz = document.getElementById("qrz");
+  const inputDominio = document.getElementById("dominio");
+  const wrapQrzCasilleros = document.getElementById("wrapQrzCasilleros");
+  const qrzCasilleros = document.getElementById("qrzCasilleros");
+  const wrapDominioCasilleros = document.getElementById("wrapDominioCasilleros");
+  const dominioCasilleros = document.getElementById("dominioCasilleros");
 
   // ===== Estado =====
   let ordenSeleccionada = null;
@@ -121,6 +127,94 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function limpiarGraduaciones(contenedor) {
     if (!contenedor) return;
     contenedor.innerHTML = "";
+  }
+
+  function sanitizarValorQrz(valor) {
+    return String(valor || "").replace(/\D+/g, "").slice(0, 9);
+  }
+
+  function sanitizarValorDominio(valor) {
+    return String(valor || "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9 ]+/g, "")
+      .slice(0, 16);
+  }
+
+  function crearInputDinamicoLista(tipo, valorInicial) {
+    const wrap = document.createElement("div");
+    wrap.className = "casillero-dinamico";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.className = `casillero-${tipo}`;
+
+    if (tipo === "qrz") {
+      input.inputMode = "numeric";
+      input.maxLength = 9;
+      input.placeholder = "Documento";
+      input.value = sanitizarValorQrz(valorInicial);
+      input.addEventListener("input", () => {
+        input.value = sanitizarValorQrz(input.value);
+      });
+    } else {
+      input.inputMode = "text";
+      input.maxLength = 16;
+      input.placeholder = "Dominio";
+      input.value = sanitizarValorDominio(valorInicial);
+      input.addEventListener("input", () => {
+        input.value = sanitizarValorDominio(input.value);
+      });
+    }
+
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function obtenerValoresListaDinamica(contenedor, tipo) {
+    const inputs = Array.from(contenedor?.querySelectorAll('input[type="text"]') || []);
+    return inputs.map((input) => {
+      const valor = tipo === "qrz" ? sanitizarValorQrz(input.value) : sanitizarValorDominio(input.value);
+      input.value = valor;
+      return valor;
+    });
+  }
+
+  function renderListaDinamica(contenedor, cantidad, tipo) {
+    if (!contenedor) return;
+
+    const cant = Math.max(0, parseInt(cantidad, 10) || 0);
+    const actuales = obtenerValoresListaDinamica(contenedor, tipo);
+    contenedor.innerHTML = "";
+
+    for (let i = 0; i < cant; i += 1) {
+      contenedor.appendChild(crearInputDinamicoLista(tipo, actuales[i] || ""));
+    }
+  }
+
+  function limpiarListaDinamica(contenedor) {
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+  }
+
+  function sincronizarUIQrzDominio() {
+    const cantidadQrz = leerEnteroInput(inputQrz);
+    wrapQrzCasilleros?.classList.toggle("hidden", cantidadQrz <= 0);
+    if (cantidadQrz > 0) renderListaDinamica(qrzCasilleros, cantidadQrz, "qrz");
+    else limpiarListaDinamica(qrzCasilleros);
+
+    const cantidadDominio = leerEnteroInput(inputDominio);
+    wrapDominioCasilleros?.classList.toggle("hidden", cantidadDominio <= 0);
+    if (cantidadDominio > 0) renderListaDinamica(dominioCasilleros, cantidadDominio, "dominio");
+    else limpiarListaDinamica(dominioCasilleros);
+  }
+
+  function construirBloqueListaVertical(titulo, cantidad, valores) {
+    const lineas = [`${titulo}: (${formatearCantidad(cantidad)})`];
+    const completos = (Array.isArray(valores) ? valores : []).filter(Boolean);
+    if (completos.length) lineas.push(...completos);
+    return lineas;
   }
 
   function sincronizarUIAlcoholimetro() {
@@ -751,6 +845,9 @@ ${bold("Moviles:")}`;
       ["Cesión de Conducción", cesion],
     ].filter(([, valor]) => valor > 0);
 
+    const qrzValores = obtenerValoresListaDinamica(qrzCasilleros, "qrz");
+    const dominioValores = obtenerValoresListaDinamica(dominioCasilleros, "dominio");
+
     const lineas = [
       `Vehículos Fiscalizados: (${formatearCantidad(vehiculos)})`,
       `Personas Identificadas: (${formatearCantidad(personas)})`,
@@ -758,8 +855,8 @@ ${bold("Moviles:")}`;
       ...alcoholimetro.lineas,
       `Actas Labradas: (${formatearCantidad(actas)})`,
       `Requisas: (${formatearCantidad(requisa)})`,
-      `Qrz: (${formatearCantidad(qrz)})`,
-      `Dominio: (${formatearCantidad(dominio)})`,
+      ...construirBloqueListaVertical("Qrz", qrz, qrzValores),
+      ...construirBloqueListaVertical("Dominio", dominio, dominioValores),
     ];
 
     if (medidas.length) {
@@ -817,12 +914,17 @@ ${bold("Moviles:")}`;
 
     limpiarGraduaciones(graduacionesSancionable);
     limpiarGraduaciones(graduacionesNoSancionable);
+    limpiarListaDinamica(qrzCasilleros);
+    limpiarListaDinamica(dominioCasilleros);
     if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
     if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
     if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
+    if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
+    if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
 
     setElementosVisibles(true);
     sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
   }
 
   // ======================================================
@@ -1018,7 +1120,16 @@ ${bold("Moviles:")}`;
 
     const detallesProcesados = esFinaliza
       ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
-      : { detalles: "", observaciones: [] };
+      : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [] };
+
+    const actasCargadas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
+    if (esFinaliza && !finalizaSinResultados && actasCargadas > 0 && detallesProcesados.cantidadValidos <= 0) {
+      marcarErrorCampo(
+        document.getElementById("detalles"),
+        'Si "Actas Labradas" es mayor a cero, el cuadro Detalles debe contener al menos un detalle válido. Ej: (03) 13018 Rto.'
+      );
+      return;
+    }
 
     if (esFinaliza && !finalizaSinResultados) {
       const lineasResultados = construirLineasResultados();
@@ -1078,12 +1189,30 @@ ${bold("Moviles:")}`;
     });
   });
 
+  [inputQrz, inputDominio].forEach((input) => {
+    if (!input) return;
+    input.addEventListener("input", () => {
+      limpiarErrorCampo(input);
+      sincronizarUIQrzDominio();
+    });
+    input.addEventListener("blur", () => {
+      normalizarInputNoNegativo(input);
+      sincronizarUIQrzDominio();
+    });
+  });
+
+  const detallesInput = document.getElementById("detalles");
+  if (detallesInput) {
+    detallesInput.addEventListener("input", () => limpiarErrorCampo(detallesInput));
+  }
+
   btnEnviar.addEventListener("click", enviar);
 
   // ===== Init =====
   (async function init() {
     actualizarTipo();
     sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
