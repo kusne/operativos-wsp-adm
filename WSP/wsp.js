@@ -15,6 +15,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
 
+  const inputAlcotest = document.getElementById("Alcotest");
+  const inputPositivaSancionable = document.getElementById("positivaSancionable");
+  const inputPositivaNoSancionable = document.getElementById("positivaNoSancionable");
+  const bloquePositivosAlcoholimetro = document.getElementById("bloquePositivosAlcoholimetro");
+  const wrapGraduacionesSancionable = document.getElementById("wrapGraduacionesSancionable");
+  const wrapGraduacionesNoSancionable = document.getElementById("wrapGraduacionesNoSancionable");
+  const graduacionesSancionable = document.getElementById("graduacionesSancionable");
+  const graduacionesNoSancionable = document.getElementById("graduacionesNoSancionable");
+
   // ===== Estado =====
   let ordenSeleccionada = null;
   let franjaSeleccionada = null;
@@ -22,6 +31,235 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   // Cache en memoria
   let ordenesCache = [];
+
+  function limpiarErrorCampo(el) {
+    if (!el) return;
+    el.classList.remove("input-error");
+  }
+
+  function marcarErrorCampo(el, mensaje) {
+    if (el) {
+      el.classList.add("input-error");
+      try { el.focus({ preventScroll: false }); } catch { try { el.focus(); } catch {} }
+    }
+    alert(mensaje);
+    return false;
+  }
+
+  function leerEnteroNoNegativo(valor) {
+    const n = parseInt(String(valor ?? "").trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function leerEnteroInput(el) {
+    return leerEnteroNoNegativo(el?.value);
+  }
+
+  function formatearCantidad(n) {
+    const v = Math.max(0, parseInt(n, 10) || 0);
+    return String(v).padStart(2, "0");
+  }
+
+  function normalizarTextoGraduacion(valor) {
+    return String(valor || "").replace(/\s+/g, "").trim();
+  }
+
+  function graduacionTieneFormatoValido(valor) {
+    return /^\d+[.,]\d{2}$/.test(normalizarTextoGraduacion(valor));
+  }
+
+  function graduacionEsCero(valor) {
+    const limpio = normalizarTextoGraduacion(valor);
+    if (!graduacionTieneFormatoValido(limpio)) return false;
+    return Number(limpio.replace(",", ".")) === 0;
+  }
+
+  function crearInputGraduacion(valorInicial) {
+    const slot = document.createElement("div");
+    slot.className = "graduacion-slot";
+
+    const abre = document.createElement("span");
+    abre.className = "graduacion-paren";
+    abre.textContent = "(";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.autocomplete = "off";
+    input.maxLength = 4;
+    input.value = valorInicial || "";
+
+    input.addEventListener("input", () => limpiarErrorCampo(input));
+
+    const cierra = document.createElement("span");
+    cierra.className = "graduacion-paren";
+    cierra.textContent = ")";
+
+    slot.appendChild(abre);
+    slot.appendChild(input);
+    slot.appendChild(cierra);
+
+    return slot;
+  }
+
+  function obtenerValoresGraduaciones(contenedor) {
+    return Array.from(contenedor?.querySelectorAll('input[type="text"]') || []).map((inp) => inp.value || "");
+  }
+
+  function renderGraduaciones(contenedor, cantidad) {
+    if (!contenedor) return;
+
+    const cant = Math.max(0, parseInt(cantidad, 10) || 0);
+    const actuales = obtenerValoresGraduaciones(contenedor);
+    contenedor.innerHTML = "";
+
+    for (let i = 0; i < cant; i += 1) {
+      contenedor.appendChild(crearInputGraduacion(actuales[i] || ""));
+    }
+  }
+
+  function limpiarGraduaciones(contenedor) {
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+  }
+
+  function sincronizarUIAlcoholimetro() {
+    const alcotest = leerEnteroInput(inputAlcotest);
+    const posSan = leerEnteroInput(inputPositivaSancionable);
+    const posNo = leerEnteroInput(inputPositivaNoSancionable);
+
+    limpiarErrorCampo(inputAlcotest);
+
+    const mostrarPositivos = alcotest > 0;
+    bloquePositivosAlcoholimetro?.classList.toggle("hidden", !mostrarPositivos);
+
+    if (!mostrarPositivos) {
+      if (inputPositivaSancionable) inputPositivaSancionable.value = "";
+      if (inputPositivaNoSancionable) inputPositivaNoSancionable.value = "";
+      wrapGraduacionesSancionable?.classList.add("hidden");
+      wrapGraduacionesNoSancionable?.classList.add("hidden");
+      limpiarGraduaciones(graduacionesSancionable);
+      limpiarGraduaciones(graduacionesNoSancionable);
+      return;
+    }
+
+    const mostrarGradSan = posSan > 0;
+    wrapGraduacionesSancionable?.classList.toggle("hidden", !mostrarGradSan);
+    if (mostrarGradSan) renderGraduaciones(graduacionesSancionable, posSan);
+    else limpiarGraduaciones(graduacionesSancionable);
+
+    const mostrarGradNo = posNo > 0;
+    wrapGraduacionesNoSancionable?.classList.toggle("hidden", !mostrarGradNo);
+    if (mostrarGradNo) renderGraduaciones(graduacionesNoSancionable, posNo);
+    else limpiarGraduaciones(graduacionesNoSancionable);
+  }
+
+  function serializarGraduaciones(contenedor, etiqueta, { permiteCero = false } = {}) {
+    const inputs = Array.from(contenedor?.querySelectorAll('input[type="text"]') || []);
+    const valores = [];
+
+    for (const input of inputs) {
+      const valor = normalizarTextoGraduacion(input.value);
+
+      if (!valor) {
+        return {
+          ok: false,
+          mensaje: `Complete todas las graduaciones de ${etiqueta}.`,
+          input,
+        };
+      }
+
+      if (!graduacionTieneFormatoValido(valor)) {
+        return {
+          ok: false,
+          mensaje: `Cada graduación de ${etiqueta} debe tener formato 0.00 o 0,00.`,
+          input,
+        };
+      }
+
+      if (!permiteCero && graduacionEsCero(valor)) {
+        return {
+          ok: false,
+          mensaje: `En Positiva Sancionable no se permite 0.00 ni 0,00.`,
+          input,
+        };
+      }
+
+      valores.push(valor);
+    }
+
+    return { ok: true, valores };
+  }
+
+  function construirLineaGraduaciones(valores) {
+    return `Graduaciones: ${valores.map((v) => `(${v})`).join("")}`;
+  }
+
+  function construirBloqueAlcoholimetro() {
+    const alcotest = leerEnteroInput(inputAlcotest);
+
+    if (alcotest <= 0) {
+      return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`] };
+    }
+
+    const posSan = leerEnteroInput(inputPositivaSancionable);
+    const posNo = leerEnteroInput(inputPositivaNoSancionable);
+
+    if (posSan <= 0 && posNo <= 0) {
+      const el = inputPositivaSancionable || inputPositivaNoSancionable || inputAlcotest;
+      return {
+        ok: false,
+        mensaje: 'Si "Test de Alcoholímetro" es mayor a 0, debe completar Positiva Sancionable o Positiva no Sancionable con un numeral mayor a cero.',
+        input: el,
+      };
+    }
+
+    let valoresSan = [];
+    let valoresNo = [];
+
+    if (posSan > 0) {
+      const validacionSan = serializarGraduaciones(graduacionesSancionable, "Positiva Sancionable");
+      if (!validacionSan.ok) return validacionSan;
+      valoresSan = validacionSan.valores;
+    }
+
+    if (posNo > 0) {
+      const validacionNo = serializarGraduaciones(graduacionesNoSancionable, "Positiva no Sancionable", { permiteCero: true });
+      if (!validacionNo.ok) return validacionNo;
+      valoresNo = validacionNo.valores.filter((v) => !graduacionEsCero(v));
+    }
+
+    if (valoresSan.length === 0 && valoresNo.length === 0) {
+      return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`] };
+    }
+
+    const lineas = [`Test de Alcoholímetro: (${formatearCantidad(alcotest)})`];
+
+    if (valoresSan.length > 0) {
+      lineas.push(`Positiva Sancionable: (${formatearCantidad(valoresSan.length)})`);
+      lineas.push(construirLineaGraduaciones(valoresSan));
+    }
+
+    if (valoresNo.length > 0) {
+      lineas.push(`Positiva no Sancionable: (${formatearCantidad(valoresNo.length)})`);
+      lineas.push(construirLineaGraduaciones(valoresNo));
+    }
+
+    return { ok: true, lineas };
+  }
+
+  function normalizarInputNoNegativo(el) {
+    if (!el) return;
+    const crudo = String(el.value || "").trim();
+    if (!crudo) {
+      limpiarErrorCampo(el);
+      return;
+    }
+
+    const n = parseInt(crudo, 10);
+    el.value = Number.isFinite(n) && n > 0 ? String(n) : "0";
+    limpiarErrorCampo(el);
+  }
 
   function guardarOrdenesSeguro(arr) {
     ordenesCache = Array.isArray(arr) ? arr : [];
@@ -274,6 +512,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!fin) {
       if (chkMismosElementos) chkMismosElementos.checked = false;
       setElementosVisibles(true);
+      sincronizarUIAlcoholimetro();
       return;
     }
 
@@ -287,6 +526,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } else {
       setElementosVisibles(true);
     }
+
+    sincronizarUIAlcoholimetro();
   }
 
   // ======================================================
@@ -437,38 +678,50 @@ ${bold("Moviles:")}`;
   }
 
   function construirLineasResultados() {
-    const vehiculos = document.getElementById("vehiculos")?.value || 0;
-    const personas = document.getElementById("personas")?.value || 0;
-    const testalom = document.getElementById("testalom")?.value || 0;
-    const alco = document.getElementById("Alcotest")?.value || 0;
-    const posSan = document.getElementById("positivaSancionable")?.value || 0;
-    const posNo = document.getElementById("positivaNoSancionable")?.value || 0;
-    const actas = document.getElementById("actas")?.value || 0;
-    const requisa = document.getElementById("Requisa")?.value || 0;
-    const qrz = document.getElementById("qrz")?.value || 0;
-    const dominio = document.getElementById("dominio")?.value || 0;
-    const remision = document.getElementById("Remision")?.value || 0;
-    const retencion = document.getElementById("Retencion")?.value || 0;
-    const prohibicion = document.getElementById("Prohibicion")?.value || 0;
-    const cesion = document.getElementById("Cesion")?.value || 0;
+    const vehiculos = leerEnteroNoNegativo(document.getElementById("vehiculos")?.value);
+    const personas = leerEnteroNoNegativo(document.getElementById("personas")?.value);
+    const testalom = leerEnteroNoNegativo(document.getElementById("testalom")?.value);
+    const actas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
+    const requisa = leerEnteroNoNegativo(document.getElementById("Requisa")?.value);
+    const qrz = leerEnteroNoNegativo(document.getElementById("qrz")?.value);
+    const dominio = leerEnteroNoNegativo(document.getElementById("dominio")?.value);
+    const remision = leerEnteroNoNegativo(document.getElementById("Remision")?.value);
+    const retencion = leerEnteroNoNegativo(document.getElementById("Retencion")?.value);
+    const prohibicion = leerEnteroNoNegativo(document.getElementById("Prohibicion")?.value);
+    const cesion = leerEnteroNoNegativo(document.getElementById("Cesion")?.value);
 
-    return [
-      `Vehículos Fiscalizados: (${vehiculos})`,
-      `Personas Identificadas: (${personas})`,
-      `Test de Alómetro: (${testalom})`,
-      `Test de Alcoholímetro: (${alco})`,
-      `Positiva Sancionable: (${posSan})`,
-      `Positiva no Sancionable: (${posNo})`,
-      `Actas Labradas: (${actas})`,
-      `Requisas: (${requisa})`,
-      `Qrz: (${qrz})`,
-      `Dominio: (${dominio})`,
-      `Medidas Cautelares:`,
-      `Remisión: (${remision})`,
-      `Retención: (${retencion})`,
-      `Prohibición de Circulación: (${prohibicion})`,
-      `Cesión de Conducción: (${cesion})`,
+    const alcoholimetro = construirBloqueAlcoholimetro();
+    if (!alcoholimetro.ok) {
+      marcarErrorCampo(alcoholimetro.input, alcoholimetro.mensaje);
+      return null;
+    }
+
+    const medidas = [
+      ["Remisión", remision],
+      ["Retención", retencion],
+      ["Prohibición de Circulación", prohibicion],
+      ["Cesión de Conducción", cesion],
+    ].filter(([, valor]) => valor > 0);
+
+    const lineas = [
+      `Vehículos Fiscalizados: (${formatearCantidad(vehiculos)})`,
+      `Personas Identificadas: (${formatearCantidad(personas)})`,
+      `Test de Alómetro: (${formatearCantidad(testalom)})`,
+      ...alcoholimetro.lineas,
+      `Actas Labradas: (${formatearCantidad(actas)})`,
+      `Requisas: (${formatearCantidad(requisa)})`,
+      `Qrz: (${formatearCantidad(qrz)})`,
+      `Dominio: (${formatearCantidad(dominio)})`,
     ];
+
+    if (medidas.length) {
+      lineas.push("Medidas Cautelares:");
+      medidas.forEach(([titulo, valor]) => {
+        lineas.push(`${titulo}: (${formatearCantidad(valor)})`);
+      });
+    }
+
+    return lineas;
   }
 
   function setElementosVisibles(visible) {
@@ -500,7 +753,10 @@ ${bold("Moviles:")}`;
 
     document
       .querySelectorAll('input[type="number"], input[type="text"], textarea')
-      .forEach((i) => (i.value = ""));
+      .forEach((i) => {
+        i.value = "";
+        limpiarErrorCampo(i);
+      });
 
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
@@ -511,7 +767,14 @@ ${bold("Moviles:")}`;
     if (chkMismosElementos) chkMismosElementos.checked = false;
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
 
+    limpiarGraduaciones(graduacionesSancionable);
+    limpiarGraduaciones(graduacionesNoSancionable);
+    if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
+    if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
+    if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
+
     setElementosVisibles(true);
+    sincronizarUIAlcoholimetro();
   }
 
   // ======================================================
@@ -706,9 +969,12 @@ ${bold("Moviles:")}`;
     partes.push(`Alcoholímetros: ${alcoTXT}`);
 
     if (esFinaliza && !finalizaSinResultados) {
+      const lineasResultados = construirLineasResultados();
+      if (!lineasResultados) return;
+
       partes.push("");
       partes.push(bold("Resultados:"));
-      partes.push(...construirLineasResultados());
+      partes.push(...lineasResultados);
 
       const detallesNormalizados = normalizarDetallesTexto(document.getElementById("detalles")?.value || "");
       if (detallesNormalizados) {
@@ -749,11 +1015,25 @@ ${bold("Moviles:")}`;
   selOrden.addEventListener("change", cargarHorariosOrden);
   selHorario.addEventListener("change", actualizarDatosFranja);
   selTipo.addEventListener("change", actualizarTipo);
+
+  [inputAlcotest, inputPositivaSancionable, inputPositivaNoSancionable].forEach((input) => {
+    if (!input) return;
+    input.addEventListener("input", () => {
+      limpiarErrorCampo(input);
+      sincronizarUIAlcoholimetro();
+    });
+    input.addEventListener("blur", () => {
+      normalizarInputNoNegativo(input);
+      sincronizarUIAlcoholimetro();
+    });
+  });
+
   btnEnviar.addEventListener("click", enviar);
 
   // ===== Init =====
   (async function init() {
     actualizarTipo();
+    sincronizarUIAlcoholimetro();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
