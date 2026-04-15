@@ -191,59 +191,59 @@
 
       <div class="resultado-item">
         <label for="vehiculos" class="gold-title">Vehículos Fiscalizados:</label>
-        <input type="number" id="vehiculos" min="0" inputmode="numeric">
+        <input type="number" id="vehiculos" min="0" inputmode="numeric" placeholder="15">
       </div>
 
       <div class="resultado-item">
         <label for="personas" class="gold-title">Personas Identificadas:</label>
-        <input type="number" id="personas" min="0" inputmode="numeric">
+        <input type="number" id="personas" min="0" inputmode="numeric" placeholder="15">
       </div>
 
       <div class="resultado-item">
         <label for="testalom" class="gold-title">Test de Alómetro:</label>
-        <input type="number" id="testalom" min="0" inputmode="numeric">
+        <input type="number" id="testalom" min="0" inputmode="numeric" placeholder="15">
       </div>
 
       <div class="resultado-item">
         <label for="Alcotest" class="gold-title">Test de Alcoholímetro:</label>
-        <input type="number" id="Alcotest" min="0" inputmode="numeric">
+        <input type="number" id="Alcotest" min="0" inputmode="numeric" placeholder="15">
       </div>
 
       <div id="bloquePositivosAlcoholimetro" class="resultado-subgrupo hidden">
         <div class="resultado-item">
           <label for="positivaSancionable" class="gold-title">Positiva Sancionable:</label>
-          <input type="number" id="positivaSancionable" min="0" inputmode="numeric">
+          <input type="number" id="positivaSancionable" min="0" inputmode="numeric" placeholder="2">
         </div>
 
         <div id="wrapGraduacionesSancionable" class="resultado-item resultado-item-graduaciones hidden">
           <label class="gold-title">Graduaciones:</label>
-          <div id="graduacionesSancionable" class="graduaciones-inline" aria-live="polite"></div>
+          <div id="graduacionesSancionable" class="graduaciones-inline" aria-live="polite"></div><span id="unitGraduacionesSancionable" class="graduaciones-unit hidden">g/l</span>
         </div>
 
         <div class="resultado-item">
           <label for="positivaNoSancionable" class="gold-title">Positiva no Sancionable:</label>
-          <input type="number" id="positivaNoSancionable" min="0" inputmode="numeric">
+          <input type="number" id="positivaNoSancionable" min="0" inputmode="numeric" placeholder="1">
         </div>
 
         <div id="wrapGraduacionesNoSancionable" class="resultado-item resultado-item-graduaciones hidden">
           <label class="gold-title">Graduaciones:</label>
-          <div id="graduacionesNoSancionable" class="graduaciones-inline" aria-live="polite"></div>
+          <div id="graduacionesNoSancionable" class="graduaciones-inline" aria-live="polite"></div><span id="unitGraduacionesNoSancionable" class="graduaciones-unit hidden">g/l</span>
         </div>
       </div>
 
       <div class="resultado-item">
         <label for="actas" class="gold-title">Actas Labradas:</label>
-        <input type="number" id="actas" min="0" inputmode="numeric">
+        <input type="number" id="actas" min="0" inputmode="numeric" placeholder="2">
       </div>
 
       <div class="resultado-item">
         <label for="Requisa" class="gold-title">Requisas:</label>
-        <input type="number" id="Requisa" min="0" inputmode="numeric">
+        <input type="number" id="Requisa" min="0" inputmode="numeric" placeholder="1">
       </div>
 
       <div class="resultado-item">
         <label for="qrz" class="gold-title">Qrz:</label>
-        <input type="number" id="qrz" min="0" inputmode="numeric">
+        <input type="number" id="qrz" min="0" inputmode="numeric" placeholder="2">
       </div>
 
       <div id="wrapQrzCasilleros" class="resultado-item resultado-item-sublista hidden">
@@ -253,7 +253,7 @@
 
       <div class="resultado-item">
         <label for="dominio" class="gold-title">Dominio:</label>
-        <input type="number" id="dominio" min="0" inputmode="numeric">
+        <input type="number" id="dominio" min="0" inputmode="numeric" placeholder="1">
       </div>
 
       <div id="wrapDominioCasilleros" class="resultado-item resultado-item-sublista hidden">
@@ -266,29 +266,29 @@
 
         <div class="resultado-item">
           <label for="Remision" class="gold-title">Remisión:</label>
-          <input type="number" id="Remision" min="0" inputmode="numeric">
+          <input type="number" id="Remision" min="0" inputmode="numeric" placeholder="1">
         </div>
 
         <div class="resultado-item">
           <label for="Retencion" class="gold-title">Retención:</label>
-          <input type="number" id="Retencion" min="0" inputmode="numeric">
+          <input type="number" id="Retencion" min="0" inputmode="numeric" placeholder="1">
         </div>
 
         <div class="resultado-item">
           <label for="Prohibicion" class="gold-title">Prohibición de Circulación:</label>
-          <input type="number" id="Prohibicion" min="0" inputmode="numeric">
+          <input type="number" id="Prohibicion" min="0" inputmode="numeric" placeholder="1">
         </div>
 
         <div class="resultado-item">
           <label for="Cesion" class="gold-title">Cesión de Conducción:</label>
-          <input type="number" id="Cesion" min="0" inputmode="numeric">
+          <input type="number" id="Cesion" min="0" inputmode="numeric" placeholder="1">
         </div>
       </div>
     </div>
 
     <div id="bloqueDetalles" class="section hidden destacado">
       <label>Detalles:</label>
-      <textarea id="detalles" rows="3"></textarea>
+      <textarea id="detalles" rows="3" placeholder="(01) 2016 Alcoholemia"></textarea>
     </div>
 
     <label for="obs">Observaciones:</label>
