@@ -301,7 +301,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const alcotest = leerEnteroInput(inputAlcotest);
 
     if (alcotest <= 0) {
-      return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`] };
+      return {
+        ok: true,
+        lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`],
+        cantidadSancionables: 0,
+        cantidadNoSancionables: 0,
+        totalValidos: 0,
+      };
     }
 
     const posSan = leerEnteroInput(inputPositivaSancionable);
@@ -342,7 +348,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const totalValidos = valoresSan.length + valoresNo.length;
     if (totalValidos === 0) {
-      return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`] };
+      return {
+        ok: true,
+        lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`],
+        cantidadSancionables: 0,
+        cantidadNoSancionables: 0,
+        totalValidos: 0,
+      };
     }
 
     const lineas = [
@@ -360,7 +372,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       lineas.push(construirLineaGraduaciones(valoresNo));
     }
 
-    return { ok: true, lineas };
+    return {
+      ok: true,
+      lineas,
+      cantidadSancionables: valoresSan.length,
+      cantidadNoSancionables: valoresNo.length,
+      totalValidos,
+    };
   }
 
   function normalizarInputNoNegativo(el) {
@@ -953,6 +971,30 @@ ${bold(`Moviles ${organismo}:`)}`)
     const alcoholimetro = construirBloqueAlcoholimetro();
     if (!alcoholimetro.ok) {
       marcarErrorCampo(alcoholimetro.input, alcoholimetro.mensaje);
+      return null;
+    }
+
+    if ((alcoholimetro.cantidadSancionables || 0) > 0 && actas <= 0) {
+      marcarErrorCampo(
+        document.getElementById("actas"),
+        'Si hay al menos una alcoholemia positiva sancionable, "Actas Labradas" debe ser mayor a cero.'
+      );
+      return null;
+    }
+
+    if (actas > 0 && vehiculos <= 0) {
+      marcarErrorCampo(
+        document.getElementById("vehiculos"),
+        'Si "Actas Labradas" es mayor a cero, "Vehículos Fiscalizados" no puede ser cero ni quedar vacío.'
+      );
+      return null;
+    }
+
+    if (actas > 0 && personas <= 0) {
+      marcarErrorCampo(
+        document.getElementById("personas"),
+        'Si "Actas Labradas" es mayor a cero, "Personas Identificadas" no puede ser cero ni quedar vacío.'
+      );
       return null;
     }
 
