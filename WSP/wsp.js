@@ -855,6 +855,85 @@ ${bold(`Moviles ${organismo}:`)}`)
       .trim();
   }
 
+  function obtenerReferenciaNomenclador(codigo, fallback = "") {
+    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+    if (!codigoLimpio || codigoLimpio === "17117") return fallback;
+
+    try {
+      if (typeof window !== "undefined" && typeof window.getReferenciaFalta === "function") {
+        return limpiarDescripcionDetalle(window.getReferenciaFalta(codigoLimpio, fallback || ""));
+      }
+    } catch {}
+
+    return fallback;
+  }
+
+  function reconstruirLineaDetalle(cantidad, codigo, descripcion) {
+    const descripcionFinal = limpiarDescripcionDetalle(descripcion);
+    if (!descripcionFinal) return null;
+
+    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+    const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+
+    if (cantidadLimpia) return `(${cantidadLimpia}) ${codigoLimpio} ${descripcionFinal}`;
+    return `${codigoLimpio} ${descripcionFinal}`;
+  }
+
+  function autocompletarLineaDetalleConNomenclador(linea) {
+    const original = String(linea || "").replace(/\r/g, "");
+    const s = original.trim();
+    if (!s) return original;
+
+    const patrones = [
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
+    ];
+
+    for (const patron of patrones) {
+      const m = s.match(patron.regex);
+      if (!m) continue;
+
+      const cantidad = patron.conCantidad ? m[1] : null;
+      const codigo = patron.conCantidad ? m[2] : m[1];
+      if (String(codigo || "").replace(/\D+/g, "") === "17117") return original;
+
+      const referencia = obtenerReferenciaNomenclador(codigo, "");
+      if (!referencia) return original;
+
+      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
+      return reconstruida || original;
+    }
+
+    return original;
+  }
+
+  function autocompletarDetallesDesdeNomenclador(texto) {
+    const original = String(texto || "").replace(/\r/g, "");
+    if (!original) return original;
+    return original.split("\n").map(autocompletarLineaDetalleConNomenclador).join("\n");
+  }
+
+  function aplicarAutocompletadoDetalles(textarea) {
+    if (!textarea) return;
+
+    const valorOriginal = String(textarea.value || "");
+    const valorNuevo = autocompletarDetallesDesdeNomenclador(valorOriginal);
+    if (valorNuevo === valorOriginal) return;
+
+    const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
+    const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : valorOriginal.length;
+    const nuevoInicio = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, inicio)).length;
+    const nuevoFin = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, fin)).length;
+
+    textarea.value = valorNuevo;
+
+    try {
+      textarea.setSelectionRange(nuevoInicio, nuevoFin);
+    } catch {}
+  }
+
   function normalizarLineaDetalle(linea) {
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
@@ -862,22 +941,20 @@ ${bold(`Moviles ${organismo}:`)}`)
     s = s.replace(/\s+/g, " ").trim();
 
     const patrones = [
-      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
-      /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(.+)$/i,
-      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
-      /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(.+)$/i,
-      /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
-      /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)(.+)$/i,
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
-    for (let i = 0; i < patrones.length; i += 1) {
-      const m = s.match(patrones[i]);
+    for (const patron of patrones) {
+      const m = s.match(patron.regex);
       if (!m) continue;
 
-      const tieneCantidad = i < 5;
-      const cantidad = tieneCantidad ? formatearCantidad(m[1]) : formatearCantidad(1);
-      const codigo = tieneCantidad ? m[2] : m[1];
-      const descripcion = limpiarDescripcionDetalle(tieneCantidad ? m[3] : m[2]);
+      const cantidad = patron.conCantidad ? formatearCantidad(m[1]) : formatearCantidad(1);
+      const codigo = patron.conCantidad ? m[2] : m[1];
+      const descripcionIngresada = patron.conCantidad ? m[3] : m[2];
+      const descripcion = obtenerReferenciaNomenclador(codigo, limpiarDescripcionDetalle(descripcionIngresada));
 
       if (!descripcion) continue;
 
@@ -1360,7 +1437,13 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   const detallesInput = document.getElementById("detalles");
   if (detallesInput) {
-    detallesInput.addEventListener("input", () => limpiarErrorCampo(detallesInput));
+    detallesInput.addEventListener("input", () => {
+      limpiarErrorCampo(detallesInput);
+      aplicarAutocompletadoDetalles(detallesInput);
+    });
+    detallesInput.addEventListener("blur", () => {
+      aplicarAutocompletadoDetalles(detallesInput);
+    });
   }
 
   btnEnviar.addEventListener("click", enviar);
