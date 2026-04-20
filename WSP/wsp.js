@@ -22,7 +22,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMismoMovil = document.getElementById("mismoMovil");
   const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
-  const bloqueObservacionesNormal = document.getElementById("bloqueObservacionesNormal");
 
   const inputAlcotest = document.getElementById("Alcotest");
   const inputPositivaSancionable = document.getElementById("positivaSancionable");
@@ -737,62 +736,32 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
-    const guardiaFecha = getGuardiaFechaISO();
-    const operativoKey = construirOperativoKeyEstable(franja);
-    const ordenNum = limpiarTextoSimple(obtenerNumeroOrdenDeFranja(franja) || "");
-    const horario = limpiarTextoSimple(franja?.horario || "");
-    const lugar = limpiarTextoSimple(franja?.lugar || "");
+    try {
+      const params = new URLSearchParams({
+        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
+        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
+        order: "updated_at.desc",
+        limit: "1",
+      });
 
-    const intentos = [
-      { guardia_fecha: `eq.${guardiaFecha}`, operativo_key: `eq.${operativoKey}` },
-      { operativo_key: `eq.${operativoKey}` },
-    ];
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
 
-    if (ordenNum && horario) {
-      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
-      intentos.push({ orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
-    }
-
-    if (ordenNum && lugar) {
-      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
-      intentos.push({ orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
-    }
-
-    if (ordenNum) {
-      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}` });
-      intentos.push({ orden_num: `eq.${ordenNum}` });
-    }
-
-    for (const filtros of intentos) {
-      try {
-        const params = new URLSearchParams({
-          select: selectCols,
-          order: "updated_at.desc",
-          limit: "1",
-          ...filtros,
-        });
-
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
-          headers: headersSupabase({ Accept: "application/json" }),
-        });
-
-        if (!r.ok) {
-          console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
-          continue;
-        }
-
-        const data = await r.json();
-        const row = Array.isArray(data) ? data[0] : null;
-        if (row) return normalizarInicioGuardado(row);
-      } catch (e) {
-        console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
+        return null;
       }
+
+      const data = await r.json();
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? normalizarInicioGuardado(row) : null;
+    } catch (e) {
+      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
+      return null;
     }
-
-    return null;
   }
-
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
     return {
@@ -938,7 +907,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     divFinaliza.classList.toggle("hidden", !fin);
 
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
-    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
 
     if (chkPresenciaActiva) {
       chkPresenciaActiva.checked = false;
@@ -950,7 +918,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       actualizarVisibilidadResultadosFinaliza();
       desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
-      actualizarVisibilidadModoControlSuperior();
       return;
     }
 
@@ -962,7 +929,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarInicioGuardadoSegunContexto();
-    actualizarVisibilidadModoControlSuperior();
   }
 
   // ======================================================
@@ -1044,44 +1010,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-  }
-
-  function modoControlSuperiorActivo() {
-    return selTipo?.value === "CONTROL SUPERIOR";
-  }
-
-  function actualizarVisibilidadModoControlSuperior() {
-    const activo = modoControlSuperiorActivo();
-    const bloqueControlSuperior = document.getElementById("bloqueControlSuperior");
-
-    if (bloqueControlSuperior) {
-      bloqueControlSuperior.classList.toggle("hidden", !activo);
-    }
-
-    if (activo) {
-      if (divFinaliza) divFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
-      if (divMismosElementos) divMismosElementos.classList.add("hidden");
-      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-      if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
-      if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.add("hidden");
-      setPersonalVisible(false);
-      setMovilidadVisible(false);
-      setElementosVisibles(false);
-      return true;
-    }
-
-    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
-    return false;
-  }
-
-  function formatearHoraActual() {
-    try {
-      return new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
-    } catch {
-      const now = new Date();
-      return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    }
   }
 
   const ORGANISMOS_CONJUNTO = [
@@ -1206,12 +1134,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadBloquePresenciaActiva() {
-    if (modoControlSuperiorActivo()) {
-      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
-      return;
-    }
-
     const mostrar = !!franjaSeleccionada && esTipoConPresenciaActivaOpcional();
 
     if (bloquePresenciaActiva) {
@@ -1224,14 +1146,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadResultadosFinaliza() {
-    if (modoControlSuperiorActivo()) {
-      if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
-      if (tituloResultadosFinaliza) tituloResultadosFinaliza.classList.add("hidden");
-      if (contenidoResultadosFinaliza) contenidoResultadosFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
-      return;
-    }
-
     const fin = selTipo?.value === "FINALIZA";
     const resultadosOpcionales = fin && esFinalizaConResultadosOpcionales();
     const mostrarResultados = fin && debeIncluirResultadosFinaliza();
@@ -1642,8 +1556,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const remoto = await leerInicioDesdeSupabase(franjaSeleccionada);
     if (lookupId !== inicioGuardadoLookupId) return;
 
-    inicioGuardadoActual = remoto || null;
-    aplicarInicioGuardadoAutomatico(remoto || null);
+    const payload = remoto || cargarInicioGuardadoCoincidente();
+    aplicarInicioGuardadoAutomatico(payload);
   }
 
   function resetUI() {
@@ -1666,16 +1580,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
 
-    if (window.ControlSuperior && typeof window.ControlSuperior.reset === "function") {
-      window.ControlSuperior.reset();
-    }
-
     divFinaliza.classList.add("hidden");
     divDetalles.classList.add("hidden");
 
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
 
     limpiarGraduaciones(graduacionesSancionable);
     limpiarGraduaciones(graduacionesNoSancionable);
@@ -1692,7 +1601,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     desactivarControlesMismos();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
-    actualizarVisibilidadModoControlSuperior();
   }
 
   // ======================================================
@@ -1702,13 +1610,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     const payload = construirInicioGuardadoActual();
     if (!payload) return null;
 
-    const guardadoOk = await guardarInicioEnSupabase(payload);
-    if (!guardadoOk) {
-      inicioGuardadoActual = null;
-      return null;
-    }
-
     inicioGuardadoActual = payload;
+    guardarInicioLocal(payload);
+    await guardarInicioEnSupabase(payload);
     return payload;
   }
 
@@ -1742,17 +1646,16 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismoPersonal) {
-    chkMismoPersonal.addEventListener("change", async () => {
+    chkMismoPersonal.addEventListener("change", () => {
       if (!chkMismoPersonal.checked) {
         limpiarSeleccionPersonal();
         setPersonalVisible(true);
         return;
       }
 
-      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
-      inicioGuardadoActual = payload || null;
+      const payload = cargarInicioGuardadoCoincidente();
       if (!payload || !payload.personal.length) {
-        alert("No hay personal guardado del INICIA en Supabase para este operativo.");
+        alert("No hay personal guardado del INICIA.");
         chkMismoPersonal.checked = false;
         limpiarSeleccionPersonal();
         setPersonalVisible(true);
@@ -1765,17 +1668,16 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismoMovil) {
-    chkMismoMovil.addEventListener("change", async () => {
+    chkMismoMovil.addEventListener("change", () => {
       if (!chkMismoMovil.checked) {
         limpiarSeleccionMovilidad();
         setMovilidadVisible(true);
         return;
       }
 
-      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
-      inicioGuardadoActual = payload || null;
+      const payload = cargarInicioGuardadoCoincidente();
       if (!payload || (!payload.moviles.length && !payload.motos.length)) {
-        alert("No hay móviles guardados del INICIA en Supabase para este operativo.");
+        alert("No hay móviles guardados del INICIA.");
         chkMismoMovil.checked = false;
         limpiarSeleccionMovilidad();
         setMovilidadVisible(true);
@@ -1788,24 +1690,23 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismosElementos) {
-    chkMismosElementos.addEventListener("change", async () => {
+    chkMismosElementos.addEventListener("change", () => {
       if (!chkMismosElementos.checked) {
         limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
 
-      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
-      inicioGuardadoActual = payload || null;
+      const payload = cargarElementosGuardados();
       if (!payload) {
-        alert("No hay elementos guardados del INICIA en Supabase para este operativo.");
+        alert("No hay elementos guardados del INICIA.");
         chkMismosElementos.checked = false;
         limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
 
-      aplicarElementos(payload.elementos);
+      aplicarElementos(payload);
       setElementosVisibles(false);
     });
   }
@@ -1813,40 +1714,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (!franjaSeleccionada) return;
-
-    if (modoControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
-      inicioGuardadoActual = inicioControlSuperior || null;
-      if (!inicioControlSuperior) {
-        alert("No hay datos del INICIA guardados en Supabase para este operativo. Envíe primero un INICIA y verifique que quede guardado.");
-        return;
-      }
-
-      const resultadoControlSuperior = window.ControlSuperior?.buildMessage?.({
-        forceActivo: true,
-        inicio: inicioControlSuperior,
-        franja: franjaSeleccionada,
-        fecha: new Date().toLocaleDateString("es-AR"),
-        hora: formatearHoraActual(),
-        bold,
-        compactarSaltos,
-        normalizarLugar,
-        normalizarHorario,
-        normalizarArrayTexto,
-        lineaDesdeArray,
-      });
-
-      if (!resultadoControlSuperior?.ok) {
-        alert(resultadoControlSuperior?.mensaje || "No se pudo generar CONTROL SUPERIOR.");
-        return;
-      }
-
-      resetUI();
-      setTimeout(() => {
-        window.location.href = "https://wa.me/?text=" + encodeURIComponent(resultadoControlSuperior.texto);
-      }, 0);
-      return;
-    }
 
     const esFinaliza = selTipo.value === "FINALIZA";
     const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
@@ -1858,10 +1725,9 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     let inicioCompartido = null;
     if (usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
-      inicioCompartido = await leerInicioDesdeSupabase(franjaSeleccionada);
-      inicioGuardadoActual = inicioCompartido || null;
+      inicioCompartido = cargarInicioGuardadoCoincidente();
       if (!inicioCompartido) {
-        alert("No hay datos del INICIA guardados en Supabase para este operativo. Destilde las opciones o envíe primero un INICIA válido.");
+        alert("No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA.");
         return;
       }
     }
@@ -1993,11 +1859,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = compactarSaltos(partes.join("\n"));
 
     if (selTipo.value === "INICIA") {
-      const inicioGuardado = await guardarElementosDeInicio();
-      if (!inicioGuardado) {
-        alert("No se pudo guardar el INICIA en Supabase. Revise la conexión o la tabla wsp_inicios antes de enviar.");
-        return;
-      }
+      await guardarElementosDeInicio();
     }
 
     resetUI();
@@ -2013,11 +1875,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
-
-  if (window.ControlSuperior && typeof window.ControlSuperior.init === "function") {
-    window.ControlSuperior.init();
-  }
-
   if (chkMostrarResultadosFinaliza) {
     chkMostrarResultadosFinaliza.addEventListener("change", () => {
       actualizarVisibilidadResultadosFinaliza();
@@ -2073,7 +1930,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     actualizarTipo();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
-    actualizarVisibilidadModoControlSuperior();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
