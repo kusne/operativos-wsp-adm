@@ -1900,3 +1900,103 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
     transform: scale(1) !important;
   }
 }
+
+
+/* ===== CONTROL SUPERIOR AJUSTE DE SIMETRIA ===== */
+#bloqueControlSuperior{
+  padding: 12px 14px !important;
+}
+
+#bloqueControlSuperior .fila-control-superior{
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  column-gap: 12px !important;
+  row-gap: 0 !important;
+  align-items: center !important;
+  margin: 0 !important;
+}
+
+#bloqueControlSuperior .fila-control-superior-acciones{
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 18px !important;
+  row-gap: 0 !important;
+  align-items: center !important;
+  margin: 16px 0 0 0 !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion{
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 9px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 10px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion > span{
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  color: var(--text) !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
+  font-size: 15px !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  transform: scale(1.15) !important;
+  transform-origin: center center !important;
+  flex: 0 0 auto !important;
+}
+
+@media (max-width: 420px){
+  #bloqueControlSuperior .fila-control-superior{
+    column-gap: 8px !important;
+  }
+
+  #bloqueControlSuperior .fila-control-superior-acciones{
+    column-gap: 12px !important;
+    margin-top: 14px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion{
+    padding: 0 6px !important;
+    gap: 8px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion > span{
+    font-size: 14px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    min-height: 19px !important;
+    transform: scale(1.12) !important;
+  }
+}
