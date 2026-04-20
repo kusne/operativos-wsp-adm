@@ -764,6 +764,37 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  async function leerInicioControlSuperiorDesdeSupabase(franja) {
+    const exacto = await leerInicioDesdeSupabase(franja);
+    if (exacto) return exacto;
+    if (!franja) return null;
+
+    try {
+      const params = new URLSearchParams({
+        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
+        order: "updated_at.desc",
+        limit: "1",
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo leer inicio para CONTROL SUPERIOR desde Supabase:", r.status, await r.text());
+        return null;
+      }
+
+      const data = await r.json();
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? normalizarInicioGuardado(row) : null;
+    } catch (e) {
+      console.warn("[WSP] Error leyendo inicio para CONTROL SUPERIOR desde Supabase.", e);
+      return null;
+    }
+  }
+
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
     return {
       ...franja,
@@ -1778,11 +1809,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     if (modoControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente();
+      const inicioControlSuperior = await leerInicioControlSuperiorDesdeSupabase(franjaSeleccionada);
       if (!inicioControlSuperior) {
         alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
         return;
       }
+
+      inicioGuardadoActual = inicioControlSuperior;
 
       const resultadoControlSuperior = window.ControlSuperior?.buildMessage?.({
         forceActivo: true,
