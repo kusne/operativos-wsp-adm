@@ -1017,7 +1017,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function modoControlSuperiorActivo() {
-    return !!(window.ControlSuperior && typeof window.ControlSuperior.isActive === "function" && window.ControlSuperior.isActive());
+    return selTipo?.value === "CONTROL SUPERIOR";
   }
 
   function actualizarVisibilidadModoControlSuperior() {
@@ -1971,14 +1971,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   selTipo.addEventListener("change", actualizarTipo);
 
   if (window.ControlSuperior && typeof window.ControlSuperior.init === "function") {
-    window.ControlSuperior.init({
-      onToggle: () => {
-        actualizarTipo();
-        actualizarVisibilidadBloquePresenciaActiva();
-        actualizarVisibilidadResultadosFinaliza();
-        actualizarVisibilidadModoControlSuperior();
-      },
-    });
+    window.ControlSuperior.init();
   }
 
   if (chkMostrarResultadosFinaliza) {
