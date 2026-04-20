@@ -737,13 +737,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    try {
+    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
+    const operativoKey = construirOperativoKeyEstable(franja);
+    const guardiaFecha = getGuardiaFechaISO();
+    const ordenNum = obtenerNumeroOrdenDeFranja(franja);
+    const horario = limpiarTextoSimple(franja?.horario || "");
+    const lugar = limpiarTextoSimple(franja?.lugar || "");
+
+    async function ejecutarLookup(extraParams) {
       const params = new URLSearchParams({
-        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
-        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
-        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
+        select: selectCols,
         order: "updated_at.desc",
         limit: "1",
+        ...extraParams,
       });
 
       const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
@@ -758,39 +764,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const data = await r.json();
       const row = Array.isArray(data) ? data[0] : null;
       return row ? normalizarInicioGuardado(row) : null;
-    } catch (e) {
-      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
-      return null;
     }
-  }
 
-  async function leerInicioControlSuperiorDesdeSupabase(franja) {
-    const exacto = await leerInicioDesdeSupabase(franja);
-    if (exacto) return exacto;
-    if (!franja) return null;
+    const intentos = [
+      { guardia_fecha: `eq.${guardiaFecha}`, operativo_key: `eq.${operativoKey}` },
+      { operativo_key: `eq.${operativoKey}` },
+    ];
+
+    if (ordenNum && horario) {
+      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
+      intentos.push({ orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
+    }
+
+    if (ordenNum && lugar) {
+      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
+      intentos.push({ orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
+    }
 
     try {
-      const params = new URLSearchParams({
-        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
-        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
-        order: "updated_at.desc",
-        limit: "1",
-      });
-
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo leer inicio para CONTROL SUPERIOR desde Supabase:", r.status, await r.text());
-        return null;
+      for (const filtros of intentos) {
+        const encontrado = await ejecutarLookup(filtros);
+        if (encontrado) return encontrado;
       }
-
-      const data = await r.json();
-      const row = Array.isArray(data) ? data[0] : null;
-      return row ? normalizarInicioGuardado(row) : null;
+      return null;
     } catch (e) {
-      console.warn("[WSP] Error leyendo inicio para CONTROL SUPERIOR desde Supabase.", e);
+      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
       return null;
     }
   }
@@ -1809,13 +1807,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     if (modoControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioControlSuperiorDesdeSupabase(franjaSeleccionada);
+      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
       if (!inicioControlSuperior) {
         alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
         return;
       }
-
-      inicioGuardadoActual = inicioControlSuperior;
 
       const resultadoControlSuperior = window.ControlSuperior?.buildMessage?.({
         forceActivo: true,
