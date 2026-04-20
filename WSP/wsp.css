@@ -1473,12 +1473,12 @@ label.check.check-inline-opcion > span{
   flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  width: 100% !important;          /* ocupa el mismo ancho que el select */
+  width: 100% !important;
   max-width: 100% !important;
   min-height: 0 !important;
-  margin: 0 0 0 15px !important;            /* arranca desde el mismo borde izquierdo */
+  margin: 0 0 0 15px !important;
   padding: 0 !important;
-  gap: 4px !important;             /* texto casi pegado al checkbox */
+  gap: 4px !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -1494,13 +1494,13 @@ label.check.check-inline-opcion > span{
   left: auto !important;
   top: auto !important;
   margin: 0 0 0 5px !important;
-  margin-left: 2px !important;       /* mismo arranque izquierdo */
+  margin-left: 2px !important;
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
   min-height: 18px !important;
   flex: 0 0 auto !important;
-  transform: scale(1.5) !important; /* checkbox más grande */
+  transform: scale(1.5) !important;
   transform-origin: center center !important;
 }
 
@@ -1511,9 +1511,9 @@ label.check.check-inline-opcion > span{
   display: inline-block !important;
   flex: 0 0 auto !important;
   margin: 0 !important;
-  margin-left: 8px !important;   /* separa el texto del checkbox */
+  margin-left: 14px !important;   /* mas separacion del texto respecto al checkbox */
   padding: 0 !important;
-  font-size: 14px !important;
+  font-size: 15px !important;     /* letras un poquito mas grandes */
   font-weight: 700 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
@@ -1522,7 +1522,7 @@ label.check.check-inline-opcion > span{
 
 #wrapPresenciaActiva > span,
 #wrapPresenciaActiva.check-inline-opcion > span{
-  color: #ffffff !important;       /* presencia activa en blanco */
+  color: #ffffff !important;
 }
 
 #wrapMostrarResultadosFinaliza > span,
