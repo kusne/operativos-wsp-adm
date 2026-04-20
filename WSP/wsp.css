@@ -1476,7 +1476,7 @@ label.check.check-inline-opcion > span{
   width: auto !important;
   max-width: none !important;
   min-height: 0 !important;
-  margin: 0 0 0 -12px !important;   /*checkbox  mas a la izquierda */
+  margin: 0 0 0 -10px !important;   /*checkbox  mas a la izquierda */
   padding: 0 !important;
   gap: 4px !important; /* text mas a la izquierda o derecha */
   border: 0 !important;
