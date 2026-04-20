@@ -1478,7 +1478,7 @@ label.check.check-inline-opcion > span{
   min-height: 0 !important;
   margin: 0 0 0 -12px !important;   /*checkbox  mas a la izquierda */
   padding: 0 !important;
-  gap: 2px !important; /* text mas a la izquierda o derecha */
+  gap: 4px !important; /* text mas a la izquierda o derecha */
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -1494,7 +1494,7 @@ label.check.check-inline-opcion > span{
   left: auto !important;
   top: auto !important;
   margin: 0 !important;
-  margin-left: -6px !important;
+  margin-left: -3px !important;
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
