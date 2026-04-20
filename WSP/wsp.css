@@ -1448,9 +1448,13 @@ label.check.check-inline-opcion > span{
 }
 /* ===== AJUSTE CHECKS PRESENCIA ACTIVA / VER ITEMS ===== */
 
+#bloquePresenciaActiva,
+#bloqueMostrarResultadosFinaliza,
 #bloquePresenciaActiva.control-opcion,
 #bloqueMostrarResultadosFinaliza.control-opcion{
-  display: block !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
   width: 100% !important;
   margin: 0 0 10px 0 !important;
   padding: 0 !important;
@@ -1459,49 +1463,67 @@ label.check.check-inline-opcion > span{
   box-shadow: none !important;
 }
 
+#wrapPresenciaActiva,
+#wrapMostrarResultadosFinaliza,
 #wrapPresenciaActiva.check-inline-opcion,
 #wrapMostrarResultadosFinaliza.check-inline-opcion{
+  position: static !important;
   display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  flex-wrap: nowrap !important;
-  gap: 6px !important;
   width: auto !important;
-  max-width: 100% !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  margin: 0 0 0 -12px !important;   /* mas a la izquierda */
   padding: 0 !important;
-  margin: 0 0 0 -8px !important;   /* un poco mas a la izquierda */
+  gap: 6px !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
+#wrapPresenciaActiva > input[type="checkbox"],
+#wrapMostrarResultadosFinaliza > input[type="checkbox"],
 #wrapPresenciaActiva.check-inline-opcion > input[type="checkbox"],
 #wrapMostrarResultadosFinaliza.check-inline-opcion > input[type="checkbox"]{
   position: static !important;
   left: auto !important;
   top: auto !important;
   margin: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
   flex: 0 0 auto !important;
-  transform: scale(1.28) !important; /* checkbox mas grande */
+  transform: scale(1.38) !important; /* checkbox mas grande */
   transform-origin: center center !important;
 }
 
+#wrapPresenciaActiva > span,
+#wrapMostrarResultadosFinaliza > span,
 #wrapPresenciaActiva.check-inline-opcion > span,
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
   display: inline-block !important;
+  flex: 0 0 auto !important;
   margin: 0 !important;
   padding: 0 !important;
-  white-space: nowrap !important;   /* siempre en una sola fila */
-  line-height: 1 !important;
   font-size: 14px !important;
   font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;   /* siempre en una sola fila */
+  word-break: keep-all !important;
 }
 
+#wrapPresenciaActiva > span,
 #wrapPresenciaActiva.check-inline-opcion > span{
-  color: #ffffff !important;
+  color: #ffffff !important;       /* presencia activa en blanco */
 }
 
+#wrapMostrarResultadosFinaliza > span,
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
-  color: #eef1f6 !important;
+  color: #072E6D !important;
 }
