@@ -1333,3 +1333,61 @@ label.check.check-inline-opcion > span{
   background: transparent !important;
   box-shadow: none !important;
 }
+
+/* ===== AJUSTE FINO FINAL: CHECKS CHICOS Y VISIBLES A LA IZQUIERDA ===== */
+#bloquePresenciaActiva.control-opcion,
+#bloqueMostrarResultadosFinaliza.control-opcion{
+  display: block !important;
+  width: 100% !important;
+  margin: 0 0 10px 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion,
+#wrapMostrarResultadosFinaliza.check-inline-opcion{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  line-height: 1.15 !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > input[type="checkbox"],
+#wrapMostrarResultadosFinaliza.check-inline-opcion > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: scale(0.92) !important;
+  transform-origin: center center !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > span,
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  letter-spacing: 0 !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > span{
+  color: #ffffff !important;
+}
+
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  color: #eef1f6 !important;
+}
