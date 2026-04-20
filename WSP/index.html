@@ -110,17 +110,17 @@
     <div class="section hidden destacado" id="bloqueMismosElementos">
       <div class="fila-mismos-datos">
         <label class="check check-chip" id="wrapMismoPersonal">
-          <span>Mismo personal?</span>
+          <span>Mismo personal</span>
           <input type="checkbox" id="mismoPersonal">
         </label>
 
         <label class="check check-chip" id="wrapMismoMovil">
-          <span>Mismo móvil?</span>
+          <span>Mismo móvil</span>
           <input type="checkbox" id="mismoMovil">
         </label>
 
         <label class="check check-chip" id="wrapMismosElementos">
-          <span>mismo Elementos?</span>
+          <span>Elementos de Inicio</span>
           <input type="checkbox" id="mismosElementos">
         </label>
       </div>
@@ -194,8 +194,16 @@
 
     <!-- FINALIZA -->
     <div id="finaliza" class="section hidden destacado">
-      <label>Resultados</label>
+      <div id="bloqueMostrarResultadosFinaliza" class="hidden">
+        <label class="check check-chip" id="wrapMostrarResultadosFinaliza">
+          <span>Mostrar items de resultados</span>
+          <input type="checkbox" id="mostrarResultadosFinaliza">
+        </label>
+      </div>
 
+      <label id="tituloResultadosFinaliza">Resultados</label>
+
+      <div id="contenidoResultadosFinaliza">
       <div class="resultado-item">
         <label for="vehiculos" class="gold-title">Vehículos Fiscalizados:</label>
         <input type="number" id="vehiculos" min="0" inputmode="numeric" placeholder="15">
@@ -290,6 +298,7 @@
           <label for="Cesion" class="gold-title">Cesión de Conducción:</label>
           <input type="number" id="Cesion" min="0" inputmode="numeric">
         </div>
+      </div>
       </div>
     </div>
 
