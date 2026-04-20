@@ -35,7 +35,6 @@
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
-      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
     </select>
 
     <label class="top-label">OPERATIVOS</label>
@@ -200,44 +199,6 @@
       </div>
     </div>
 
-    <div id="bloqueControlSuperior" class="section hidden destacado">
-      <label>CONTROL SUPERIOR</label>
-
-      <div class="fila-control-superior">
-        <label class="control-superior-opcion" id="wrapControlSuperiorJefe">
-          <span>JEFE</span>
-          <input type="checkbox" id="controlSuperiorJefe" class="control-superior-rol">
-        </label>
-
-        <label class="control-superior-opcion" id="wrapControlSuperiorSubjefe">
-          <span>SUBJEFE</span>
-          <input type="checkbox" id="controlSuperiorSubjefe" class="control-superior-rol">
-        </label>
-
-        <label class="control-superior-opcion" id="wrapControlSuperiorOtros">
-          <span>OTROS</span>
-          <input type="checkbox" id="controlSuperiorOtros" class="control-superior-rol">
-        </label>
-      </div>
-
-      <div id="bloqueControlSuperiorOtrosTexto" class="control-superior-otros hidden">
-        <label for="controlSuperiorOtrosTexto">Otros</label>
-        <input type="text" id="controlSuperiorOtrosTexto" placeholder="Nombre y apellido">
-      </div>
-
-      <div class="fila-control-superior-acciones">
-        <label class="control-superior-opcion control-superior-opcion-secundaria" id="wrapControlSuperiorConMovil">
-          <span>Con móvil?</span>
-          <input type="checkbox" id="controlSuperiorConMovil">
-        </label>
-
-        <label class="control-superior-opcion control-superior-opcion-secundaria" id="wrapControlSuperiorSeAcopla">
-          <span>Se acopla?</span>
-          <input type="checkbox" id="controlSuperiorSeAcopla">
-        </label>
-      </div>
-    </div>
-
     <!-- FINALIZA -->
     <div id="finaliza" class="section hidden destacado">
       <div id="bloqueMostrarResultadosFinaliza" class="control-opcion hidden">
@@ -353,11 +314,9 @@
       <textarea id="detalles" rows="3" placeholder="(01) 2016 Alcoholemia"></textarea>
     </div>
 
-    <div id="bloqueObservacionesNormal">
-      <label for="obs">Observaciones:</label>
-      <textarea id="obs" rows="3" placeholder="Se realizó (01) verificación por animales sueltos
+    <label for="obs">Observaciones:</label>
+    <textarea id="obs" rows="3" placeholder="Se realizó (01) verificación por animales sueltos
 o se realizó (01) Procedimiento Policial"></textarea>
-    </div>
 
     <button type="button" id="btnEnviar">Enviar por WhatsApp</button>
 
@@ -372,10 +331,10 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   <!-- wsp -->
   <script src="./nomenclador.js" defer></script>
-  <script src="./controlsuperior.js" defer></script>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
+
 
 
 
