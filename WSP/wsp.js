@@ -907,37 +907,30 @@ ${bold(`Moviles ${organismo}:`)}`)
     const s = original.trim();
     if (!s) return original;
 
-    const conCantidad = [
-      /^\(\s*(\d{1,2})\s*\)(?:\s+(\d{1,4}))?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-      /^(\d{1,2})\s*[-–—]\s*(\d{1,4})?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-      /^(\d{1,2})\s+(\d{1,4})?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+    const patrones = [
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
-    for (const regex of conCantidad) {
-      const m = s.match(regex);
+    for (const patron of patrones) {
+      const m = s.match(patron.regex);
       if (!m) continue;
 
-      const cantidad = m[1];
-      const codigoParcial = String(m[2] || "").replace(/\D+/g, "");
-      const resto = m[3] || "";
+      const cantidad = patron.conCantidad ? m[1] : null;
+      const codigo = String((patron.conCantidad ? m[2] : m[1]) || "").replace(/\D+/g, "");
+      const resto = m[patron.conCantidad ? 3 : 2] || "";
 
       if (!esDescripcionExactaDeNomenclador(resto)) return original;
-      if (codigoParcial === "17117") return original;
+      if (codigo === "17117") return original;
 
-      const qty = formatearCantidad(cantidad);
-      return codigoParcial ? `(${qty}) ${codigoParcial}` : `(${qty})`;
+      const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+      if (cantidadLimpia) return codigo ? `(${cantidadLimpia}) ${codigo}` : `(${cantidadLimpia})`;
+      return codigo || "";
     }
 
-    const sinCantidad = s.match(/^(\d{0,4})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i);
-    if (!sinCantidad) return original;
-
-    const codigoParcial = String(sinCantidad[1] || "").replace(/\D+/g, "");
-    const resto = sinCantidad[2] || "";
-
-    if (!esDescripcionExactaDeNomenclador(resto)) return original;
-    if (codigoParcial === "17117") return original;
-
-    return codigoParcial || "";
+    return original;
   }
 
   function autocompletarLineaDetalleConNomenclador(linea) {
@@ -946,10 +939,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!s) return original;
 
     const patrones = [
-      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
     for (const patron of patrones) {
@@ -957,17 +950,27 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!m) continue;
 
       const cantidad = patron.conCantidad ? m[1] : null;
-      const codigo = patron.conCantidad ? m[2] : m[1];
-      if (String(codigo || "").replace(/\D+/g, "") === "17117") return original;
+      const codigo = String((patron.conCantidad ? m[2] : m[1]) || "").replace(/\D+/g, "");
+      const resto = m[patron.conCantidad ? 3 : 2] || "";
+
+      if (codigo === "17117") return original;
 
       const referencia = obtenerReferenciaNomenclador(codigo, "");
-      if (!referencia) return original;
+      if (referencia) {
+        const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
+        return reconstruida || original;
+      }
 
-      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
-      return reconstruida || original;
+      if (esDescripcionExactaDeNomenclador(resto)) {
+        const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+        if (cantidadLimpia) return codigo ? `(${cantidadLimpia}) ${codigo}` : `(${cantidadLimpia})`;
+        return codigo || "";
+      }
+
+      return original;
     }
 
-    return limpiarTextoPegadoSinCodigo(original);
+    return original;
   }
 
   function autocompletarDetallesDesdeNomenclador(texto) {
