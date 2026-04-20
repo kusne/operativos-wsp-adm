@@ -737,19 +737,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
-    const operativoKey = construirOperativoKeyEstable(franja);
-    const guardiaFecha = getGuardiaFechaISO();
-    const ordenNum = obtenerNumeroOrdenDeFranja(franja);
-    const horario = limpiarTextoSimple(franja?.horario || "");
-    const lugar = limpiarTextoSimple(franja?.lugar || "");
-
-    async function ejecutarLookup(extraParams) {
+    try {
       const params = new URLSearchParams({
-        select: selectCols,
+        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
+        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
         order: "updated_at.desc",
         limit: "1",
-        ...extraParams,
       });
 
       const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
@@ -764,33 +758,69 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const data = await r.json();
       const row = Array.isArray(data) ? data[0] : null;
       return row ? normalizarInicioGuardado(row) : null;
-    }
-
-    const intentos = [
-      { guardia_fecha: `eq.${guardiaFecha}`, operativo_key: `eq.${operativoKey}` },
-      { operativo_key: `eq.${operativoKey}` },
-    ];
-
-    if (ordenNum && horario) {
-      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
-      intentos.push({ orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
-    }
-
-    if (ordenNum && lugar) {
-      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
-      intentos.push({ orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
-    }
-
-    try {
-      for (const filtros of intentos) {
-        const encontrado = await ejecutarLookup(filtros);
-        if (encontrado) return encontrado;
-      }
-      return null;
     } catch (e) {
       console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
       return null;
     }
+  }
+
+  async function fetchInicioSupabasePorCriterio(criterios = {}) {
+    try {
+      const params = new URLSearchParams({
+        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+        order: "updated_at.desc",
+        limit: "1",
+      });
+
+      Object.entries(criterios).forEach(([clave, valor]) => {
+        const limpio = limpiarTextoSimple(valor || "");
+        if (limpio) params.set(clave, `eq.${limpio}`);
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo leer inicio desde Supabase con criterio:", criterios, r.status, await r.text());
+        return null;
+      }
+
+      const data = await r.json();
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? normalizarInicioGuardado(row) : null;
+    } catch (e) {
+      console.warn("[WSP] Error leyendo inicio desde Supabase con criterio.", criterios, e);
+      return null;
+    }
+  }
+
+  async function leerInicioControlSuperiorDesdeSupabase(franja) {
+    if (!franja) return null;
+
+    const guardiaFecha = getGuardiaFechaISO();
+    const operativoKey = construirOperativoKeyEstable(franja);
+    const ordenNum = obtenerNumeroOrdenDeFranja(franja);
+    const horario = limpiarTextoSimple(franja?.horario || "");
+    const lugar = limpiarTextoSimple(franja?.lugar || "");
+
+    const intentos = [
+      () => leerInicioDesdeSupabase(franja),
+      () => fetchInicioSupabasePorCriterio({ operativo_key: operativoKey }),
+      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, orden_num: ordenNum, horario }),
+      () => fetchInicioSupabasePorCriterio({ orden_num: ordenNum, horario }),
+      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, orden_num: ordenNum, lugar }),
+      () => fetchInicioSupabasePorCriterio({ orden_num: ordenNum, lugar }),
+      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, horario, lugar }),
+      () => fetchInicioSupabasePorCriterio({ horario, lugar }),
+    ];
+
+    for (const intento of intentos) {
+      const encontrado = await intento();
+      if (encontrado) return encontrado;
+    }
+
+    return null;
   }
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
@@ -1807,7 +1837,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     if (modoControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
+      const inicioControlSuperior = await leerInicioControlSuperiorDesdeSupabase(franjaSeleccionada);
       if (!inicioControlSuperior) {
         alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
         return;
