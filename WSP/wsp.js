@@ -10,6 +10,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const divFinaliza = document.getElementById("finaliza");
   const divDetalles = document.getElementById("bloqueDetalles");
+  const bloqueMostrarResultadosFinaliza = document.getElementById("bloqueMostrarResultadosFinaliza");
+  const chkMostrarResultadosFinaliza = document.getElementById("mostrarResultadosFinaliza");
+  const tituloResultadosFinaliza = document.getElementById("tituloResultadosFinaliza");
+  const contenidoResultadosFinaliza = document.getElementById("contenidoResultadosFinaliza");
 
   const divMismosElementos = document.getElementById("bloqueMismosElementos");
   const chkMismoPersonal = document.getElementById("mismoPersonal");
@@ -878,6 +882,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     ordenSeleccionada = null;
 
     if (selTipo.value === "FINALIZA") {
+      if (chkMostrarResultadosFinaliza) {
+        chkMostrarResultadosFinaliza.checked = false;
+      }
+      actualizarVisibilidadResultadosFinaliza();
       sincronizarInicioGuardadoSegunContexto();
     }
   }
@@ -891,11 +899,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
 
     if (!fin) {
+      if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+      actualizarVisibilidadResultadosFinaliza();
       desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
       return;
     }
 
+    if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
+      chkMostrarResultadosFinaliza.checked = false;
+    }
+    actualizarVisibilidadResultadosFinaliza();
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarInicioGuardadoSegunContexto();
@@ -1052,8 +1066,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       .join("\n\n");
   }
 
-  function esFinalizaSinResultados() {
-    const fuente = [
+  function obtenerFuenteTipoFinalizaActual() {
+    return [
       franjaSeleccionada?.titulo || "",
       obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
     ]
@@ -1061,8 +1075,55 @@ ${bold(`Moviles ${organismo}:`)}`)
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
+  }
 
-    return /\bordenamiento\b|\blimpieza\s*tunel\b|\bcustodia\b|\btraslado\b|\bmonitoreo\b/.test(fuente);
+  function esFinalizaSinResultados() {
+    const fuente = obtenerFuenteTipoFinalizaActual();
+    return /\bcustodia\b|\btraslado\b/.test(fuente);
+  }
+
+  function esFinalizaConResultadosOpcionales() {
+    const fuente = obtenerFuenteTipoFinalizaActual();
+    return /\bordenamiento\b|\bestablecido\b|\bmonitoreo\b|\bpresencia\s*activa\b|\blimpieza\b|\bablacion\b/.test(fuente);
+  }
+
+  function debeIncluirResultadosFinaliza() {
+    if (selTipo?.value !== "FINALIZA") return false;
+    if (esFinalizaSinResultados()) return false;
+    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
+    return true;
+  }
+
+  function actualizarVisibilidadResultadosFinaliza() {
+    const fin = selTipo?.value === "FINALIZA";
+    const resultadosOpcionales = fin && esFinalizaConResultadosOpcionales();
+    const mostrarResultados = fin && debeIncluirResultadosFinaliza();
+
+    if (bloqueMostrarResultadosFinaliza) {
+      bloqueMostrarResultadosFinaliza.classList.toggle("hidden", !resultadosOpcionales);
+    }
+
+    if (tituloResultadosFinaliza) {
+      tituloResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
+    }
+
+    if (contenidoResultadosFinaliza) {
+      contenidoResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
+    }
+
+    if (!mostrarResultados) {
+      if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
+      if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
+      if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
+      if (unitGraduacionesSancionable) unitGraduacionesSancionable.classList.add("hidden");
+      if (unitGraduacionesNoSancionable) unitGraduacionesNoSancionable.classList.add("hidden");
+      if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
+      if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
+      return;
+    }
+
+    sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
   }
 
   // ======================================================
@@ -1594,7 +1655,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     const esFinaliza = selTipo.value === "FINALIZA";
-    const finalizaSinResultados = esFinaliza && esFinalizaSinResultados();
+    const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
     const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
     const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
@@ -1697,11 +1758,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
-    if (esFinaliza && !finalizaSinResultados && !validarDetallesRequeridosPorActas(detallesProcesados)) {
+    if (esFinaliza && incluirResultadosFinaliza && !validarDetallesRequeridosPorActas(detallesProcesados)) {
       return;
     }
 
-    if (esFinaliza && !finalizaSinResultados) {
+    if (esFinaliza && incluirResultadosFinaliza) {
       const lineasResultados = construirLineasResultados();
       if (!lineasResultados) return;
 
@@ -1716,7 +1777,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
     }
 
-    if (esFinaliza && finalizaSinResultados) {
+    if (esFinaliza && !incluirResultadosFinaliza) {
       if (detallesProcesados.detalles) {
         partes.push("");
         partes.push(bold("Detalles:"));
@@ -1747,6 +1808,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
+  if (chkMostrarResultadosFinaliza) {
+    chkMostrarResultadosFinaliza.addEventListener("change", () => {
+      actualizarVisibilidadResultadosFinaliza();
+    });
+  }
 
   [inputAlcotest, inputPositivaSancionable, inputPositivaNoSancionable].forEach((input) => {
     if (!input) return;
