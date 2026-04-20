@@ -1783,3 +1783,120 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
     font-size:12px !important;
   }
 }
+
+
+/* ===== CONTROL SUPERIOR UI COMPACTA ===== */
+#bloqueControlSuperior{
+  padding: 12px 14px !important;
+}
+
+#bloqueControlSuperior > label{
+  display:block !important;
+  margin: 0 0 12px 0 !important;
+  color: var(--gold) !important;
+  font-weight: 800 !important;
+  letter-spacing: .2px !important;
+}
+
+#bloqueControlSuperior .fila-control-superior,
+#bloqueControlSuperior .fila-control-superior-acciones{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  flex-wrap:nowrap !important;
+  gap: 18px !important;
+  margin: 0 !important;
+}
+
+#bloqueControlSuperior .fila-control-superior-acciones{
+  margin-top: 10px !important;
+  gap: 28px !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion{
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  width: auto !important;
+  min-height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion > span{
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  color: var(--text) !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
+  font-size: 15px !important;
+}
+
+#bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  transform: scale(1.05) !important;
+  transform-origin: center center !important;
+  flex: 0 0 auto !important;
+}
+
+#bloqueControlSuperior .control-superior-otros{
+  margin-top: 12px !important;
+}
+
+#bloqueControlSuperior .control-superior-otros label{
+  display:block !important;
+  margin: 0 0 6px 0 !important;
+  font-weight: 700 !important;
+}
+
+#bloqueControlSuperior .control-superior-otros input[type="text"]{
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 520px){
+  #bloqueControlSuperior .fila-control-superior,
+  #bloqueControlSuperior .fila-control-superior-acciones{
+    gap: 14px !important;
+  }
+
+  #bloqueControlSuperior .fila-control-superior-acciones{
+    gap: 18px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion > span{
+    font-size: 14px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
+    font-size: 13px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+    transform: scale(1) !important;
+  }
+}
