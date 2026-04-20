@@ -1493,8 +1493,8 @@ label.check.check-inline-opcion > span{
   position: static !important;
   left: auto !important;
   top: auto !important;
-  margin: 0 !important;
-  margin-left: 2 !important;       /* mismo arranque izquierdo */
+  margin: 0 0 0 5px !important;
+  margin-left: 0 !important;       /* mismo arranque izquierdo */
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
