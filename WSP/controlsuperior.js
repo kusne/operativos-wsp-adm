@@ -23,8 +23,18 @@
     return refs;
   }
 
+  function normalizarModo(txt) {
+    return String(txt || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
+  }
+
   function isActive() {
-    return ensureRefs().tipo?.value === "CONTROL SUPERIOR";
+    const r = ensureRefs();
+    const value = normalizarModo(r.tipo?.value);
+    const selectedText = normalizarModo(r.tipo?.selectedOptions?.[0]?.textContent);
+    return value === "CONTROL SUPERIOR" || selectedText === "CONTROL SUPERIOR";
   }
 
   function limpiarRolesExcepto(excepto) {
@@ -99,7 +109,8 @@
 
   function buildMessage(ctx = {}) {
     const payload = getPayload();
-    if (!payload.activo) {
+    const activo = ctx.forceActivo === true || payload.activo;
+    if (!activo) {
       return { ok: false, mensaje: "CONTROL SUPERIOR no está seleccionado." };
     }
 
