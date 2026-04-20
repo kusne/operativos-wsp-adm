@@ -1468,17 +1468,17 @@ label.check.check-inline-opcion > span{
 #wrapPresenciaActiva.check-inline-opcion,
 #wrapMostrarResultadosFinaliza.check-inline-opcion{
   position: static !important;
-  display: inline-flex !important;
+  display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  width: auto !important;
-  max-width: none !important;
+  width: 100% !important;          /* ocupa el mismo ancho que el select */
+  max-width: 100% !important;
   min-height: 0 !important;
-  margin: 0 0 0 -6px !important;   /*checkbox  mas a la izquierda */
+  margin: 0 !important;            /* arranca desde el mismo borde izquierdo */
   padding: 0 !important;
-  gap: 6px !important; /* text mas a la izquierda o derecha */
+  gap: 4px !important;             /* texto casi pegado al checkbox */
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -1494,13 +1494,13 @@ label.check.check-inline-opcion > span{
   left: auto !important;
   top: auto !important;
   margin: 0 !important;
-  margin-left: -3px !important;
+  margin-left: 0 !important;       /* mismo arranque izquierdo */
   width: 18px !important;
   height: 18px !important;
   min-width: 18px !important;
   min-height: 18px !important;
   flex: 0 0 auto !important;
-  transform: scale(1.5) !important; /* checkbox mas grande */
+  transform: scale(1.5) !important; /* checkbox más grande */
   transform-origin: center center !important;
 }
 
@@ -1515,7 +1515,7 @@ label.check.check-inline-opcion > span{
   font-size: 14px !important;
   font-weight: 700 !important;
   line-height: 1 !important;
-  white-space: nowrap !important;   /* siempre en una sola fila */
+  white-space: nowrap !important;
   word-break: keep-all !important;
 }
 
