@@ -1513,7 +1513,7 @@ label.check.check-inline-opcion > span{
   margin: 0 !important;
   margin-left: 14px !important;   /* mas separacion del texto respecto al checkbox */
   padding: 0 !important;
-  font-size: 15px !important;     /* letras un poquito mas grandes */
+  font-size: 17px !important;     /* letras un poquito mas grandes */
   font-weight: 700 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
