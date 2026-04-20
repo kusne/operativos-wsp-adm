@@ -1785,6 +1785,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       const resultadoControlSuperior = window.ControlSuperior?.buildMessage?.({
+        forceActivo: true,
         inicio: inicioControlSuperior,
         franja: franjaSeleccionada,
         fecha: new Date().toLocaleDateString("es-AR"),
