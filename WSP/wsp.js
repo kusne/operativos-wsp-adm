@@ -737,87 +737,56 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    try {
-      const params = new URLSearchParams({
-        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
-        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
-        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
-        order: "updated_at.desc",
-        limit: "1",
-      });
-
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
-        return null;
-      }
-
-      const data = await r.json();
-      const row = Array.isArray(data) ? data[0] : null;
-      return row ? normalizarInicioGuardado(row) : null;
-    } catch (e) {
-      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
-      return null;
-    }
-  }
-
-  async function fetchInicioSupabasePorCriterio(criterios = {}) {
-    try {
-      const params = new URLSearchParams({
-        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
-        order: "updated_at.desc",
-        limit: "1",
-      });
-
-      Object.entries(criterios).forEach(([clave, valor]) => {
-        const limpio = limpiarTextoSimple(valor || "");
-        if (limpio) params.set(clave, `eq.${limpio}`);
-      });
-
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo leer inicio desde Supabase con criterio:", criterios, r.status, await r.text());
-        return null;
-      }
-
-      const data = await r.json();
-      const row = Array.isArray(data) ? data[0] : null;
-      return row ? normalizarInicioGuardado(row) : null;
-    } catch (e) {
-      console.warn("[WSP] Error leyendo inicio desde Supabase con criterio.", criterios, e);
-      return null;
-    }
-  }
-
-  async function leerInicioControlSuperiorDesdeSupabase(franja) {
-    if (!franja) return null;
-
+    const select = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
     const guardiaFecha = getGuardiaFechaISO();
     const operativoKey = construirOperativoKeyEstable(franja);
-    const ordenNum = obtenerNumeroOrdenDeFranja(franja);
+    const ordenNum = limpiarTextoSimple(obtenerNumeroOrdenDeFranja(franja) || "");
     const horario = limpiarTextoSimple(franja?.horario || "");
     const lugar = limpiarTextoSimple(franja?.lugar || "");
 
     const intentos = [
-      () => leerInicioDesdeSupabase(franja),
-      () => fetchInicioSupabasePorCriterio({ operativo_key: operativoKey }),
-      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, orden_num: ordenNum, horario }),
-      () => fetchInicioSupabasePorCriterio({ orden_num: ordenNum, horario }),
-      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, orden_num: ordenNum, lugar }),
-      () => fetchInicioSupabasePorCriterio({ orden_num: ordenNum, lugar }),
-      () => fetchInicioSupabasePorCriterio({ guardia_fecha: guardiaFecha, horario, lugar }),
-      () => fetchInicioSupabasePorCriterio({ horario, lugar }),
+      { guardia_fecha: `eq.${guardiaFecha}`, operativo_key: `eq.${operativoKey}` },
+      { operativo_key: `eq.${operativoKey}` },
     ];
 
-    for (const intento of intentos) {
-      const encontrado = await intento();
-      if (encontrado) return encontrado;
+    if (ordenNum && horario) {
+      intentos.push(
+        { guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` },
+        { orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` },
+      );
+    }
+
+    if (ordenNum && lugar) {
+      intentos.push(
+        { guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` },
+        { orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` },
+      );
+    }
+
+    for (const filtros of intentos) {
+      try {
+        const params = new URLSearchParams({
+          select,
+          ...filtros,
+          order: "updated_at.desc",
+          limit: "1",
+        });
+
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+          headers: headersSupabase({ Accept: "application/json" }),
+        });
+
+        if (!r.ok) {
+          console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text(), filtros);
+          continue;
+        }
+
+        const data = await r.json();
+        const row = Array.isArray(data) ? data[0] : null;
+        if (row) return normalizarInicioGuardado(row);
+      } catch (e) {
+        console.warn("[WSP] Error leyendo inicio desde Supabase.", e, filtros);
+      }
     }
 
     return null;
@@ -1837,7 +1806,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     if (modoControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioControlSuperiorDesdeSupabase(franjaSeleccionada);
+      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
       if (!inicioControlSuperior) {
         alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
         return;
