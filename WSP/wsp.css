@@ -407,14 +407,48 @@ label.check > input[type="checkbox"]{
   margin: 0 !important;
 }
 
-/* ===== mismos elementos (bloque) ===== */
+/* ===== mismos datos de inicio (bloque) ===== */
 #bloqueMismosElementos{
   padding: 8px 10px;
 }
 
-#bloqueMismosElementos #wrapMismosElementos{
-  margin: 0;
+#bloqueMismosElementos .fila-mismos-datos{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+#bloqueMismosElementos label.check.check-chip{
+  position: static !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100% !important;
+  padding: 8px 10px !important;
+  margin: 0 !important;
+
+  line-height: normal !important;
+  min-height: 40px !important;
+
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fff;
+}
+
+#bloqueMismosElementos label.check.check-chip > span{
   font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+#bloqueMismosElementos label.check.check-chip > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: scale(var(--check-scale)) !important;
+  margin: 0 !important;
 }
 /* ===== Encabezado con logo (arriba derecha) ===== */
 .brand{
