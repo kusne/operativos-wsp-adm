@@ -1511,11 +1511,11 @@ label.check.check-inline-opcion > span{
   display: inline-block !important;
   flex: 0 0 auto !important;
   margin: 0 !important;
-  margin-left: 14px !important;   /* mas separacion del texto respecto al checkbox */
+  margin-left: 14px !important;
   padding: 0 !important;
-  font-size: 30px !important;     /* letras un poquito mas grandes */
-  font-weight: 700 !important;
-  line-height: 1 !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
   white-space: nowrap !important;
   word-break: keep-all !important;
 }
