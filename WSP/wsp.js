@@ -879,6 +879,67 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
+  function esDescripcionExactaDeNomenclador(txt) {
+    const descripcion = limpiarDescripcionDetalle(txt)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (!descripcion) return false;
+
+    try {
+      const tabla = typeof window !== "undefined" ? window.NOMENCLADOR_CODIGOS : null;
+      if (!tabla || typeof tabla !== "object") return false;
+
+      return Object.values(tabla).some((item) => {
+        const ref = limpiarDescripcionDetalle(item?.referencia || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        return !!ref && ref === descripcion;
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  function limpiarTextoPegadoSinCodigo(linea) {
+    const original = String(linea || "").replace(/\r/g, "");
+    const s = original.trim();
+    if (!s) return original;
+
+    const conCantidad = [
+      /^\(\s*(\d{1,2})\s*\)(?:\s+(\d{1,4}))?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+      /^(\d{1,2})\s*[-–—]\s*(\d{1,4})?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+      /^(\d{1,2})\s+(\d{1,4})?(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+    ];
+
+    for (const regex of conCantidad) {
+      const m = s.match(regex);
+      if (!m) continue;
+
+      const cantidad = m[1];
+      const codigoParcial = String(m[2] || "").replace(/\D+/g, "");
+      const resto = m[3] || "";
+
+      if (!esDescripcionExactaDeNomenclador(resto)) return original;
+      if (codigoParcial === "17117") return original;
+
+      const qty = formatearCantidad(cantidad);
+      return codigoParcial ? `(${qty}) ${codigoParcial}` : `(${qty})`;
+    }
+
+    const sinCantidad = s.match(/^(\d{0,4})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i);
+    if (!sinCantidad) return original;
+
+    const codigoParcial = String(sinCantidad[1] || "").replace(/\D+/g, "");
+    const resto = sinCantidad[2] || "";
+
+    if (!esDescripcionExactaDeNomenclador(resto)) return original;
+    if (codigoParcial === "17117") return original;
+
+    return codigoParcial || "";
+  }
+
   function autocompletarLineaDetalleConNomenclador(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
@@ -906,7 +967,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return reconstruida || original;
     }
 
-    return original;
+    return limpiarTextoPegadoSinCodigo(original);
   }
 
   function autocompletarDetallesDesdeNomenclador(texto) {
