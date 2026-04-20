@@ -14,6 +14,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMostrarResultadosFinaliza = document.getElementById("mostrarResultadosFinaliza");
   const tituloResultadosFinaliza = document.getElementById("tituloResultadosFinaliza");
   const contenidoResultadosFinaliza = document.getElementById("contenidoResultadosFinaliza");
+  const bloquePresenciaActiva = document.getElementById("bloquePresenciaActiva");
+  const chkPresenciaActiva = document.getElementById("presenciaActiva");
 
   const divMismosElementos = document.getElementById("bloqueMismosElementos");
   const chkMismoPersonal = document.getElementById("mismoPersonal");
@@ -48,6 +50,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
+
+  const OBS_PRESENCIA_ACTIVA_INICIA = "Se inicia con Presencia Activa por inclemencias del tiempo ( lluvias).Se adjunta vistas Fotograficas.";
+  const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -881,11 +886,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
     ordenSeleccionada = null;
 
+    if (chkMostrarResultadosFinaliza) {
+      chkMostrarResultadosFinaliza.checked = false;
+    }
+    if (chkPresenciaActiva) {
+      chkPresenciaActiva.checked = false;
+    }
+
+    actualizarVisibilidadBloquePresenciaActiva();
+    actualizarVisibilidadResultadosFinaliza();
+
     if (selTipo.value === "FINALIZA") {
-      if (chkMostrarResultadosFinaliza) {
-        chkMostrarResultadosFinaliza.checked = false;
-      }
-      actualizarVisibilidadResultadosFinaliza();
       sincronizarInicioGuardadoSegunContexto();
     }
   }
@@ -894,12 +905,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fin = selTipo.value === "FINALIZA";
 
     divFinaliza.classList.toggle("hidden", !fin);
-    divDetalles.classList.toggle("hidden", !fin);
 
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
 
+    if (chkPresenciaActiva) {
+      chkPresenciaActiva.checked = false;
+    }
+
     if (!fin) {
       if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+      actualizarVisibilidadBloquePresenciaActiva();
       actualizarVisibilidadResultadosFinaliza();
       desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
@@ -909,6 +924,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
       chkMostrarResultadosFinaliza.checked = false;
     }
+    actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
@@ -1087,17 +1103,55 @@ ${bold(`Moviles ${organismo}:`)}`)
     return /\bordenamiento\b|\bestablecido\b|\bmonitoreo\b|\bpresencia\s*activa\b|\blimpieza\b|\bablacion\b/.test(fuente);
   }
 
+  function esTipoConPresenciaActivaOpcional() {
+    const fuente = obtenerFuenteTipoFinalizaActual();
+    if (!fuente) return false;
+
+    if (/\bordenamiento\b|\bablacion\b|\blimpieza\b|\bestablecido\b|\bmonitoreo\b|\bacompanamiento\b|\bacompanamieto\b|\bescolta\b|\bcustodia\b|\btraslado\b|\bpresencia\s*activa\b/.test(fuente)) {
+      return false;
+    }
+
+    return /\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b|\balcoholem/i.test(fuente)
+      || /\bdicep\b|\bconjunto\b|\bcoordinad\w*\b|\bcontrol\s+de\s+peso\b|\bpeso\b|\bcontrol\b/.test(fuente);
+  }
+
+  function debeOcultarTodoPorPresenciaActivaFinaliza() {
+    return selTipo?.value === "FINALIZA" && esTipoConPresenciaActivaOpcional() && !!chkPresenciaActiva?.checked;
+  }
+
   function debeIncluirResultadosFinaliza() {
     if (selTipo?.value !== "FINALIZA") return false;
+    if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
     if (esFinalizaSinResultados()) return false;
     if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
     return true;
+  }
+
+  function debeIncluirDetallesFinaliza() {
+    if (selTipo?.value !== "FINALIZA") return false;
+    if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
+    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
+    if (esFinalizaSinResultados()) return true;
+    return true;
+  }
+
+  function actualizarVisibilidadBloquePresenciaActiva() {
+    const mostrar = !!franjaSeleccionada && esTipoConPresenciaActivaOpcional();
+
+    if (bloquePresenciaActiva) {
+      bloquePresenciaActiva.classList.toggle("hidden", !mostrar);
+    }
+
+    if (!mostrar && chkPresenciaActiva) {
+      chkPresenciaActiva.checked = false;
+    }
   }
 
   function actualizarVisibilidadResultadosFinaliza() {
     const fin = selTipo?.value === "FINALIZA";
     const resultadosOpcionales = fin && esFinalizaConResultadosOpcionales();
     const mostrarResultados = fin && debeIncluirResultadosFinaliza();
+    const mostrarDetalles = fin && debeIncluirDetallesFinaliza();
 
     if (bloqueMostrarResultadosFinaliza) {
       bloqueMostrarResultadosFinaliza.classList.toggle("hidden", !resultadosOpcionales);
@@ -1111,6 +1165,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       contenidoResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
     }
 
+    if (divDetalles) {
+      divDetalles.classList.toggle("hidden", !mostrarDetalles);
+    }
+
     if (!mostrarResultados) {
       if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
       if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
@@ -1119,11 +1177,15 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (unitGraduacionesNoSancionable) unitGraduacionesNoSancionable.classList.add("hidden");
       if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
       if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
-      return;
+      if (!mostrarDetalles) {
+        return;
+      }
     }
 
-    sincronizarUIAlcoholimetro();
-    sincronizarUIQrzDominio();
+    if (mostrarResultados) {
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
+    }
   }
 
   // ======================================================
@@ -1524,6 +1586,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     divDetalles.classList.add("hidden");
 
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
 
     limpiarGraduaciones(graduacionesSancionable);
     limpiarGraduaciones(graduacionesNoSancionable);
@@ -1656,6 +1719,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const esFinaliza = selTipo.value === "FINALIZA";
     const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
+    const incluirDetallesFinaliza = esFinaliza && debeIncluirDetallesFinaliza();
+    const usarPresenciaActiva = !!chkPresenciaActiva?.checked && esTipoConPresenciaActivaOpcional();
     const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
     const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
@@ -1754,7 +1819,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     partes.push(`Alómetros: ${alomTXT}`);
     partes.push(`Alcoholímetros: ${alcoTXT}`);
 
-    const detallesProcesados = esFinaliza
+    const detallesProcesados = esFinaliza && incluirDetallesFinaliza
       ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
@@ -1770,6 +1835,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       partes.push(bold("Resultados:"));
       partes.push(...lineasResultados);
 
+      if (incluirDetallesFinaliza && detallesProcesados.detalles) {
+        partes.push("");
+        partes.push(bold("Detalles:"));
+        partes.push(detallesProcesados.detalles);
+      }
+    }
+
+    if (esFinaliza && !incluirResultadosFinaliza && incluirDetallesFinaliza) {
       if (detallesProcesados.detalles) {
         partes.push("");
         partes.push(bold("Detalles:"));
@@ -1777,17 +1850,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
     }
 
-    if (esFinaliza && !incluirResultadosFinaliza) {
-      if (detallesProcesados.detalles) {
-        partes.push("");
-        partes.push(bold("Detalles:"));
-        partes.push(detallesProcesados.detalles);
-      }
-    }
+    const observacionesExtras = [...detallesProcesados.observaciones];
+    if (!esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_INICIA);
+    if (esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_FINALIZA);
 
     partes.push("");
     partes.push(bold("Observaciones:"));
-    partes.push(construirObservacionesFinales(detallesProcesados.observaciones));
+    partes.push(construirObservacionesFinales(observacionesExtras));
 
     const textoFinal = compactarSaltos(partes.join("\n"));
 
@@ -1810,6 +1879,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   selTipo.addEventListener("change", actualizarTipo);
   if (chkMostrarResultadosFinaliza) {
     chkMostrarResultadosFinaliza.addEventListener("change", () => {
+      actualizarVisibilidadResultadosFinaliza();
+    });
+  }
+
+  if (chkPresenciaActiva) {
+    chkPresenciaActiva.addEventListener("change", () => {
       actualizarVisibilidadResultadosFinaliza();
     });
   }
