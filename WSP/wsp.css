@@ -1446,3 +1446,62 @@ label.check.check-inline-opcion > span{
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
   color: #072E6D !important;
 }
+/* ===== AJUSTE CHECKS PRESENCIA ACTIVA / VER ITEMS ===== */
+
+#bloquePresenciaActiva.control-opcion,
+#bloqueMostrarResultadosFinaliza.control-opcion{
+  display: block !important;
+  width: 100% !important;
+  margin: 0 0 10px 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion,
+#wrapMostrarResultadosFinaliza.check-inline-opcion{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 0 0 -8px !important;   /* un poco mas a la izquierda */
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1 !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > input[type="checkbox"],
+#wrapMostrarResultadosFinaliza.check-inline-opcion > input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+  transform: scale(1.28) !important; /* checkbox mas grande */
+  transform-origin: center center !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > span,
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;   /* siempre en una sola fila */
+  line-height: 1 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > span{
+  color: #ffffff !important;
+}
+
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  color: #eef1f6 !important;
+}
