@@ -22,6 +22,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMismoMovil = document.getElementById("mismoMovil");
   const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
+  const bloqueObservacionesNormal = document.getElementById("bloqueObservacionesNormal");
 
   const inputAlcotest = document.getElementById("Alcotest");
   const inputPositivaSancionable = document.getElementById("positivaSancionable");
@@ -907,6 +908,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     divFinaliza.classList.toggle("hidden", !fin);
 
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
+    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
 
     if (chkPresenciaActiva) {
       chkPresenciaActiva.checked = false;
@@ -918,6 +920,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       actualizarVisibilidadResultadosFinaliza();
       desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
+      actualizarVisibilidadModoControlSuperior();
       return;
     }
 
@@ -929,6 +932,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarInicioGuardadoSegunContexto();
+    actualizarVisibilidadModoControlSuperior();
   }
 
   // ======================================================
@@ -1010,6 +1014,44 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
+  }
+
+  function modoControlSuperiorActivo() {
+    return !!(window.ControlSuperior && typeof window.ControlSuperior.isActive === "function" && window.ControlSuperior.isActive());
+  }
+
+  function actualizarVisibilidadModoControlSuperior() {
+    const activo = modoControlSuperiorActivo();
+    const bloqueControlSuperior = document.getElementById("bloqueControlSuperior");
+
+    if (bloqueControlSuperior) {
+      bloqueControlSuperior.classList.toggle("hidden", !activo);
+    }
+
+    if (activo) {
+      if (divFinaliza) divFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
+      if (divMismosElementos) divMismosElementos.classList.add("hidden");
+      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+      if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
+      if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.add("hidden");
+      setPersonalVisible(false);
+      setMovilidadVisible(false);
+      setElementosVisibles(false);
+      return true;
+    }
+
+    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
+    return false;
+  }
+
+  function formatearHoraActual() {
+    try {
+      return new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    } catch {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    }
   }
 
   const ORGANISMOS_CONJUNTO = [
@@ -1134,6 +1176,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadBloquePresenciaActiva() {
+    if (modoControlSuperiorActivo()) {
+      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+      return;
+    }
+
     const mostrar = !!franjaSeleccionada && esTipoConPresenciaActivaOpcional();
 
     if (bloquePresenciaActiva) {
@@ -1146,6 +1194,14 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadResultadosFinaliza() {
+    if (modoControlSuperiorActivo()) {
+      if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
+      if (tituloResultadosFinaliza) tituloResultadosFinaliza.classList.add("hidden");
+      if (contenidoResultadosFinaliza) contenidoResultadosFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
+      return;
+    }
+
     const fin = selTipo?.value === "FINALIZA";
     const resultadosOpcionales = fin && esFinalizaConResultadosOpcionales();
     const mostrarResultados = fin && debeIncluirResultadosFinaliza();
@@ -1580,11 +1636,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
 
+    if (window.ControlSuperior && typeof window.ControlSuperior.reset === "function") {
+      window.ControlSuperior.reset();
+    }
+
     divFinaliza.classList.add("hidden");
     divDetalles.classList.add("hidden");
 
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
 
     limpiarGraduaciones(graduacionesSancionable);
     limpiarGraduaciones(graduacionesNoSancionable);
@@ -1601,6 +1662,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     desactivarControlesMismos();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
+    actualizarVisibilidadModoControlSuperior();
   }
 
   // ======================================================
@@ -1714,6 +1776,38 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (!franjaSeleccionada) return;
+
+    if (modoControlSuperiorActivo()) {
+      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente();
+      if (!inicioControlSuperior) {
+        alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
+        return;
+      }
+
+      const resultadoControlSuperior = window.ControlSuperior?.buildMessage?.({
+        inicio: inicioControlSuperior,
+        franja: franjaSeleccionada,
+        fecha: new Date().toLocaleDateString("es-AR"),
+        hora: formatearHoraActual(),
+        bold,
+        compactarSaltos,
+        normalizarLugar,
+        normalizarHorario,
+        normalizarArrayTexto,
+        lineaDesdeArray,
+      });
+
+      if (!resultadoControlSuperior?.ok) {
+        alert(resultadoControlSuperior?.mensaje || "No se pudo generar CONTROL SUPERIOR.");
+        return;
+      }
+
+      resetUI();
+      setTimeout(() => {
+        window.location.href = "https://wa.me/?text=" + encodeURIComponent(resultadoControlSuperior.texto);
+      }, 0);
+      return;
+    }
 
     const esFinaliza = selTipo.value === "FINALIZA";
     const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
@@ -1875,6 +1969,18 @@ ${bold(`Moviles ${organismo}:`)}`)
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
+
+  if (window.ControlSuperior && typeof window.ControlSuperior.init === "function") {
+    window.ControlSuperior.init({
+      onToggle: () => {
+        actualizarTipo();
+        actualizarVisibilidadBloquePresenciaActiva();
+        actualizarVisibilidadResultadosFinaliza();
+        actualizarVisibilidadModoControlSuperior();
+      },
+    });
+  }
+
   if (chkMostrarResultadosFinaliza) {
     chkMostrarResultadosFinaliza.addEventListener("change", () => {
       actualizarVisibilidadResultadosFinaliza();
@@ -1930,6 +2036,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     actualizarTipo();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
+    actualizarVisibilidadModoControlSuperior();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
