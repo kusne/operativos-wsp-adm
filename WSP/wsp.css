@@ -1529,3 +1529,9 @@ label.check.check-inline-opcion > span{
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
   color: #072E6D !important;
 }
+/* ===== SOLO AGRANDAR LETRAS DE PRESENCIA ACTIVA / VER ITEMS ===== */
+label#wrapPresenciaActiva.check.check-inline-opcion > span,
+label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
+  font-size: 18px !important;
+  line-height: 1.1 !important;
+}
