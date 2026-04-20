@@ -1082,29 +1082,27 @@ ${bold(`Moviles ${organismo}:`)}`)
       .join("\n\n");
   }
 
-  function obtenerFuenteTipoFinalizaActual() {
-    return [
+  function obtenerFuenteTipoActual() {
+    return normalizarBasicoSinAcentos([
       franjaSeleccionada?.titulo || "",
       obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
-    ]
-      .join(" ")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      obtenerTipoCortoFranja(franjaSeleccionada),
+      construirTextoOpcionHorario(franjaSeleccionada),
+    ].join(" "));
   }
 
   function esFinalizaSinResultados() {
-    const fuente = obtenerFuenteTipoFinalizaActual();
+    const fuente = obtenerFuenteTipoActual();
     return /\bcustodia\b|\btraslado\b/.test(fuente);
   }
 
   function esFinalizaConResultadosOpcionales() {
-    const fuente = obtenerFuenteTipoFinalizaActual();
+    const fuente = obtenerFuenteTipoActual();
     return /\bordenamiento\b|\bestablecido\b|\bmonitoreo\b|\bpresencia\s*activa\b|\blimpieza\b|\bablacion\b/.test(fuente);
   }
 
   function esTipoConPresenciaActivaOpcional() {
-    const fuente = obtenerFuenteTipoFinalizaActual();
+    const fuente = obtenerFuenteTipoActual();
     if (!fuente) return false;
 
     if (/\bordenamiento\b|\bablacion\b|\blimpieza\b|\bestablecido\b|\bmonitoreo\b|\bacompanamiento\b|\bacompanamieto\b|\bescolta\b|\bcustodia\b|\btraslado\b|\bpresencia\s*activa\b/.test(fuente)) {
@@ -1112,7 +1110,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     return /\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b|\balcoholem/i.test(fuente)
-      || /\bdicep\b|\bconjunto\b|\bcoordinad\w*\b|\bcontrol\s+de\s+peso\b|\bpeso\b|\bcontrol\b/.test(fuente);
+      || /\bdicep\b|\ben\s+conjunto\b|\boperativo\s+en\s+conjunto\b|\bconjunto\b|\bcoordinad\w*\b|\bcontrol\s+de\s+peso\b|\bpeso\b|\bcontrol\b/.test(fuente);
   }
 
   function debeOcultarTodoPorPresenciaActivaFinaliza() {
