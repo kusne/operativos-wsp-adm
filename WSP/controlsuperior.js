@@ -3,7 +3,6 @@
   const SUBJEFE_NOMBRE = "Inspector Tramontini Ismael";
 
   let refs = null;
-  let onToggle = null;
 
   function qs(id) {
     return document.getElementById(id);
@@ -12,8 +11,7 @@
   function ensureRefs() {
     if (refs) return refs;
     refs = {
-      activo: qs("controlSuperiorActivo"),
-      bloque: qs("bloqueControlSuperior"),
+      tipo: qs("tipo"),
       jefe: qs("controlSuperiorJefe"),
       subjefe: qs("controlSuperiorSubjefe"),
       otros: qs("controlSuperiorOtros"),
@@ -26,7 +24,7 @@
   }
 
   function isActive() {
-    return !!ensureRefs().activo?.checked;
+    return ensureRefs().tipo?.value === "CONTROL SUPERIOR";
   }
 
   function limpiarRolesExcepto(excepto) {
@@ -54,7 +52,6 @@
 
   function reset() {
     const r = ensureRefs();
-    if (r.activo) r.activo.checked = false;
     if (r.jefe) r.jefe.checked = false;
     if (r.subjefe) r.subjefe.checked = false;
     if (r.otros) r.otros.checked = false;
@@ -67,7 +64,7 @@
   function getPayload() {
     const r = ensureRefs();
     return {
-      activo: !!r.activo?.checked,
+      activo: isActive(),
       rol: getRolSeleccionado(),
       otros: String(r.otrosTexto?.value || "").trim(),
       conMovil: !!r.conMovil?.checked,
@@ -78,22 +75,21 @@
   function obtenerNombreRol(payload) {
     if (payload.rol === "JEFE") return JEFE_NOMBRE;
     if (payload.rol === "SUBJEFE") return SUBJEFE_NOMBRE;
-    return payload.otros || "";
+    return payload.otros || "otros";
   }
 
   function construirObservacion(payload) {
     const nombre = obtenerNombreRol(payload);
-    if (!nombre) return "";
 
     if (payload.rol === "OTROS") {
       if (payload.conMovil) {
-        return `Siendo la hora al margen se hace Presente ${nombre}, en movil __________.`;
+        return `Siendo la hora al margen se hace presente ${nombre}, en móvil __________.`;
       }
-      return `Siendo la hora al margen se hace Presente ${nombre}.`;
+      return `Siendo la hora al margen se hace presente ${nombre}.`;
     }
 
     const articulo = payload.rol === "JEFE" ? "el Jefe" : "el Subjefe";
-    const tramoMovil = payload.conMovil ? ", en movil N°12428," : ",";
+    const tramoMovil = payload.conMovil ? ", en móvil N°12428," : ",";
     const cierre = payload.seAcopla
       ? " acoplando al mismo."
       : " acto seguido se retira sin novedad.";
@@ -109,10 +105,6 @@
 
     if (!payload.rol) {
       return { ok: false, mensaje: "Debe seleccionar JEFE, SUBJEFE u OTROS en CONTROL SUPERIOR." };
-    }
-
-    if (payload.rol === "OTROS" && !payload.otros) {
-      return { ok: false, mensaje: "Debe completar el nombre en OTROS." };
     }
 
     const inicio = ctx.inicio || {};
@@ -164,17 +156,8 @@
     return { ok: true, texto: compactarSaltos(partes.join("\n")) };
   }
 
-  function notifyToggle() {
-    if (typeof onToggle === "function") onToggle(isActive());
-  }
-
-  function init(config = {}) {
-    onToggle = typeof config.onToggle === "function" ? config.onToggle : null;
+  function init() {
     const r = ensureRefs();
-    if (!r.activo) return;
-
-    r.activo.addEventListener("change", notifyToggle);
-
     [r.jefe, r.subjefe, r.otros].forEach((el) => {
       if (!el) return;
       el.addEventListener("change", () => {
