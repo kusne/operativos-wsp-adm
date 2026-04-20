@@ -737,7 +737,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const select = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
+    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
     const guardiaFecha = getGuardiaFechaISO();
     const operativoKey = construirOperativoKeyEstable(franja);
     const ordenNum = limpiarTextoSimple(obtenerNumeroOrdenDeFranja(franja) || "");
@@ -750,26 +750,27 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     ];
 
     if (ordenNum && horario) {
-      intentos.push(
-        { guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` },
-        { orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` },
-      );
+      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
+      intentos.push({ orden_num: `eq.${ordenNum}`, horario: `eq.${horario}` });
     }
 
     if (ordenNum && lugar) {
-      intentos.push(
-        { guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` },
-        { orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` },
-      );
+      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
+      intentos.push({ orden_num: `eq.${ordenNum}`, lugar: `eq.${lugar}` });
+    }
+
+    if (ordenNum) {
+      intentos.push({ guardia_fecha: `eq.${guardiaFecha}`, orden_num: `eq.${ordenNum}` });
+      intentos.push({ orden_num: `eq.${ordenNum}` });
     }
 
     for (const filtros of intentos) {
       try {
         const params = new URLSearchParams({
-          select,
-          ...filtros,
+          select: selectCols,
           order: "updated_at.desc",
           limit: "1",
+          ...filtros,
         });
 
         const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
@@ -777,7 +778,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         });
 
         if (!r.ok) {
-          console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text(), filtros);
+          console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
           continue;
         }
 
@@ -785,12 +786,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const row = Array.isArray(data) ? data[0] : null;
         if (row) return normalizarInicioGuardado(row);
       } catch (e) {
-        console.warn("[WSP] Error leyendo inicio desde Supabase.", e, filtros);
+        console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
       }
     }
 
     return null;
   }
+
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
     return {
@@ -1640,8 +1642,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const remoto = await leerInicioDesdeSupabase(franjaSeleccionada);
     if (lookupId !== inicioGuardadoLookupId) return;
 
-    const payload = remoto || cargarInicioGuardadoCoincidente();
-    aplicarInicioGuardadoAutomatico(payload);
+    inicioGuardadoActual = remoto || null;
+    aplicarInicioGuardadoAutomatico(remoto || null);
   }
 
   function resetUI() {
@@ -1700,9 +1702,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     const payload = construirInicioGuardadoActual();
     if (!payload) return null;
 
+    const guardadoOk = await guardarInicioEnSupabase(payload);
+    if (!guardadoOk) {
+      inicioGuardadoActual = null;
+      return null;
+    }
+
     inicioGuardadoActual = payload;
-    guardarInicioLocal(payload);
-    await guardarInicioEnSupabase(payload);
     return payload;
   }
 
@@ -1736,16 +1742,17 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismoPersonal) {
-    chkMismoPersonal.addEventListener("change", () => {
+    chkMismoPersonal.addEventListener("change", async () => {
       if (!chkMismoPersonal.checked) {
         limpiarSeleccionPersonal();
         setPersonalVisible(true);
         return;
       }
 
-      const payload = cargarInicioGuardadoCoincidente();
+      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
+      inicioGuardadoActual = payload || null;
       if (!payload || !payload.personal.length) {
-        alert("No hay personal guardado del INICIA.");
+        alert("No hay personal guardado del INICIA en Supabase para este operativo.");
         chkMismoPersonal.checked = false;
         limpiarSeleccionPersonal();
         setPersonalVisible(true);
@@ -1758,16 +1765,17 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismoMovil) {
-    chkMismoMovil.addEventListener("change", () => {
+    chkMismoMovil.addEventListener("change", async () => {
       if (!chkMismoMovil.checked) {
         limpiarSeleccionMovilidad();
         setMovilidadVisible(true);
         return;
       }
 
-      const payload = cargarInicioGuardadoCoincidente();
+      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
+      inicioGuardadoActual = payload || null;
       if (!payload || (!payload.moviles.length && !payload.motos.length)) {
-        alert("No hay móviles guardados del INICIA.");
+        alert("No hay móviles guardados del INICIA en Supabase para este operativo.");
         chkMismoMovil.checked = false;
         limpiarSeleccionMovilidad();
         setMovilidadVisible(true);
@@ -1780,23 +1788,24 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   if (chkMismosElementos) {
-    chkMismosElementos.addEventListener("change", () => {
+    chkMismosElementos.addEventListener("change", async () => {
       if (!chkMismosElementos.checked) {
         limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
 
-      const payload = cargarElementosGuardados();
+      const payload = await leerInicioDesdeSupabase(franjaSeleccionada);
+      inicioGuardadoActual = payload || null;
       if (!payload) {
-        alert("No hay elementos guardados del INICIA.");
+        alert("No hay elementos guardados del INICIA en Supabase para este operativo.");
         chkMismosElementos.checked = false;
         limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
 
-      aplicarElementos(payload);
+      aplicarElementos(payload.elementos);
       setElementosVisibles(false);
     });
   }
@@ -1807,8 +1816,9 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (modoControlSuperiorActivo()) {
       const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
+      inicioGuardadoActual = inicioControlSuperior || null;
       if (!inicioControlSuperior) {
-        alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
+        alert("No hay datos del INICIA guardados en Supabase para este operativo. Envíe primero un INICIA y verifique que quede guardado.");
         return;
       }
 
@@ -1848,9 +1858,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     let inicioCompartido = null;
     if (usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
-      inicioCompartido = cargarInicioGuardadoCoincidente();
+      inicioCompartido = await leerInicioDesdeSupabase(franjaSeleccionada);
+      inicioGuardadoActual = inicioCompartido || null;
       if (!inicioCompartido) {
-        alert("No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA.");
+        alert("No hay datos del INICIA guardados en Supabase para este operativo. Destilde las opciones o envíe primero un INICIA válido.");
         return;
       }
     }
@@ -1982,7 +1993,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = compactarSaltos(partes.join("\n"));
 
     if (selTipo.value === "INICIA") {
-      await guardarElementosDeInicio();
+      const inicioGuardado = await guardarElementosDeInicio();
+      if (!inicioGuardado) {
+        alert("No se pudo guardar el INICIA en Supabase. Revise la conexión o la tabla wsp_inicios antes de enviar.");
+        return;
+      }
     }
 
     resetUI();
