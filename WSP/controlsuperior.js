@@ -1,0 +1,196 @@
+(function () {
+  const JEFE_NOMBRE = "SubCrio Choque Jose Maria";
+  const SUBJEFE_NOMBRE = "Inspector Tramontini Ismael";
+
+  let refs = null;
+  let onToggle = null;
+
+  function qs(id) {
+    return document.getElementById(id);
+  }
+
+  function ensureRefs() {
+    if (refs) return refs;
+    refs = {
+      activo: qs("controlSuperiorActivo"),
+      bloque: qs("bloqueControlSuperior"),
+      jefe: qs("controlSuperiorJefe"),
+      subjefe: qs("controlSuperiorSubjefe"),
+      otros: qs("controlSuperiorOtros"),
+      otrosTextoWrap: qs("bloqueControlSuperiorOtrosTexto"),
+      otrosTexto: qs("controlSuperiorOtrosTexto"),
+      conMovil: qs("controlSuperiorConMovil"),
+      seAcopla: qs("controlSuperiorSeAcopla"),
+    };
+    return refs;
+  }
+
+  function isActive() {
+    return !!ensureRefs().activo?.checked;
+  }
+
+  function limpiarRolesExcepto(excepto) {
+    const r = ensureRefs();
+    [r.jefe, r.subjefe, r.otros].forEach((el) => {
+      if (!el || el === excepto) return;
+      el.checked = false;
+    });
+  }
+
+  function getRolSeleccionado() {
+    const r = ensureRefs();
+    if (r.jefe?.checked) return "JEFE";
+    if (r.subjefe?.checked) return "SUBJEFE";
+    if (r.otros?.checked) return "OTROS";
+    return "";
+  }
+
+  function syncOtros() {
+    const r = ensureRefs();
+    const mostrar = !!r.otros?.checked;
+    if (r.otrosTextoWrap) r.otrosTextoWrap.classList.toggle("hidden", !mostrar);
+    if (!mostrar && r.otrosTexto) r.otrosTexto.value = "";
+  }
+
+  function reset() {
+    const r = ensureRefs();
+    if (r.activo) r.activo.checked = false;
+    if (r.jefe) r.jefe.checked = false;
+    if (r.subjefe) r.subjefe.checked = false;
+    if (r.otros) r.otros.checked = false;
+    if (r.conMovil) r.conMovil.checked = false;
+    if (r.seAcopla) r.seAcopla.checked = false;
+    if (r.otrosTexto) r.otrosTexto.value = "";
+    syncOtros();
+  }
+
+  function getPayload() {
+    const r = ensureRefs();
+    return {
+      activo: !!r.activo?.checked,
+      rol: getRolSeleccionado(),
+      otros: String(r.otrosTexto?.value || "").trim(),
+      conMovil: !!r.conMovil?.checked,
+      seAcopla: !!r.seAcopla?.checked,
+    };
+  }
+
+  function obtenerNombreRol(payload) {
+    if (payload.rol === "JEFE") return JEFE_NOMBRE;
+    if (payload.rol === "SUBJEFE") return SUBJEFE_NOMBRE;
+    return payload.otros || "";
+  }
+
+  function construirObservacion(payload) {
+    const nombre = obtenerNombreRol(payload);
+    if (!nombre) return "";
+
+    if (payload.rol === "OTROS") {
+      if (payload.conMovil) {
+        return `Siendo la hora al margen se hace Presente ${nombre}, en movil __________.`;
+      }
+      return `Siendo la hora al margen se hace Presente ${nombre}.`;
+    }
+
+    const articulo = payload.rol === "JEFE" ? "el Jefe" : "el Subjefe";
+    const tramoMovil = payload.conMovil ? ", en movil N°12428," : ",";
+    const cierre = payload.seAcopla
+      ? " acoplando al mismo."
+      : " acto seguido se retira sin novedad.";
+
+    return `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando servicio,${cierre}`;
+  }
+
+  function buildMessage(ctx = {}) {
+    const payload = getPayload();
+    if (!payload.activo) {
+      return { ok: false, mensaje: "CONTROL SUPERIOR no está seleccionado." };
+    }
+
+    if (!payload.rol) {
+      return { ok: false, mensaje: "Debe seleccionar JEFE, SUBJEFE u OTROS en CONTROL SUPERIOR." };
+    }
+
+    if (payload.rol === "OTROS" && !payload.otros) {
+      return { ok: false, mensaje: "Debe completar el nombre en OTROS." };
+    }
+
+    const inicio = ctx.inicio || {};
+    const franja = ctx.franja || {};
+    const bold = typeof ctx.bold === "function" ? ctx.bold : (txt) => `*${String(txt || "").trim()}*`;
+    const compactarSaltos = typeof ctx.compactarSaltos === "function"
+      ? ctx.compactarSaltos
+      : (txt) => String(txt || "").replace(/\n{3,}/g, "\n\n").trim();
+    const normalizarLugar = typeof ctx.normalizarLugar === "function"
+      ? ctx.normalizarLugar
+      : (txt) => String(txt || "").trim();
+    const normalizarArrayTexto = typeof ctx.normalizarArrayTexto === "function"
+      ? ctx.normalizarArrayTexto
+      : (arr) => Array.isArray(arr) ? arr.map((v) => String(v || "").trim()).filter(Boolean) : [];
+    const lineaDesdeArray = typeof ctx.lineaDesdeArray === "function"
+      ? ctx.lineaDesdeArray
+      : (arr, sep) => Array.isArray(arr) && arr.length ? arr.join(` ${sep} `) : "/";
+
+    const fecha = ctx.fecha || new Date().toLocaleDateString("es-AR");
+    const hora = ctx.hora || new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const lugar = normalizarLugar(inicio.lugar || franja.lugar || "");
+    const personalTexto = normalizarArrayTexto(inicio.personal).join("\n") || "/";
+    const movilTexto = [
+      lineaDesdeArray(inicio.moviles, "/"),
+      lineaDesdeArray(inicio.motos, "/"),
+    ].filter((v) => v && v !== "/").join(" / ") || "/";
+
+    const partes = [];
+    partes.push(bold("POLICIA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"));
+    partes.push(bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE"));
+    partes.push(bold("TERCIO CHARLIE"));
+    partes.push("");
+    partes.push(`${bold("MOTIVO:")} CONTROL SUPERIOR`);
+    partes.push("");
+    partes.push(`${bold("LUGAR:")} ${lugar || "/"}`);
+    partes.push("");
+    partes.push(`${bold("HORA:")} ${hora} hs`);
+    partes.push("");
+    partes.push(`${bold("FECHA:")} ${fecha}`);
+    partes.push("");
+    partes.push(`${bold("MOVIL:")} ${movilTexto}`);
+    partes.push("");
+    partes.push(bold("PERSONAL:"));
+    partes.push(personalTexto);
+    partes.push("");
+    partes.push(bold("OBSERVACIÓNES:"));
+    partes.push(construirObservacion(payload));
+
+    return { ok: true, texto: compactarSaltos(partes.join("\n")) };
+  }
+
+  function notifyToggle() {
+    if (typeof onToggle === "function") onToggle(isActive());
+  }
+
+  function init(config = {}) {
+    onToggle = typeof config.onToggle === "function" ? config.onToggle : null;
+    const r = ensureRefs();
+    if (!r.activo) return;
+
+    r.activo.addEventListener("change", notifyToggle);
+
+    [r.jefe, r.subjefe, r.otros].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("change", () => {
+        if (el.checked) limpiarRolesExcepto(el);
+        syncOtros();
+      });
+    });
+
+    syncOtros();
+  }
+
+  window.ControlSuperior = {
+    init,
+    isActive,
+    reset,
+    getPayload,
+    buildMessage,
+  };
+})();
