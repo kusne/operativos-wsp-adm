@@ -1391,3 +1391,58 @@ label.check.check-inline-opcion > span{
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
   color: #eef1f6 !important;
 }
+
+/* =========================================================
+   AJUSTE FINAL SOLICITADO (REGLA DE ORO)
+   - SOLO corrige posición y visibilidad de:
+     1) Presencia activa
+     2) Ver items
+   - NO toca lógica ni funcionamiento existente
+   ========================================================= */
+#wrapPresenciaActiva.check-inline-opcion,
+#wrapMostrarResultadosFinaliza.check-inline-opcion{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: 1.15 !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > input[type="checkbox"],
+#wrapMostrarResultadosFinaliza.check-inline-opcion > input[type="checkbox"]{
+  order: 0 !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  transform: scale(1) !important;
+  transform-origin: center center !important;
+  flex: 0 0 auto !important;
+}
+
+#wrapPresenciaActiva.check-inline-opcion > span,
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  order: 1 !important;
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.15 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+/* color bien visible en ambos contextos */
+#wrapPresenciaActiva.check-inline-opcion > span{
+  color: var(--gold) !important;
+}
+
+#wrapMostrarResultadosFinaliza.check-inline-opcion > span{
+  color: #072E6D !important;
+}
