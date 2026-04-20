@@ -1680,3 +1680,106 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
     grid-template-columns:1fr;
   }
 }
+
+
+/* ===== CONTROL SUPERIOR AJUSTE VISUAL FINAL ===== */
+
+#bloqueControlSuperior{
+  padding: 10px 12px !important;
+}
+
+#bloqueControlSuperior > label{
+  display:block;
+  margin-bottom:10px;
+  color:var(--gold) !important;
+  font-weight:800 !important;
+  letter-spacing:.2px;
+}
+
+#bloqueControlSuperior .fila-control-superior,
+#bloqueControlSuperior .fila-control-superior-acciones{
+  display:grid !important;
+  gap:8px !important;
+}
+
+#bloqueControlSuperior .fila-control-superior{
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  margin-top:4px !important;
+}
+
+#bloqueControlSuperior .fila-control-superior-acciones{
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  margin-top:8px !important;
+}
+
+#bloqueControlSuperior label.control-superior-chip{
+  position:static !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:6px !important;
+  width:100% !important;
+  min-height:42px !important;
+  padding:8px 10px !important;
+  margin:0 !important;
+  border:2px solid var(--border) !important;
+  border-radius:12px !important;
+  background:#EDF1F7 !important;
+  box-shadow:0 4px 10px rgba(0,0,0,.12) !important;
+  line-height:1 !important;
+}
+
+#bloqueControlSuperior label.control-superior-chip > input[type="checkbox"]{
+  position:static !important;
+  left:auto !important;
+  top:auto !important;
+  transform:scale(1.05) !important;
+  margin:0 !important;
+  flex:0 0 auto !important;
+}
+
+#bloqueControlSuperior label.control-superior-chip > span{
+  flex:0 1 auto !important;
+  margin:0 !important;
+  padding:0 !important;
+  font-size:13px !important;
+  font-weight:800 !important;
+  line-height:1.1 !important;
+  color:var(--text) !important;
+  white-space:normal !important;
+}
+
+#bloqueControlSuperior .control-superior-otros{
+  margin-top:8px !important;
+}
+
+#bloqueControlSuperior .control-superior-otros label{
+  display:block !important;
+  margin-bottom:6px !important;
+  font-weight:700 !important;
+}
+
+#bloqueControlSuperior .control-superior-otros input[type="text"]{
+  width:100% !important;
+  margin:0 !important;
+}
+
+@media (max-width: 520px){
+  #bloqueControlSuperior .fila-control-superior{
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+
+  #bloqueControlSuperior .fila-control-superior-acciones{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-chip{
+    min-height:40px !important;
+    padding:8px 8px !important;
+    gap:5px !important;
+  }
+
+  #bloqueControlSuperior label.control-superior-chip > span{
+    font-size:12px !important;
+  }
+}
