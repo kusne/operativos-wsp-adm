@@ -1478,7 +1478,7 @@ label.check.check-inline-opcion > span{
   min-height: 0 !important;
   margin: 0 0 0 15px !important;            /* arranca desde el mismo borde izquierdo */
   padding: 0 !important;
-  gap: 16px !important;             /* texto casi pegado al checkbox */
+  gap: 4px !important;             /* texto casi pegado al checkbox */
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -1511,6 +1511,7 @@ label.check.check-inline-opcion > span{
   display: inline-block !important;
   flex: 0 0 auto !important;
   margin: 0 !important;
+  margin-left: 8px !important;   /* separa el texto del checkbox */
   padding: 0 !important;
   font-size: 14px !important;
   font-weight: 700 !important;
