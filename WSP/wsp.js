@@ -1,4 +1,4 @@
-// ===== CONFIG SUPABASE (SOLO LECTURA WSP) =====
+// ===== CONFIG SUPABASE WSP =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
@@ -12,6 +12,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const divDetalles = document.getElementById("bloqueDetalles");
 
   const divMismosElementos = document.getElementById("bloqueMismosElementos");
+  const chkMismoPersonal = document.getElementById("mismoPersonal");
+  const chkMismoMovil = document.getElementById("mismoMovil");
   const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
 
@@ -40,6 +42,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // Cache en memoria
   let ordenesCache = [];
   let operativosCache = [];
+  let inicioGuardadoActual = null;
+  let inicioGuardadoLookupId = 0;
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -527,6 +531,229 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return null;
   }
 
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function getGuardiaFechaISO() {
+    const d = getGuardiaInicio();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function normalizarParteClave(txt) {
+    return normalizarBasicoSinAcentos(String(txt || ""))
+      .replace(/[^a-z0-9/ -]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function construirOperativoKeyEstable(franja) {
+    if (!franja) return "";
+
+    const ordenNum = normalizarParteClave(obtenerNumeroOrdenDeFranja(franja) || "sin-orden");
+    const textoRef = normalizarParteClave(obtenerTextoRefOrdenDeFranja(franja) || "sin-texto");
+    const horario = normalizarParteClave(franja?.horario || "sin-horario");
+    const lugar = normalizarParteClave(franja?.lugar || "sin-lugar");
+    const tipo = normalizarParteClave(obtenerTipoCortoFranja(franja) || "sin-tipo");
+
+    return [ordenNum, textoRef, horario, lugar, tipo].join("|");
+  }
+
+  function normalizarArrayTexto(arr) {
+    return (Array.isArray(arr) ? arr : []).map((v) => limpiarTextoSimple(v)).filter(Boolean);
+  }
+
+  function construirPayloadElementosActual() {
+    return {
+      ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
+      HT: leerSeleccionPorClase("HT"),
+      PDA: leerSeleccionPorClase("PDA"),
+      IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
+      Alometro: leerSeleccionPorClase("Alometro"),
+      Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
+    };
+  }
+
+  function normalizarPayloadElementos(payload) {
+    const fuente = payload?.elementos && typeof payload.elementos === "object" ? payload.elementos : payload || {};
+
+    return {
+      ESCOPETA: normalizarArrayTexto(fuente.ESCOPETA),
+      HT: normalizarArrayTexto(fuente.HT),
+      PDA: normalizarArrayTexto(fuente.PDA),
+      IMPRESORA: normalizarArrayTexto(fuente.IMPRESORA),
+      Alometro: normalizarArrayTexto(fuente.Alometro),
+      Alcoholimetro: normalizarArrayTexto(fuente.Alcoholimetro),
+    };
+  }
+
+  function normalizarInicioGuardado(payload) {
+    if (!payload) return null;
+
+    return {
+      guardia_fecha: String(payload.guardia_fecha || ""),
+      operativo_key: String(payload.operativo_key || ""),
+      orden_num: limpiarTextoSimple(payload.orden_num || ""),
+      texto_ref: limpiarTextoSimple(payload.texto_ref || ""),
+      horario: limpiarTextoSimple(payload.horario || ""),
+      lugar: limpiarTextoSimple(payload.lugar || ""),
+      tipo_corto: limpiarTextoSimple(payload.tipo_corto || ""),
+      personal: normalizarArrayTexto(payload.personal),
+      moviles: normalizarArrayTexto(payload.moviles),
+      motos: normalizarArrayTexto(payload.motos),
+      elementos: normalizarPayloadElementos(payload),
+      ts: payload?.ts || Date.now(),
+    };
+  }
+
+  function construirInicioGuardadoActual() {
+    if (!franjaSeleccionada) return null;
+
+    return normalizarInicioGuardado({
+      guardia_fecha: getGuardiaFechaISO(),
+      operativo_key: construirOperativoKeyEstable(franjaSeleccionada),
+      orden_num: obtenerNumeroOrdenDeFranja(franjaSeleccionada),
+      texto_ref: obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
+      horario: limpiarTextoSimple(franjaSeleccionada?.horario || ""),
+      lugar: limpiarTextoSimple(franjaSeleccionada?.lugar || ""),
+      tipo_corto: obtenerTipoCortoFranja(franjaSeleccionada),
+      personal: leerSeleccionPorClase("personal"),
+      moviles: leerSeleccionPorClase("movil"),
+      motos: leerSeleccionPorClase("moto"),
+      elementos: construirPayloadElementosActual(),
+      ts: Date.now(),
+    });
+  }
+
+  function headersSupabase(extra = {}) {
+    return {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      ...extra,
+    };
+  }
+
+  function guardarInicioLocal(payload) {
+    const data = normalizarInicioGuardado(payload);
+    if (!data) return;
+
+    try {
+      if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
+        StorageApp.guardarElementosInicio(data.elementos);
+      }
+    } catch (e) {
+      console.warn("[WSP] Error guardando elementos en StorageApp.", e);
+    }
+
+    try {
+      localStorage.setItem("elementos_inicio", JSON.stringify(data.elementos));
+      localStorage.setItem("wsp_inicio_actual", JSON.stringify(data));
+    } catch (e) {
+      console.warn("[WSP] No se pudo guardar inicio en localStorage.", e);
+    }
+  }
+
+  function cargarInicioLocal() {
+    try {
+      const raw = localStorage.getItem("wsp_inicio_actual");
+      if (raw) {
+        const parsed = normalizarInicioGuardado(JSON.parse(raw));
+        if (parsed) return parsed;
+      }
+    } catch (e) {
+      console.warn("[WSP] No se pudo leer wsp_inicio_actual de localStorage.", e);
+    }
+
+    try {
+      const storageAppPayload = StorageApp?.cargarElementosInicio?.();
+      if (storageAppPayload) return normalizarInicioGuardado({ elementos: storageAppPayload });
+    } catch {}
+
+    try {
+      const legacy = JSON.parse(localStorage.getItem("elementos_inicio") || "null");
+      if (legacy) return normalizarInicioGuardado({ elementos: legacy });
+    } catch {}
+
+    return null;
+  }
+
+  function coincideInicioConFranja(payload, franja = franjaSeleccionada) {
+    if (!payload || !franja) return false;
+
+    if (payload.guardia_fecha && payload.operativo_key) {
+      return payload.guardia_fecha === getGuardiaFechaISO() && payload.operativo_key === construirOperativoKeyEstable(franja);
+    }
+
+    return true;
+  }
+
+  function cargarInicioGuardadoCoincidente() {
+    const actual = normalizarInicioGuardado(inicioGuardadoActual);
+    if (actual && coincideInicioConFranja(actual)) return actual;
+
+    const local = cargarInicioLocal();
+    if (local && coincideInicioConFranja(local)) return local;
+
+    return null;
+  }
+
+  async function guardarInicioEnSupabase(payload) {
+    const data = normalizarInicioGuardado(payload);
+    if (!data) return false;
+
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/wsp_inicios?on_conflict=guardia_fecha,operativo_key`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: headersSupabase({
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        body: JSON.stringify(data),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo guardar inicio en Supabase:", r.status, await r.text());
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      console.warn("[WSP] Error guardando inicio en Supabase.", e);
+      return false;
+    }
+  }
+
+  async function leerInicioDesdeSupabase(franja) {
+    if (!franja) return null;
+
+    try {
+      const params = new URLSearchParams({
+        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
+        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
+        order: "updated_at.desc",
+        limit: "1",
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
+        return null;
+      }
+
+      const data = await r.json();
+      const row = Array.isArray(data) ? data[0] : null;
+      return row ? normalizarInicioGuardado(row) : null;
+    } catch (e) {
+      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
+      return null;
+    }
+  }
+
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
     return {
       ...franja,
@@ -649,6 +876,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const key = selHorario?.value || "";
     franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
     ordenSeleccionada = null;
+
+    if (selTipo.value === "FINALIZA") {
+      sincronizarInicioGuardadoSegunContexto();
+    }
   }
 
   function actualizarTipo() {
@@ -660,24 +891,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
 
     if (!fin) {
-      if (chkMismosElementos) chkMismosElementos.checked = false;
-      setElementosVisibles(true);
+      desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
       return;
     }
 
-    const payload = cargarElementosGuardados?.() || null;
-
-    if (chkMismosElementos) chkMismosElementos.checked = !!payload;
-
-    if (payload) {
-      aplicarElementos(payload);
-      setElementosVisibles(false);
-    } else {
-      setElementosVisibles(true);
-    }
-
+    desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
+    sincronizarInicioGuardadoSegunContexto();
   }
 
   // ======================================================
@@ -879,70 +1100,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
-  function esDescripcionExactaDeNomenclador(txt) {
-    const descripcion = limpiarDescripcionDetalle(txt)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    if (!descripcion) return false;
-
-    try {
-      const tabla = typeof window !== "undefined" ? window.NOMENCLADOR_CODIGOS : null;
-      if (!tabla || typeof tabla !== "object") return false;
-
-      return Object.values(tabla).some((item) => {
-        const ref = limpiarDescripcionDetalle(item?.referencia || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "");
-        return !!ref && ref === descripcion;
-      });
-    } catch {
-      return false;
-    }
-  }
-
-  function limpiarTextoPegadoSinCodigo(linea) {
-    const original = String(linea || "").replace(/\r/g, "");
-    const s = original.trim();
-    if (!s) return original;
-
-    const patrones = [
-      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s+(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
-    ];
-
-    for (const patron of patrones) {
-      const m = s.match(patron.regex);
-      if (!m) continue;
-
-      const cantidad = patron.conCantidad ? m[1] : null;
-      const codigo = String((patron.conCantidad ? m[2] : m[1]) || "").replace(/\D+/g, "");
-      const resto = m[patron.conCantidad ? 3 : 2] || "";
-
-      if (!esDescripcionExactaDeNomenclador(resto)) return original;
-      if (codigo === "17117") return original;
-
-      const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
-      if (cantidadLimpia) return codigo ? `(${cantidadLimpia}) ${codigo}` : `(${cantidadLimpia})`;
-      return codigo || "";
-    }
-
-    return original;
-  }
-
   function autocompletarLineaDetalleConNomenclador(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
     if (!s) return original;
 
     const patrones = [
-      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s+(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{0,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
     for (const patron of patrones) {
@@ -950,24 +1117,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!m) continue;
 
       const cantidad = patron.conCantidad ? m[1] : null;
-      const codigo = String((patron.conCantidad ? m[2] : m[1]) || "").replace(/\D+/g, "");
-      const resto = m[patron.conCantidad ? 3 : 2] || "";
-
-      if (codigo === "17117") return original;
+      const codigo = patron.conCantidad ? m[2] : m[1];
+      if (String(codigo || "").replace(/\D+/g, "") === "17117") return original;
 
       const referencia = obtenerReferenciaNomenclador(codigo, "");
-      if (referencia) {
-        const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
-        return reconstruida || original;
-      }
+      if (!referencia) return original;
 
-      if (esDescripcionExactaDeNomenclador(resto)) {
-        const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
-        if (cantidadLimpia) return codigo ? `(${cantidadLimpia}) ${codigo}` : `(${cantidadLimpia})`;
-        return codigo || "";
-      }
-
-      return original;
+      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
+      return reconstruida || original;
     }
 
     return original;
@@ -1187,9 +1344,105 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
   }
 
+  function setPersonalVisible(visible) {
+    const el = document.getElementById("bloquePersonal");
+    if (!el) return;
+    el.classList.toggle("hidden", !visible);
+  }
+
+  function setMovilidadVisible(visible) {
+    const el = document.getElementById("bloqueMovil");
+    if (!el) return;
+    el.classList.toggle("hidden", !visible);
+  }
+
+  function limpiarSeleccionPersonal() {
+    document.querySelectorAll(".personal").forEach((inp) => {
+      inp.checked = false;
+    });
+  }
+
+  function limpiarSeleccionMovilidad() {
+    document.querySelectorAll(".movil, .moto").forEach((inp) => {
+      inp.checked = false;
+    });
+  }
+
+  function aplicarSeleccionDesdeArray(selector, valores) {
+    const wanted = new Set(normalizarArrayTexto(valores));
+    Array.from(document.querySelectorAll(selector)).forEach((inp) => {
+      inp.checked = wanted.has(inp.value);
+    });
+  }
+
+  function aplicarPersonal(payload) {
+    aplicarSeleccionDesdeArray(".personal", payload?.personal);
+  }
+
+  function aplicarMovilidad(payload) {
+    aplicarSeleccionDesdeArray(".movil", payload?.moviles);
+    aplicarSeleccionDesdeArray(".moto", payload?.motos);
+  }
+
+  function desactivarControlesMismos({ limpiar = false } = {}) {
+    if (chkMismoPersonal) chkMismoPersonal.checked = false;
+    if (chkMismoMovil) chkMismoMovil.checked = false;
+    if (chkMismosElementos) chkMismosElementos.checked = false;
+
+    if (limpiar) {
+      limpiarSeleccionPersonal();
+      limpiarSeleccionMovilidad();
+      limpiarSeleccionElementos();
+    }
+
+    setPersonalVisible(true);
+    setMovilidadVisible(true);
+    setElementosVisibles(true);
+  }
+
+  function aplicarInicioGuardadoAutomatico(payload) {
+    const data = normalizarInicioGuardado(payload);
+    inicioGuardadoActual = data;
+
+    if (!data) {
+      desactivarControlesMismos({ limpiar: true });
+      return;
+    }
+
+    if (chkMismoPersonal) chkMismoPersonal.checked = true;
+    if (chkMismoMovil) chkMismoMovil.checked = true;
+    if (chkMismosElementos) chkMismosElementos.checked = true;
+
+    aplicarPersonal(data);
+    aplicarMovilidad(data);
+    aplicarElementos(data.elementos);
+
+    setPersonalVisible(false);
+    setMovilidadVisible(false);
+    setElementosVisibles(false);
+  }
+
+  async function sincronizarInicioGuardadoSegunContexto() {
+    const fin = selTipo.value === "FINALIZA";
+
+    if (!fin || !franjaSeleccionada) {
+      inicioGuardadoActual = null;
+      desactivarControlesMismos({ limpiar: false });
+      return;
+    }
+
+    const lookupId = ++inicioGuardadoLookupId;
+    const remoto = await leerInicioDesdeSupabase(franjaSeleccionada);
+    if (lookupId !== inicioGuardadoLookupId) return;
+
+    const payload = remoto || cargarInicioGuardadoCoincidente();
+    aplicarInicioGuardadoAutomatico(payload);
+  }
+
   function resetUI() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
+    inicioGuardadoActual = null;
 
     selTipo.value = "INICIA";
     limpiarSeleccionOperativo();
@@ -1209,7 +1462,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     divFinaliza.classList.add("hidden");
     divDetalles.classList.add("hidden");
 
-    if (chkMismosElementos) chkMismosElementos.checked = false;
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
 
     limpiarGraduaciones(graduacionesSancionable);
@@ -1224,52 +1476,27 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
     if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
 
-    setElementosVisibles(true);
+    desactivarControlesMismos();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
   }
 
   // ======================================================
-  // ===== MISMOS ELEMENTOS ================================
+  // ===== DATOS DE INICIO COMPARTIDOS =====================
   // ======================================================
-  function guardarElementosDeInicio() {
-    const payload = {
-      ts: Date.now(),
-      ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
-      HT: leerSeleccionPorClase("HT"),
-      PDA: leerSeleccionPorClase("PDA"),
-      IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
-      Alometro: leerSeleccionPorClase("Alometro"),
-      Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
-    };
+  async function guardarElementosDeInicio() {
+    const payload = construirInicioGuardadoActual();
+    if (!payload) return null;
 
-    try {
-      if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
-        StorageApp.guardarElementosInicio(payload);
-        return;
-      }
-    } catch (e) {
-      console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
-    }
-
-    try {
-      localStorage.setItem("elementos_inicio", JSON.stringify(payload));
-    } catch (e) {
-      console.warn("[WSP] No se pudo guardar en localStorage.", e);
-    }
+    inicioGuardadoActual = payload;
+    guardarInicioLocal(payload);
+    await guardarInicioEnSupabase(payload);
+    return payload;
   }
 
   function cargarElementosGuardados() {
-    try {
-      const p = StorageApp?.cargarElementosInicio?.();
-      if (p) return p;
-    } catch {}
-
-    try {
-      return JSON.parse(localStorage.getItem("elementos_inicio") || "null");
-    } catch {
-      return null;
-    }
+    const payload = cargarInicioGuardadoCoincidente();
+    return payload ? normalizarPayloadElementos(payload) : null;
   }
 
   function limpiarSeleccionElementos() {
@@ -1284,14 +1511,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function aplicarElementos(payload) {
     if (!payload) return;
 
-    const map = {
-      ESCOPETA: payload.ESCOPETA,
-      HT: payload.HT,
-      PDA: payload.PDA,
-      IMPRESORA: payload.IMPRESORA,
-      Alometro: payload.Alometro,
-      Alcoholimetro: payload.Alcoholimetro,
-    };
+    const map = normalizarPayloadElementos(payload);
 
     Object.keys(map).forEach((clase) => {
       const wanted = new Set(Array.isArray(map[clase]) ? map[clase] : []);
@@ -1300,6 +1520,50 @@ ${bold(`Moviles ${organismo}:`)}`)
       inputs.forEach((inp) => {
         inp.checked = wanted.has(inp.value);
       });
+    });
+  }
+
+  if (chkMismoPersonal) {
+    chkMismoPersonal.addEventListener("change", () => {
+      if (!chkMismoPersonal.checked) {
+        limpiarSeleccionPersonal();
+        setPersonalVisible(true);
+        return;
+      }
+
+      const payload = cargarInicioGuardadoCoincidente();
+      if (!payload || !payload.personal.length) {
+        alert("No hay personal guardado del INICIA.");
+        chkMismoPersonal.checked = false;
+        limpiarSeleccionPersonal();
+        setPersonalVisible(true);
+        return;
+      }
+
+      aplicarPersonal(payload);
+      setPersonalVisible(false);
+    });
+  }
+
+  if (chkMismoMovil) {
+    chkMismoMovil.addEventListener("change", () => {
+      if (!chkMismoMovil.checked) {
+        limpiarSeleccionMovilidad();
+        setMovilidadVisible(true);
+        return;
+      }
+
+      const payload = cargarInicioGuardadoCoincidente();
+      if (!payload || (!payload.moviles.length && !payload.motos.length)) {
+        alert("No hay móviles guardados del INICIA.");
+        chkMismoMovil.checked = false;
+        limpiarSeleccionMovilidad();
+        setMovilidadVisible(true);
+        return;
+      }
+
+      aplicarMovilidad(payload);
+      setMovilidadVisible(false);
     });
   }
 
@@ -1326,32 +1590,44 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   // ===== ENVIAR A WHATSAPP =====
-  function enviar() {
+  async function enviar() {
     if (!franjaSeleccionada) return;
 
-    if (!seleccion("personal")) {
+    const esFinaliza = selTipo.value === "FINALIZA";
+    const finalizaSinResultados = esFinaliza && esFinalizaSinResultados();
+    const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
+    const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
+    const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
+
+    let inicioCompartido = null;
+    if (usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
+      inicioCompartido = cargarInicioGuardadoCoincidente();
+      if (!inicioCompartido) {
+        alert("No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA.");
+        return;
+      }
+    }
+
+    const personalTexto = usarMismoPersonal
+      ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
+      : seleccion("personal");
+
+    if (!personalTexto) {
       alert("Debe seleccionar personal policial.");
       return;
     }
 
-    const mov = seleccionLinea("movil", "/");
-    const mot = seleccionLinea("moto", "/");
+    const mov = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
+    const mot = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
     if (mov === "/" && mot === "/") {
       alert("Debe seleccionar al menos un móvil o moto.");
       return;
     }
 
-    const esFinaliza = selTipo.value === "FINALIZA";
-    const finalizaSinResultados = esFinaliza && esFinalizaSinResultados();
-    const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
-
-    let elementosInicio = null;
-    if (usarMismosElementos) {
-      elementosInicio = cargarElementosGuardados();
-      if (!elementosInicio) {
-        alert("No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA.");
-        return;
-      }
+    const elementosInicio = usarMismosElementos ? normalizarPayloadElementos(inicioCompartido) : null;
+    if (usarMismosElementos && !elementosInicio) {
+      alert("No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA.");
+      return;
     }
 
     const fecha = new Date().toLocaleDateString("es-AR");
@@ -1379,10 +1655,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       franjaSeleccionada.titulo
     )}`.trim();
 
-    const mobilesTexto =
-      [seleccionLinea("movil", "/"), seleccionLinea("moto", "/")]
-        .filter((v) => v !== "/")
-        .join(" / ") || "/";
+    const mobilesTexto = [mov, mot].filter((v) => v !== "/").join(" / ") || "/";
 
     const partes = [];
 
@@ -1400,7 +1673,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     partes.push("");
 
     partes.push(bold("Personal Policial:"));
-    partes.push(seleccion("personal") || "/");
+    partes.push(personalTexto || "/");
     partes.push("");
 
     partes.push(`${bold("Móviles:")} ${mobilesTexto}`);
@@ -1458,7 +1731,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = compactarSaltos(partes.join("\n"));
 
     if (selTipo.value === "INICIA") {
-      guardarElementosDeInicio();
+      await guardarElementosDeInicio();
     }
 
     resetUI();
