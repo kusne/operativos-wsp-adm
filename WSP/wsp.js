@@ -22,7 +22,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMismoMovil = document.getElementById("mismoMovil");
   const chkMismosElementos = document.getElementById("mismosElementos");
   const bloqueControlSuperior = document.getElementById("bloqueControlSuperior");
-  const labelObs = document.querySelector('label[for="obs"]');
+  const labelObs = document.getElementById("labelObs");
   const textareaObs = document.getElementById("obs");
   const btnEnviar = document.getElementById("btnEnviar");
 
@@ -547,9 +547,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return String(n).padStart(2, "0");
   }
 
-  function getGuardiaFechaISO() {
-    const d = getGuardiaInicio();
+  function toFechaISO(d) {
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function getGuardiaFechaISO() {
+    return toFechaISO(getGuardiaInicio());
+  }
+
+  function getFechasBusquedaInicio() {
+    const base = getGuardiaInicio();
+    const anterior = new Date(base);
+    anterior.setDate(anterior.getDate() - 1);
+    return [toFechaISO(base), toFechaISO(anterior)];
+  }
+
+  function getDiaGuardiaTexto() {
+    const nombres = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+    return nombres[getGuardiaInicio().getDay()] || "";
   }
 
   function normalizarParteClave(txt) {
@@ -569,6 +584,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const tipo = normalizarParteClave(obtenerTipoCortoFranja(franja) || "sin-tipo");
 
     return [ordenNum, textoRef, horario, lugar, tipo].join("|");
+  }
+
+  function construirOperativoKeysPosibles(franja) {
+    if (!franja) return [];
+
+    const orden = normalizarParteClave(obtenerNumeroOrdenDeFranja(franja) || "-") || "-";
+    const textoRef = normalizarParteClave(obtenerTextoRefOrdenDeFranja(franja) || "-") || "-";
+    const horario = normalizarParteClave(String(franja?.horario || "-").replace(/:/g, " ")) || "-";
+    const lugar = normalizarParteClave(franja?.lugar || "-") || "-";
+    const tipo = normalizarParteClave(obtenerTipoCortoFranja(franja) || "-") || "-";
+    const dia = normalizarParteClave(getDiaGuardiaTexto() || "-") || "-";
+
+    const keys = new Set();
+    keys.add(construirOperativoKeyEstable(franja));
+    keys.add([orden, dia, horario, lugar, tipo].join("|"));
+    keys.add([orden, dia, horario, lugar, `${tipo} - ${textoRef}`].join("|"));
+    keys.add([orden, dia, horario, lugar, `${tipo} - -`].join("|"));
+    keys.add([orden, horario, lugar].join("|"));
+
+    return Array.from(keys).map((v) => limpiarTextoSimple(v)).filter(Boolean);
   }
 
   function normalizarArrayTexto(arr) {
@@ -599,8 +634,47 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     };
   }
 
+  function pareceHorario(txt) {
+    return /(\d{1,2})[ :](\d{2})\s*a\s*(\d{1,2})[ :](\d{2})/i.test(String(txt || ""));
+  }
+
+  function pareceDiaSemana(txt) {
+    return /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)$/i.test(limpiarTextoSimple(txt));
+  }
+
   function extraerPartesDeOperativoKey(operativoKey) {
-    const partes = String(operativoKey || "").split("|");
+    const partes = String(operativoKey || "").split("|").map((v) => limpiarTextoSimple(v));
+
+    if (partes.length >= 5 && pareceDiaSemana(partes[1])) {
+      return {
+        orden_num: limpiarTextoSimple(partes[0] || ""),
+        texto_ref: limpiarTextoSimple(partes[4] || ""),
+        horario: limpiarTextoSimple(partes[2] || ""),
+        lugar: limpiarTextoSimple(partes[3] || ""),
+        tipo_corto: limpiarTextoSimple(partes[4] || ""),
+      };
+    }
+
+    if (partes.length >= 5 && pareceHorario(partes[2])) {
+      return {
+        orden_num: limpiarTextoSimple(partes[0] || ""),
+        texto_ref: limpiarTextoSimple(partes[1] || ""),
+        horario: limpiarTextoSimple(partes[2] || ""),
+        lugar: limpiarTextoSimple(partes[3] || ""),
+        tipo_corto: limpiarTextoSimple(partes[4] || ""),
+      };
+    }
+
+    if (partes.length >= 3 && pareceHorario(partes[1])) {
+      return {
+        orden_num: limpiarTextoSimple(partes[0] || ""),
+        texto_ref: limpiarTextoSimple(partes[3] || partes[2] || ""),
+        horario: limpiarTextoSimple(partes[1] || ""),
+        lugar: limpiarTextoSimple(partes[2] || ""),
+        tipo_corto: limpiarTextoSimple(partes[3] || ""),
+      };
+    }
+
     return {
       orden_num: limpiarTextoSimple(partes[0] || ""),
       texto_ref: limpiarTextoSimple(partes[1] || ""),
@@ -624,12 +698,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function puntuarCoincidenciaInicio(payload, franja = franjaSeleccionada) {
     if (!payload || !franja) return -1;
 
-    if (payload.guardia_fecha && payload.guardia_fecha !== getGuardiaFechaISO()) {
+    const fechasBusqueda = getFechasBusquedaInicio();
+    if (payload.guardia_fecha && !fechasBusqueda.includes(payload.guardia_fecha)) {
       return -1;
     }
 
-    const keyEsperada = construirOperativoKeyEstable(franja);
-    if (payload.operativo_key && payload.operativo_key === keyEsperada) {
+    const keysEsperadas = construirOperativoKeysPosibles(franja);
+    if (payload.operativo_key && keysEsperadas.includes(limpiarTextoSimple(payload.operativo_key))) {
       return 1000;
     }
 
@@ -793,46 +868,57 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!franja) return null;
 
     const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
+    const fechasBusqueda = getFechasBusquedaInicio();
+    const keysPosibles = construirOperativoKeysPosibles(franja);
 
     try {
-      const paramsExactos = new URLSearchParams({
-        select: selectCols,
-        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
-        operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
-        order: "updated_at.desc",
-        limit: "1",
-      });
+      for (const fechaBusqueda of fechasBusqueda) {
+        for (const keyPosible of keysPosibles) {
+          const paramsExactos = new URLSearchParams({
+            select: selectCols,
+            guardia_fecha: `eq.${fechaBusqueda}`,
+            operativo_key: `eq.${keyPosible}`,
+            order: "updated_at.desc",
+            limit: "1",
+          });
 
-      const rExacto = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsExactos.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
+          const rExacto = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsExactos.toString()}`, {
+            headers: headersSupabase({ Accept: "application/json" }),
+          });
 
-      if (!rExacto.ok) {
-        console.warn("[WSP] No se pudo leer inicio exacto desde Supabase:", rExacto.status, await rExacto.text());
-      } else {
-        const dataExacta = await rExacto.json();
-        const rowExacta = Array.isArray(dataExacta) ? dataExacta[0] : null;
-        if (rowExacta) return normalizarInicioGuardado(rowExacta);
+          if (!rExacto.ok) {
+            console.warn("[WSP] No se pudo leer inicio exacto desde Supabase:", rExacto.status, await rExacto.text());
+          } else {
+            const dataExacta = await rExacto.json();
+            const rowExacta = Array.isArray(dataExacta) ? dataExacta[0] : null;
+            if (rowExacta) return normalizarInicioGuardado(rowExacta);
+          }
+        }
       }
 
-      const paramsFallback = new URLSearchParams({
-        select: selectCols,
-        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
-        order: "updated_at.desc",
-        limit: "50",
-      });
+      let filas = [];
+      for (const fechaBusqueda of fechasBusqueda) {
+        const paramsFallback = new URLSearchParams({
+          select: selectCols,
+          guardia_fecha: `eq.${fechaBusqueda}`,
+          order: "updated_at.desc",
+          limit: "100",
+        });
 
-      const rFallback = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsFallback.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
+        const rFallback = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsFallback.toString()}`, {
+          headers: headersSupabase({ Accept: "application/json" }),
+        });
 
-      if (!rFallback.ok) {
-        console.warn("[WSP] No se pudo leer inicio fallback desde Supabase:", rFallback.status, await rFallback.text());
-        return null;
+        if (!rFallback.ok) {
+          console.warn("[WSP] No se pudo leer inicio fallback desde Supabase:", rFallback.status, await rFallback.text());
+          continue;
+        }
+
+        const dataFallback = await rFallback.json();
+        if (Array.isArray(dataFallback)) {
+          filas = filas.concat(dataFallback.map(normalizarInicioGuardado).filter(Boolean));
+        }
       }
-
-      const dataFallback = await rFallback.json();
-      const filas = Array.isArray(dataFallback) ? dataFallback.map(normalizarInicioGuardado).filter(Boolean) : [];
 
       let mejor = null;
       let mejorPuntaje = -1;
