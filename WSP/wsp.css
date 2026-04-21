@@ -1549,46 +1549,49 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
 }
 
 .control-superior-grid-3{
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .control-superior-grid-2{
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 12px;
 }
 
-label.check.check-control-superior{
-  position: static !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 10px 12px !important;
-  min-height: 42px !important;
-  line-height: 1.15 !important;
-  border: 1px solid #ddd !important;
-  border-radius: 8px !important;
-  background: #fff !important;
-  box-shadow: none !important;
+.control-superior-item{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 10px;
+  min-height: 54px;
+  border: 1px solid #d6dbe6;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
 }
 
-label.check.check-control-superior > span{
-  flex: 0 0 auto;
-  color: #072E6D;
-  font-weight: 700;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-label.check.check-control-superior > input[type="checkbox"]{
+.control-superior-item input[type="checkbox"]{
   position: static !important;
   left: auto !important;
   top: auto !important;
   margin: 0 !important;
-  transform: scale(1.2) !important;
-  flex: 0 0 auto !important;
+  transform: scale(1.12) !important;
+  flex: 0 0 auto;
+}
+
+.control-superior-text{
+  color: #072E6D;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.control-superior-item-largo .control-superior-text{
+  font-size: 12px;
 }
 
 #bloqueControlSuperiorOtrosTexto{
@@ -1601,4 +1604,20 @@ label.check.check-control-superior > input[type="checkbox"]{
 
 #controlSuperiorOtrosTexto{
   width: 100%;
+}
+
+@media (max-width: 420px){
+  .control-superior-item{
+    gap: 6px;
+    padding: 10px 8px;
+    min-height: 50px;
+  }
+
+  .control-superior-text{
+    font-size: 12px;
+  }
+
+  .control-superior-item-largo .control-superior-text{
+    font-size: 11px;
+  }
 }
