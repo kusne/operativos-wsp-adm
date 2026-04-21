@@ -867,7 +867,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
+    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
     const fechasBusqueda = getFechasBusquedaInicio();
     const keysPosibles = construirOperativoKeysPosibles(franja);
 
@@ -878,7 +878,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
             select: selectCols,
             guardia_fecha: `eq.${fechaBusqueda}`,
             operativo_key: `eq.${keyPosible}`,
-            order: "updated_at.desc",
+            order: "id.desc",
             limit: "1",
           });
 
@@ -901,8 +901,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const paramsFallback = new URLSearchParams({
           select: selectCols,
           guardia_fecha: `eq.${fechaBusqueda}`,
-          order: "updated_at.desc",
-          limit: "100",
+          order: "id.desc",
+          limit: "300",
         });
 
         const rFallback = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsFallback.toString()}`, {
@@ -1317,6 +1317,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadBloquePresenciaActiva() {
+    if (esControlSuperiorActivo()) {
+      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+      return;
+    }
+
     const mostrar = !!franjaSeleccionada && esTipoConPresenciaActivaOpcional();
 
     if (bloquePresenciaActiva) {
@@ -1947,7 +1953,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!franjaSeleccionada) return;
 
     if (esControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente();
+      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
       if (!inicioControlSuperior) {
         alert("No hay datos de inicio guardados para este operativo.");
         return;
