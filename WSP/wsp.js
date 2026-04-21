@@ -599,17 +599,64 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     };
   }
 
+  function extraerPartesDeOperativoKey(operativoKey) {
+    const partes = String(operativoKey || "").split("|");
+    return {
+      orden_num: limpiarTextoSimple(partes[0] || ""),
+      texto_ref: limpiarTextoSimple(partes[1] || ""),
+      horario: limpiarTextoSimple(partes[2] || ""),
+      lugar: limpiarTextoSimple(partes[3] || ""),
+      tipo_corto: limpiarTextoSimple(partes[4] || ""),
+    };
+  }
+
+  function normalizarValorComparacion(txt) {
+    return normalizarBasicoSinAcentos(String(txt || "")).replace(/[^a-z0-9]+/g, "");
+  }
+
+  function valoresComparablesCoinciden(a, b) {
+    const aa = normalizarValorComparacion(a);
+    const bb = normalizarValorComparacion(b);
+    if (!aa || !bb) return false;
+    return aa === bb || aa.includes(bb) || bb.includes(aa);
+  }
+
+  function puntuarCoincidenciaInicio(payload, franja = franjaSeleccionada) {
+    if (!payload || !franja) return -1;
+
+    if (payload.guardia_fecha && payload.guardia_fecha !== getGuardiaFechaISO()) {
+      return -1;
+    }
+
+    const keyEsperada = construirOperativoKeyEstable(franja);
+    if (payload.operativo_key && payload.operativo_key === keyEsperada) {
+      return 1000;
+    }
+
+    let puntos = 0;
+
+    if (valoresComparablesCoinciden(payload.horario, franja?.horario || "")) puntos += 60;
+    if (valoresComparablesCoinciden(payload.lugar, franja?.lugar || "")) puntos += 30;
+    if (valoresComparablesCoinciden(payload.tipo_corto, obtenerTipoCortoFranja(franja) || "")) puntos += 10;
+    if (valoresComparablesCoinciden(payload.orden_num, obtenerNumeroOrdenDeFranja(franja) || "")) puntos += 8;
+    if (valoresComparablesCoinciden(payload.texto_ref, obtenerTextoRefOrdenDeFranja(franja) || "")) puntos += 5;
+
+    return puntos;
+  }
+
   function normalizarInicioGuardado(payload) {
     if (!payload) return null;
+
+    const derivado = extraerPartesDeOperativoKey(payload.operativo_key || "");
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
       operativo_key: String(payload.operativo_key || ""),
-      orden_num: limpiarTextoSimple(payload.orden_num || ""),
-      texto_ref: limpiarTextoSimple(payload.texto_ref || ""),
-      horario: limpiarTextoSimple(payload.horario || ""),
-      lugar: limpiarTextoSimple(payload.lugar || ""),
-      tipo_corto: limpiarTextoSimple(payload.tipo_corto || ""),
+      orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
+      texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
+      horario: limpiarTextoSimple(payload.horario || derivado.horario || ""),
+      lugar: limpiarTextoSimple(payload.lugar || derivado.lugar || ""),
+      tipo_corto: limpiarTextoSimple(payload.tipo_corto || derivado.tipo_corto || ""),
       personal: normalizarArrayTexto(payload.personal),
       moviles: normalizarArrayTexto(payload.moviles),
       motos: normalizarArrayTexto(payload.motos),
@@ -691,22 +738,27 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function coincideInicioConFranja(payload, franja = franjaSeleccionada) {
     if (!payload || !franja) return false;
-
-    if (payload.guardia_fecha && payload.operativo_key) {
-      return payload.guardia_fecha === getGuardiaFechaISO() && payload.operativo_key === construirOperativoKeyEstable(franja);
-    }
-
-    return true;
+    return puntuarCoincidenciaInicio(normalizarInicioGuardado(payload), franja) >= 90;
   }
 
   function cargarInicioGuardadoCoincidente() {
-    const actual = normalizarInicioGuardado(inicioGuardadoActual);
-    if (actual && coincideInicioConFranja(actual)) return actual;
+    const candidatos = [
+      normalizarInicioGuardado(inicioGuardadoActual),
+      cargarInicioLocal(),
+    ].filter(Boolean);
 
-    const local = cargarInicioLocal();
-    if (local && coincideInicioConFranja(local)) return local;
+    let mejor = null;
+    let mejorPuntaje = -1;
 
-    return null;
+    candidatos.forEach((item) => {
+      const puntaje = puntuarCoincidenciaInicio(item);
+      if (puntaje > mejorPuntaje) {
+        mejor = item;
+        mejorPuntaje = puntaje;
+      }
+    });
+
+    return mejorPuntaje >= 90 ? mejor : null;
   }
 
   async function guardarInicioEnSupabase(payload) {
@@ -740,27 +792,59 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
+    const selectCols = "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at";
+
     try {
-      const params = new URLSearchParams({
-        select: "guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,updated_at",
+      const paramsExactos = new URLSearchParams({
+        select: selectCols,
         guardia_fecha: `eq.${getGuardiaFechaISO()}`,
         operativo_key: `eq.${construirOperativoKeyEstable(franja)}`,
         order: "updated_at.desc",
         limit: "1",
       });
 
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+      const rExacto = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsExactos.toString()}`, {
         headers: headersSupabase({ Accept: "application/json" }),
       });
 
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo leer inicio desde Supabase:", r.status, await r.text());
+      if (!rExacto.ok) {
+        console.warn("[WSP] No se pudo leer inicio exacto desde Supabase:", rExacto.status, await rExacto.text());
+      } else {
+        const dataExacta = await rExacto.json();
+        const rowExacta = Array.isArray(dataExacta) ? dataExacta[0] : null;
+        if (rowExacta) return normalizarInicioGuardado(rowExacta);
+      }
+
+      const paramsFallback = new URLSearchParams({
+        select: selectCols,
+        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
+        order: "updated_at.desc",
+        limit: "50",
+      });
+
+      const rFallback = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsFallback.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!rFallback.ok) {
+        console.warn("[WSP] No se pudo leer inicio fallback desde Supabase:", rFallback.status, await rFallback.text());
         return null;
       }
 
-      const data = await r.json();
-      const row = Array.isArray(data) ? data[0] : null;
-      return row ? normalizarInicioGuardado(row) : null;
+      const dataFallback = await rFallback.json();
+      const filas = Array.isArray(dataFallback) ? dataFallback.map(normalizarInicioGuardado).filter(Boolean) : [];
+
+      let mejor = null;
+      let mejorPuntaje = -1;
+      filas.forEach((fila) => {
+        const puntaje = puntuarCoincidenciaInicio(fila, franja);
+        if (puntaje > mejorPuntaje) {
+          mejor = fila;
+          mejorPuntaje = puntaje;
+        }
+      });
+
+      return mejorPuntaje >= 90 ? mejor : null;
     } catch (e) {
       console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
       return null;
