@@ -1724,3 +1724,16 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
 #bloquePresenciaActiva.hidden{
   display: none !important;
 }
+
+
+/* ===== MODO CONTROL SUPERIOR: OCULTACIONES E INHABILITACION ===== */
+body.modo-control-superior #bloquePresenciaActiva,
+body.modo-control-superior #labelObs,
+body.modo-control-superior #obs{
+  display: none !important;
+}
+
+body.modo-control-superior #presenciaActiva,
+body.modo-control-superior #wrapPresenciaActiva{
+  pointer-events: none !important;
+}
