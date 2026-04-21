@@ -35,12 +35,47 @@
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
+      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
     </select>
 
     <label class="top-label">OPERATIVOS</label>
     <select id="horario" class="obligatorio">
       <option value="">Seleccionar Operativo</option>
     </select>
+
+
+    <div id="bloqueControlSuperior" class="section hidden destacado">
+      <div class="control-superior-grid control-superior-grid-3">
+        <label class="check check-control-superior">
+          <span>JEFE</span>
+          <input type="checkbox" id="controlSuperiorJefe">
+        </label>
+        <label class="check check-control-superior">
+          <span>SUBJEFE</span>
+          <input type="checkbox" id="controlSuperiorSubjefe">
+        </label>
+        <label class="check check-control-superior">
+          <span>OTROS</span>
+          <input type="checkbox" id="controlSuperiorOtros">
+        </label>
+      </div>
+
+      <div id="bloqueControlSuperiorOtrosTexto" class="hidden">
+        <label for="controlSuperiorOtrosTexto">Nombre:</label>
+        <input type="text" id="controlSuperiorOtrosTexto" placeholder="Apellido y nombre">
+      </div>
+
+      <div class="control-superior-grid control-superior-grid-2">
+        <label class="check check-control-superior">
+          <span>Con Móvil?</span>
+          <input type="checkbox" id="controlSuperiorConMovil">
+        </label>
+        <label class="check check-control-superior">
+          <span>Se Acopla?</span>
+          <input type="checkbox" id="controlSuperiorSeAcopla">
+        </label>
+      </div>
+    </div>
 
     <!-- PERSONAL -->
     <div class="section obligatorio destacado" id="bloquePersonal">
@@ -331,6 +366,7 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   <!-- wsp -->
   <script src="./nomenclador.js" defer></script>
+  <script src="./controlsuperior.js" defer></script>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
