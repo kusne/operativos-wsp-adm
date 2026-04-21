@@ -106,7 +106,7 @@
       ? " acoplandose al mismo."
       : " acto seguido se retira sin novedad.";
 
-    return `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando servicio,${cierre}`;
+    return `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando el servicio,${cierre}`;
   }
 
   function buildMessage(ctx = {}) {
