@@ -35,6 +35,7 @@
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
+      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
     </select>
 
     <label class="top-label">OPERATIVOS</label>
@@ -314,9 +315,32 @@
       <textarea id="detalles" rows="3" placeholder="(01) 2016 Alcoholemia"></textarea>
     </div>
 
-    <label for="obs">Observaciones:</label>
-    <textarea id="obs" rows="3" placeholder="Se realizó (01) verificación por animales sueltos
+
+    <div id="bloqueControlSuperior" class="section hidden destacado">
+      <label>CONTROL SUPERIOR</label>
+
+      <div class="control-superior-row control-superior-row-top">
+        <label class="control-superior-opcion"><span>JEFE</span><input type="checkbox" id="controlSuperiorJefe"></label>
+        <label class="control-superior-opcion"><span>SUBJEFE</span><input type="checkbox" id="controlSuperiorSubjefe"></label>
+        <label class="control-superior-opcion"><span>OTROS</span><input type="checkbox" id="controlSuperiorOtros"></label>
+      </div>
+
+      <div class="control-superior-row control-superior-row-bottom">
+        <label class="control-superior-opcion"><span>Con móvil?</span><input type="checkbox" id="controlSuperiorConMovil"></label>
+        <label class="control-superior-opcion"><span>Se acopla?</span><input type="checkbox" id="controlSuperiorSeAcopla"></label>
+      </div>
+
+      <div id="bloqueControlSuperiorOtrosTexto" class="control-superior-otros hidden">
+        <label for="controlSuperiorOtrosTexto">Otros:</label>
+        <input type="text" id="controlSuperiorOtrosTexto" placeholder="Nombre / cargo">
+      </div>
+    </div>
+
+    <div id="bloqueObservacionesNormal">
+      <label for="obs">Observaciones:</label>
+      <textarea id="obs" rows="3" placeholder="Se realizó (01) verificación por animales sueltos
 o se realizó (01) Procedimiento Policial"></textarea>
+    </div>
 
     <button type="button" id="btnEnviar">Enviar por WhatsApp</button>
 
@@ -331,6 +355,7 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   <!-- wsp -->
   <script src="./nomenclador.js" defer></script>
+  <script src="./controlsuperior.js" defer></script>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
