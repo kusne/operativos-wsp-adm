@@ -1536,467 +1536,62 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
   line-height: 1.1 !important;
 }
 
+
 /* ===== CONTROL SUPERIOR ===== */
-#bloqueToggleControlSuperior{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:flex-start !important;
-  width:100% !important;
-  margin:0 0 10px 0 !important;
-  padding:0 !important;
-  border:0 !important;
-  background:transparent !important;
-  box-shadow:none !important;
-}
-
-#wrapControlSuperior,
-#wrapControlSuperior.check-inline-opcion{
-  position:static !important;
-  display:flex !important;
-  flex-direction:row !important;
-  flex-wrap:nowrap !important;
-  align-items:center !important;
-  justify-content:flex-start !important;
-  width:100% !important;
-  max-width:100% !important;
-  min-height:0 !important;
-  margin:0 0 0 15px !important;
-  padding:0 !important;
-  gap:4px !important;
-  border:0 !important;
-  background:transparent !important;
-  box-shadow:none !important;
-  line-height:1 !important;
-  white-space:nowrap !important;
-}
-
-#wrapControlSuperior > input[type="checkbox"],
-#wrapControlSuperior.check-inline-opcion > input[type="checkbox"]{
-  position:static !important;
-  left:auto !important;
-  top:auto !important;
-  margin:0 0 0 5px !important;
-  margin-left:2px !important;
-  width:18px !important;
-  height:18px !important;
-  min-width:18px !important;
-  min-height:18px !important;
-  flex:0 0 auto !important;
-  transform:scale(1.5) !important;
-  transform-origin:center center !important;
-}
-
-#wrapControlSuperior > span,
-#wrapControlSuperior.check-inline-opcion > span{
-  display:inline-block !important;
-  flex:0 0 auto !important;
-  margin:0 !important;
-  margin-left:14px !important;
-  padding:0 !important;
-  font-size:18px !important;
-  font-weight:800 !important;
-  line-height:1.1 !important;
-  white-space:nowrap !important;
-  color:var(--gold) !important;
-}
-
 #bloqueControlSuperior{
-  padding:10px;
+  padding: 12px 14px;
 }
 
 #bloqueControlSuperior > label{
-  margin-bottom:10px;
+  margin-bottom: 12px;
 }
 
-#bloqueControlSuperior .fila-control-superior,
-#bloqueControlSuperior .fila-control-superior-acciones{
-  display:grid;
-  gap:10px;
-  margin-top:6px;
+#bloqueControlSuperior .control-superior-row{
+  display: grid;
+  gap: 12px;
+  align-items: center;
 }
 
-#bloqueControlSuperior .fila-control-superior{
-  grid-template-columns:repeat(3, minmax(0, 1fr));
+#bloqueControlSuperior .control-superior-row-top{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-#bloqueControlSuperior .fila-control-superior-acciones{
-  grid-template-columns:repeat(2, minmax(0, 1fr));
-  margin-top:10px;
+#bloqueControlSuperior .control-superior-row-bottom{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
 }
 
-#bloqueControlSuperior label.control-superior-chip{
-  position:static !important;
-  display:flex !important;
-  align-items:center;
-  justify-content:space-between;
-  width:100% !important;
-  padding:10px 12px !important;
-  margin:0 !important;
-  line-height:normal !important;
-  min-height:40px !important;
-  border:2px solid var(--border) !important;
-  border-radius:14px;
-  background:#EDF1F7;
-  box-shadow:0 6px 14px rgba(0,0,0,0.14);
+#bloqueControlSuperior .control-superior-opcion{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0;
+  font-weight: 700;
+  line-height: 1.2;
+  min-height: auto;
 }
 
-#bloqueControlSuperior label.control-superior-chip > span{
-  font-weight:700;
-  font-size:14px;
-  line-height:1.2;
-  color:var(--text);
-}
-
-#bloqueControlSuperior label.control-superior-chip > input[type="checkbox"]{
-  position:static !important;
-  left:auto !important;
-  top:auto !important;
-  transform:scale(1.15) !important;
-  margin:0 !important;
-  flex:0 0 auto !important;
-}
-
-#bloqueControlSuperior .control-superior-otros{
-  margin-top:10px;
-}
-
-#bloqueControlSuperior .control-superior-otros label{
-  display:block;
-  font-weight:700;
-  margin-bottom:6px;
-}
-
-#bloqueControlSuperior .control-superior-otros input[type="text"]{
-  width:100%;
-  margin-bottom:0;
-}
-
-@media (max-width: 520px){
-  #bloqueControlSuperior .fila-control-superior{
-    grid-template-columns:1fr;
-  }
-
-  #bloqueControlSuperior .fila-control-superior-acciones{
-    grid-template-columns:1fr;
-  }
-}
-
-
-/* ===== CONTROL SUPERIOR AJUSTE VISUAL FINAL ===== */
-
-#bloqueControlSuperior{
-  padding: 10px 12px !important;
-}
-
-#bloqueControlSuperior > label{
-  display:block;
-  margin-bottom:10px;
-  color:var(--gold) !important;
-  font-weight:800 !important;
-  letter-spacing:.2px;
-}
-
-#bloqueControlSuperior .fila-control-superior,
-#bloqueControlSuperior .fila-control-superior-acciones{
-  display:grid !important;
-  gap:8px !important;
-}
-
-#bloqueControlSuperior .fila-control-superior{
-  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
-  margin-top:4px !important;
-}
-
-#bloqueControlSuperior .fila-control-superior-acciones{
-  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-  margin-top:8px !important;
-}
-
-#bloqueControlSuperior label.control-superior-chip{
-  position:static !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:flex-start !important;
-  gap:6px !important;
-  width:100% !important;
-  min-height:42px !important;
-  padding:8px 10px !important;
-  margin:0 !important;
-  border:2px solid var(--border) !important;
-  border-radius:12px !important;
-  background:#EDF1F7 !important;
-  box-shadow:0 4px 10px rgba(0,0,0,.12) !important;
-  line-height:1 !important;
-}
-
-#bloqueControlSuperior label.control-superior-chip > input[type="checkbox"]{
-  position:static !important;
-  left:auto !important;
-  top:auto !important;
-  transform:scale(1.05) !important;
-  margin:0 !important;
-  flex:0 0 auto !important;
-}
-
-#bloqueControlSuperior label.control-superior-chip > span{
-  flex:0 1 auto !important;
-  margin:0 !important;
-  padding:0 !important;
-  font-size:13px !important;
-  font-weight:800 !important;
-  line-height:1.1 !important;
-  color:var(--text) !important;
-  white-space:normal !important;
-}
-
-#bloqueControlSuperior .control-superior-otros{
-  margin-top:8px !important;
-}
-
-#bloqueControlSuperior .control-superior-otros label{
-  display:block !important;
-  margin-bottom:6px !important;
-  font-weight:700 !important;
-}
-
-#bloqueControlSuperior .control-superior-otros input[type="text"]{
-  width:100% !important;
-  margin:0 !important;
-}
-
-@media (max-width: 520px){
-  #bloqueControlSuperior .fila-control-superior{
-    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
-  }
-
-  #bloqueControlSuperior .fila-control-superior-acciones{
-    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-chip{
-    min-height:40px !important;
-    padding:8px 8px !important;
-    gap:5px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-chip > span{
-    font-size:12px !important;
-  }
-}
-
-
-/* ===== CONTROL SUPERIOR UI COMPACTA ===== */
-#bloqueControlSuperior{
-  padding: 12px 14px !important;
-}
-
-#bloqueControlSuperior > label{
-  display:block !important;
-  margin: 0 0 12px 0 !important;
-  color: var(--gold) !important;
-  font-weight: 800 !important;
-  letter-spacing: .2px !important;
-}
-
-#bloqueControlSuperior .fila-control-superior,
-#bloqueControlSuperior .fila-control-superior-acciones{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:flex-start !important;
-  flex-wrap:nowrap !important;
-  gap: 18px !important;
-  margin: 0 !important;
-}
-
-#bloqueControlSuperior .fila-control-superior-acciones{
-  margin-top: 10px !important;
-  gap: 28px !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion{
-  position: static !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 7px !important;
-  width: auto !important;
-  min-height: auto !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  line-height: 1.1 !important;
-  white-space: nowrap !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion > span{
-  margin: 0 !important;
-  padding: 0 !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  line-height: 1.1 !important;
-  color: var(--text) !important;
-  white-space: nowrap !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
-  font-size: 15px !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
+#bloqueControlSuperior .control-superior-opcion > input[type="checkbox"]{
   position: static !important;
   left: auto !important;
   top: auto !important;
+  transform: scale(1.25) !important;
   margin: 0 !important;
-  width: 18px !important;
-  height: 18px !important;
-  min-width: 18px !important;
-  min-height: 18px !important;
-  transform: scale(1.05) !important;
-  transform-origin: center center !important;
-  flex: 0 0 auto !important;
 }
 
 #bloqueControlSuperior .control-superior-otros{
-  margin-top: 12px !important;
+  margin-top: 14px;
 }
 
 #bloqueControlSuperior .control-superior-otros label{
-  display:block !important;
-  margin: 0 0 6px 0 !important;
-  font-weight: 700 !important;
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
 }
 
 #bloqueControlSuperior .control-superior-otros input[type="text"]{
-  width: 100% !important;
-  margin: 0 !important;
-}
-
-@media (max-width: 520px){
-  #bloqueControlSuperior .fila-control-superior,
-  #bloqueControlSuperior .fila-control-superior-acciones{
-    gap: 14px !important;
-  }
-
-  #bloqueControlSuperior .fila-control-superior-acciones{
-    gap: 18px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion > span{
-    font-size: 14px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
-    font-size: 13px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
-    width: 16px !important;
-    height: 16px !important;
-    min-width: 16px !important;
-    min-height: 16px !important;
-    transform: scale(1) !important;
-  }
-}
-
-
-/* ===== CONTROL SUPERIOR AJUSTE DE SIMETRIA ===== */
-#bloqueControlSuperior{
-  padding: 12px 14px !important;
-}
-
-#bloqueControlSuperior .fila-control-superior{
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  column-gap: 12px !important;
-  row-gap: 0 !important;
-  align-items: center !important;
-  margin: 0 !important;
-}
-
-#bloqueControlSuperior .fila-control-superior-acciones{
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  column-gap: 18px !important;
-  row-gap: 0 !important;
-  align-items: center !important;
-  margin: 16px 0 0 0 !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion{
-  position: static !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 9px !important;
-  width: 100% !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  padding: 0 10px !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  line-height: 1.1 !important;
-  white-space: nowrap !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion > span{
-  display: inline-block !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  font-size: 15px !important;
-  font-weight: 800 !important;
-  line-height: 1.1 !important;
-  color: var(--text) !important;
-  white-space: nowrap !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion.control-superior-opcion-secundaria > span{
-  font-size: 15px !important;
-}
-
-#bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  margin: 0 !important;
-  width: 20px !important;
-  height: 20px !important;
-  min-width: 20px !important;
-  min-height: 20px !important;
-  transform: scale(1.15) !important;
-  transform-origin: center center !important;
-  flex: 0 0 auto !important;
-}
-
-@media (max-width: 420px){
-  #bloqueControlSuperior .fila-control-superior{
-    column-gap: 8px !important;
-  }
-
-  #bloqueControlSuperior .fila-control-superior-acciones{
-    column-gap: 12px !important;
-    margin-top: 14px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion{
-    padding: 0 6px !important;
-    gap: 8px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion > span{
-    font-size: 14px !important;
-  }
-
-  #bloqueControlSuperior label.control-superior-opcion > input[type="checkbox"]{
-    width: 19px !important;
-    height: 19px !important;
-    min-width: 19px !important;
-    min-height: 19px !important;
-    transform: scale(1.12) !important;
-  }
+  width: 100%;
+  margin-bottom: 0;
 }
