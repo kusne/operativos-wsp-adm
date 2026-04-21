@@ -1688,6 +1688,8 @@ ${bold(`Moviles ${organismo}:`)}`)
   function setUIControlSuperiorActiva(activa) {
     setControlSuperiorVisible(activa);
 
+    document.body.classList.toggle("modo-control-superior", !!activa);
+
     setPersonalVisible(!activa);
     setMovilidadVisible(!activa);
     setElementosVisibles(!activa);
@@ -1697,6 +1699,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divDetalles) divDetalles.classList.add("hidden");
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    if (chkPresenciaActiva) chkPresenciaActiva.disabled = !!activa;
 
     if (activa) {
       if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
