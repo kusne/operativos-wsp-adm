@@ -1716,3 +1716,11 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
     font-size: 11.5px !important;
   }
 }
+
+
+/* ===== CONTROL SUPERIOR OCULTACIONES ===== */
+#labelObs.hidden,
+#obs.hidden,
+#bloquePresenciaActiva.hidden{
+  display: none !important;
+}
