@@ -19,6 +19,7 @@
       otrosTexto: qs("controlSuperiorOtrosTexto"),
       conMovil: qs("controlSuperiorConMovil"),
       seAcopla: qs("controlSuperiorSeAcopla"),
+      bloque: qs("bloqueControlSuperior"),
     };
     return refs;
   }
@@ -88,18 +89,19 @@
     return payload.otros || "otros";
   }
 
-  function construirObservacion(payload) {
+  function construirObservacion(payload, movilTexto) {
     const nombre = obtenerNombreRol(payload);
+    const movil = String(movilTexto || "").trim() || "__________";
 
     if (payload.rol === "OTROS") {
       if (payload.conMovil) {
-        return `Siendo la hora al margen se hace presente ${nombre}, en móvil __________.`;
+        return `Siendo la hora al margen se hace presente ${nombre}, en móvil ${movil}.`;
       }
       return `Siendo la hora al margen se hace presente ${nombre}.`;
     }
 
     const articulo = payload.rol === "JEFE" ? "el Jefe" : "el Subjefe";
-    const tramoMovil = payload.conMovil ? ", en móvil N°12428," : ",";
+    const tramoMovil = payload.conMovil ? `, en móvil ${movil},` : ",";
     const cierre = payload.seAcopla
       ? " acoplando al mismo."
       : " acto seguido se retira sin novedad.";
@@ -116,6 +118,10 @@
 
     if (!payload.rol) {
       return { ok: false, mensaje: "Debe seleccionar JEFE, SUBJEFE u OTROS en CONTROL SUPERIOR." };
+    }
+
+    if (payload.rol === "OTROS" && !payload.otros) {
+      return { ok: false, mensaje: "Debe completar el nombre en OTROS para CONTROL SUPERIOR." };
     }
 
     const inicio = ctx.inicio || {};
@@ -162,7 +168,7 @@
     partes.push(personalTexto);
     partes.push("");
     partes.push(bold("OBSERVACIÓNES:"));
-    partes.push(construirObservacion(payload));
+    partes.push(construirObservacion(payload, movilTexto));
 
     return { ok: true, texto: compactarSaltos(partes.join("\n")) };
   }
