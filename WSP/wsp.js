@@ -1114,7 +1114,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function debeOcultarTodoPorPresenciaActivaFinaliza() {
-    return selTipo?.value === "FINALIZA" && esTipoConPresenciaActivaOpcional() && !!chkPresenciaActiva?.checked;
+    return selTipo?.value === "FINALIZA" && !!chkPresenciaActiva?.checked;
   }
 
   function debeIncluirResultadosFinaliza() {
@@ -1221,42 +1221,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
-  function reconstruirLineaDetalleSinDescripcion(cantidad, codigo) {
-    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
-    if (!codigoLimpio) return "";
-
-    const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
-
-    if (cantidadLimpia) return `(${cantidadLimpia}) ${codigoLimpio}`;
-    return `${codigoLimpio}`;
-  }
-
-  function extraerPartesLineaDetalle(linea) {
+  function autocompletarLineaDetalleConNomenclador(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
-    if (!s) return null;
+    if (!s) return original;
 
     const patrones = [
-      {
-        regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-        regexPrefijo: /^\(\s*\d{1,2}\s*\)\s*\d{4,5}/i,
-        conCantidad: true,
-      },
-      {
-        regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-        regexPrefijo: /^\d{1,2}\s*[-–—]\s*\d{4,5}/i,
-        conCantidad: true,
-      },
-      {
-        regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-        regexPrefijo: /^\d{1,2}\s+\d{4,5}/i,
-        conCantidad: true,
-      },
-      {
-        regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
-        regexPrefijo: /^\d{4,5}/i,
-        conCantidad: false,
-      },
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
     for (const patron of patrones) {
@@ -1265,74 +1239,22 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       const cantidad = patron.conCantidad ? m[1] : null;
       const codigo = patron.conCantidad ? m[2] : m[1];
-      const descripcion = patron.conCantidad ? m[3] : m[2];
-      const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
-      if (!codigoLimpio) continue;
+      if (String(codigo || "").replace(/\D+/g, "") === "17117") return original;
 
-      const prefijoNormalizado = reconstruirLineaDetalleSinDescripcion(cantidad, codigo);
-      const prefijoFuenteMatch = s.match(patron.regexPrefijo);
-      const prefijoFuente = prefijoFuenteMatch ? prefijoFuenteMatch[0] : "";
+      const referencia = obtenerReferenciaNomenclador(codigo, "");
+      if (!referencia) return original;
 
-      return {
-        cantidad,
-        codigo,
-        codigoLimpio,
-        descripcion,
-        prefijoNormalizado,
-        prefijoFuente,
-      };
+      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
+      return reconstruida || original;
     }
 
-    return null;
-  }
-
-  function autocompletarLineaDetalleConNomenclador(linea) {
-    const original = String(linea || "").replace(/\r/g, "");
-    const partes = extraerPartesLineaDetalle(original);
-    if (!partes) return original;
-
-    if (partes.codigoLimpio === "17117") return original;
-
-    const referencia = obtenerReferenciaNomenclador(partes.codigo, "");
-    if (!referencia) {
-      return reconstruirLineaDetalleSinDescripcion(partes.cantidad, partes.codigo) || original;
-    }
-
-    return reconstruirLineaDetalle(partes.cantidad, partes.codigo, referencia) || original;
+    return original;
   }
 
   function autocompletarDetallesDesdeNomenclador(texto) {
     const original = String(texto || "").replace(/\r/g, "");
     if (!original) return original;
     return original.split("\n").map(autocompletarLineaDetalleConNomenclador).join("\n");
-  }
-
-  function calcularPosicionCursorDetalleAutocompletado(texto, posicion) {
-    const valor = String(texto || "").replace(/\r/g, "");
-    const pos = Math.max(0, Math.min(Number(posicion) || 0, valor.length));
-
-    const inicioLinea = valor.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
-    const finLineaIdx = valor.indexOf("\n", pos);
-    const finLinea = finLineaIdx === -1 ? valor.length : finLineaIdx;
-
-    const antesDeLaLinea = valor.slice(0, inicioLinea);
-    const lineaActual = valor.slice(inicioLinea, finLinea);
-    const columnaOriginal = pos - inicioLinea;
-
-    const partes = extraerPartesLineaDetalle(lineaActual);
-    if (!partes) {
-      return autocompletarDetallesDesdeNomenclador(valor.slice(0, pos)).length;
-    }
-
-    const largoPrefijoFuente = partes.prefijoFuente.length;
-    const largoPrefijoNormalizado = partes.prefijoNormalizado.length;
-
-    const columnaNueva =
-      columnaOriginal >= largoPrefijoFuente
-        ? largoPrefijoNormalizado
-        : Math.min(columnaOriginal, largoPrefijoNormalizado);
-
-    return autocompletarDetallesDesdeNomenclador(antesDeLaLinea).length + columnaNueva;
   }
 
   function aplicarAutocompletadoDetalles(textarea) {
@@ -1344,9 +1266,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
     const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : valorOriginal.length;
-
-    const nuevoInicio = calcularPosicionCursorDetalleAutocompletado(valorOriginal, inicio);
-    const nuevoFin = calcularPosicionCursorDetalleAutocompletado(valorOriginal, fin);
+    const nuevoInicio = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, inicio)).length;
+    const nuevoFin = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, fin)).length;
 
     textarea.value = valorNuevo;
 
@@ -1797,7 +1718,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const esFinaliza = selTipo.value === "FINALIZA";
     const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
     const incluirDetallesFinaliza = esFinaliza && debeIncluirDetallesFinaliza();
-    const usarPresenciaActiva = !!chkPresenciaActiva?.checked && esTipoConPresenciaActivaOpcional();
+    const usarPresenciaActiva = !!chkPresenciaActiva?.checked;
     const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
     const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
