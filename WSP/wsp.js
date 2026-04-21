@@ -22,8 +22,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const chkMismoMovil = document.getElementById("mismoMovil");
   const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
-  const bloqueControlSuperior = document.getElementById("bloqueControlSuperior");
-  const bloqueObservacionesNormal = document.getElementById("bloqueObservacionesNormal");
 
   const inputAlcotest = document.getElementById("Alcotest");
   const inputPositivaSancionable = document.getElementById("positivaSancionable");
@@ -883,41 +881,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       : `${horario} - ${tipo} - ${lugar}`;
   }
 
-  function modoControlSuperiorActivo() {
-    return selTipo?.value === "CONTROL SUPERIOR";
-  }
-
-  function actualizarVisibilidadModoControlSuperior() {
-    const activo = modoControlSuperiorActivo();
-
-    if (bloqueControlSuperior) {
-      bloqueControlSuperior.classList.toggle("hidden", !activo);
-    }
-
-    if (!activo) {
-      if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
-      return false;
-    }
-
-    if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
-    if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
-
-    if (divFinaliza) divFinaliza.classList.add("hidden");
-    if (divDetalles) divDetalles.classList.add("hidden");
-    if (divMismosElementos) divMismosElementos.classList.add("hidden");
-    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-    if (bloqueControlSuperior) bloqueControlSuperior.classList.add("hidden");
-    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.remove("hidden");
-    if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
-    if (bloqueObservacionesNormal) bloqueObservacionesNormal.classList.add("hidden");
-
-    setPersonalVisible(false);
-    setMovilidadVisible(false);
-    setElementosVisibles(false);
-
-    return true;
-  }
-
   function actualizarDatosFranja() {
     const key = selHorario?.value || "";
     franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
@@ -932,7 +895,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
-    actualizarVisibilidadModoControlSuperior();
 
     if (selTipo.value === "FINALIZA") {
       sincronizarInicioGuardadoSegunContexto();
@@ -941,7 +903,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function actualizarTipo() {
     const fin = selTipo.value === "FINALIZA";
-    const controlSuperior = modoControlSuperiorActivo();
 
     divFinaliza.classList.toggle("hidden", !fin);
 
@@ -951,20 +912,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       chkPresenciaActiva.checked = false;
     }
 
-    if (controlSuperior) {
-      desactivarControlesMismos({ limpiar: true });
-      actualizarVisibilidadBloquePresenciaActiva();
-      actualizarVisibilidadResultadosFinaliza();
-      actualizarVisibilidadModoControlSuperior();
-      if (window.ControlSuperior?.reset) window.ControlSuperior.reset();
-      return;
-    }
-
     if (!fin) {
       if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
       actualizarVisibilidadBloquePresenciaActiva();
       actualizarVisibilidadResultadosFinaliza();
-      actualizarVisibilidadModoControlSuperior();
       desactivarControlesMismos();
       sincronizarUIAlcoholimetro();
       return;
@@ -975,7 +926,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
-    actualizarVisibilidadModoControlSuperior();
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarInicioGuardadoSegunContexto();
@@ -1184,12 +1134,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadBloquePresenciaActiva() {
-    if (modoControlSuperiorActivo()) {
-      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
-      return;
-    }
-
     const mostrar = !!franjaSeleccionada && esTipoConPresenciaActivaOpcional();
 
     if (bloquePresenciaActiva) {
@@ -1202,14 +1146,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarVisibilidadResultadosFinaliza() {
-    if (modoControlSuperiorActivo()) {
-      if (bloqueMostrarResultadosFinaliza) bloqueMostrarResultadosFinaliza.classList.add("hidden");
-      if (tituloResultadosFinaliza) tituloResultadosFinaliza.classList.add("hidden");
-      if (contenidoResultadosFinaliza) contenidoResultadosFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
-      return;
-    }
-
     const fin = selTipo?.value === "FINALIZA";
     const resultadosOpcionales = fin && esFinalizaConResultadosOpcionales();
     const mostrarResultados = fin && debeIncluirResultadosFinaliza();
@@ -1631,7 +1567,6 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     selTipo.value = "INICIA";
     limpiarSeleccionOperativo();
-    if (window.ControlSuperior?.reset) window.ControlSuperior.reset();
 
     document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
 
@@ -1779,42 +1714,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (!franjaSeleccionada) return;
-
-    if (modoControlSuperiorActivo()) {
-      if (!window.ControlSuperior || typeof window.ControlSuperior.buildMessage !== "function") {
-        alert("No se pudo cargar CONTROL SUPERIOR.");
-        return;
-      }
-
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada);
-      if (!inicioControlSuperior) {
-        alert("No hay datos guardados del INICIA para este operativo. Envíe primero un INICIA para usar CONTROL SUPERIOR.");
-        return;
-      }
-
-      const armadoControlSuperior = window.ControlSuperior.buildMessage({
-        forceActivo: true,
-        inicio: inicioControlSuperior,
-        franja: franjaSeleccionada,
-        bold,
-        compactarSaltos,
-        normalizarLugar,
-        normalizarArrayTexto,
-        lineaDesdeArray,
-      });
-
-      if (!armadoControlSuperior?.ok) {
-        alert(armadoControlSuperior?.mensaje || "No se pudo armar el informe CONTROL SUPERIOR.");
-        return;
-      }
-
-      const textoControlSuperior = compactarSaltos(armadoControlSuperior.texto || "");
-      resetUI();
-      setTimeout(() => {
-        window.location.href = "https://wa.me/?text=" + encodeURIComponent(textoControlSuperior);
-      }, 0);
-      return;
-    }
 
     const esFinaliza = selTipo.value === "FINALIZA";
     const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
@@ -2028,9 +1927,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== Init =====
   (async function init() {
     selTipo.value = "INICIA";
-    if (window.ControlSuperior?.init) window.ControlSuperior.init();
     actualizarTipo();
-    actualizarVisibilidadModoControlSuperior();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
     await syncOrdenesDesdeServidor();
