@@ -103,7 +103,7 @@
     const articulo = payload.rol === "JEFE" ? "el Jefe" : "el Subjefe";
     const tramoMovil = payload.conMovil ? `, en móvil ${movil},` : ",";
     const cierre = payload.seAcopla
-      ? " acoplando al mismo."
+      ? " acoplandose al mismo."
       : " acto seguido se retira sin novedad.";
 
     return `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando servicio,${cierre}`;
