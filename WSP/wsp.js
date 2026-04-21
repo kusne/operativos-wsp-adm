@@ -1226,34 +1226,60 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!codigoLimpio) return "";
 
     const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+
     if (cantidadLimpia) return `(${cantidadLimpia}) ${codigoLimpio}`;
     return `${codigoLimpio}`;
   }
 
-  function obtenerPosicionCursorFinCodigo(cantidad, codigo) {
-    return reconstruirLineaDetalleSinDescripcion(cantidad, codigo).length;
-  }
-
-  function parsearLineaDetalleEditable(linea) {
+  function extraerPartesLineaDetalle(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
     if (!s) return null;
 
     const patrones = [
-      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s+(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
+      {
+        regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+        regexPrefijo: /^\(\s*\d{1,2}\s*\)\s*\d{4,5}/i,
+        conCantidad: true,
+      },
+      {
+        regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+        regexPrefijo: /^\d{1,2}\s*[-–—]\s*\d{4,5}/i,
+        conCantidad: true,
+      },
+      {
+        regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+        regexPrefijo: /^\d{1,2}\s+\d{4,5}/i,
+        conCantidad: true,
+      },
+      {
+        regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i,
+        regexPrefijo: /^\d{4,5}/i,
+        conCantidad: false,
+      },
     ];
 
     for (const patron of patrones) {
       const m = s.match(patron.regex);
       if (!m) continue;
 
+      const cantidad = patron.conCantidad ? m[1] : null;
+      const codigo = patron.conCantidad ? m[2] : m[1];
+      const descripcion = patron.conCantidad ? m[3] : m[2];
+      const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+      if (!codigoLimpio) continue;
+
+      const prefijoNormalizado = reconstruirLineaDetalleSinDescripcion(cantidad, codigo);
+      const prefijoFuenteMatch = s.match(patron.regexPrefijo);
+      const prefijoFuente = prefijoFuenteMatch ? prefijoFuenteMatch[0] : "";
+
       return {
-        original,
-        cantidad: patron.conCantidad ? m[1] : null,
-        codigo: patron.conCantidad ? m[2] : m[1],
+        cantidad,
+        codigo,
+        codigoLimpio,
+        descripcion,
+        prefijoNormalizado,
+        prefijoFuente,
       };
     }
 
@@ -1261,88 +1287,66 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function autocompletarLineaDetalleConNomenclador(linea) {
-    const parsed = parsearLineaDetalleEditable(linea);
-    if (!parsed) {
-      return { texto: String(linea || "").replace(/\r/g, ""), cursor: null };
+    const original = String(linea || "").replace(/\r/g, "");
+    const partes = extraerPartesLineaDetalle(original);
+    if (!partes) return original;
+
+    if (partes.codigoLimpio === "17117") return original;
+
+    const referencia = obtenerReferenciaNomenclador(partes.codigo, "");
+    if (!referencia) {
+      return reconstruirLineaDetalleSinDescripcion(partes.cantidad, partes.codigo) || original;
     }
 
-    const { original, cantidad, codigo } = parsed;
-    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
-    if (!codigoLimpio) {
-      return { texto: original, cursor: null };
-    }
-
-    if (codigoLimpio === "17117") {
-      return {
-        texto: original,
-        cursor: obtenerPosicionCursorFinCodigo(cantidad, codigoLimpio),
-      };
-    }
-
-    const referencia = obtenerReferenciaNomenclador(codigoLimpio, "");
-    if (referencia) {
-      const reconstruida = reconstruirLineaDetalle(cantidad, codigoLimpio, referencia) || original;
-      return {
-        texto: reconstruida,
-        cursor: obtenerPosicionCursorFinCodigo(cantidad, codigoLimpio),
-      };
-    }
-
-    return {
-      texto: reconstruirLineaDetalleSinDescripcion(cantidad, codigoLimpio) || original,
-      cursor: obtenerPosicionCursorFinCodigo(cantidad, codigoLimpio),
-    };
+    return reconstruirLineaDetalle(partes.cantidad, partes.codigo, referencia) || original;
   }
 
   function autocompletarDetallesDesdeNomenclador(texto) {
     const original = String(texto || "").replace(/\r/g, "");
-    if (!original) return { texto: original, lineas: [] };
-
-    const lineas = original.split("\n").map(autocompletarLineaDetalleConNomenclador);
-    return {
-      texto: lineas.map((item) => item.texto).join("\n"),
-      lineas,
-    };
+    if (!original) return original;
+    return original.split("\n").map(autocompletarLineaDetalleConNomenclador).join("\n");
   }
 
-  function obtenerInfoLineaDesdePosicion(texto, posicion) {
-    const seguro = Math.max(0, Math.min(typeof posicion === "number" ? posicion : 0, texto.length));
-    const previo = texto.slice(0, seguro);
-    const lineIndex = previo.split("\n").length - 1;
-    const ultimoSalto = previo.lastIndexOf("\n");
-    const lineStart = ultimoSalto >= 0 ? ultimoSalto + 1 : 0;
-    return { lineIndex, lineStart };
+  function calcularPosicionCursorDetalleAutocompletado(texto, posicion) {
+    const valor = String(texto || "").replace(/\r/g, "");
+    const pos = Math.max(0, Math.min(Number(posicion) || 0, valor.length));
+
+    const inicioLinea = valor.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+    const finLineaIdx = valor.indexOf("\n", pos);
+    const finLinea = finLineaIdx === -1 ? valor.length : finLineaIdx;
+
+    const antesDeLaLinea = valor.slice(0, inicioLinea);
+    const lineaActual = valor.slice(inicioLinea, finLinea);
+    const columnaOriginal = pos - inicioLinea;
+
+    const partes = extraerPartesLineaDetalle(lineaActual);
+    if (!partes) {
+      return autocompletarDetallesDesdeNomenclador(valor.slice(0, pos)).length;
+    }
+
+    const largoPrefijoFuente = partes.prefijoFuente.length;
+    const largoPrefijoNormalizado = partes.prefijoNormalizado.length;
+
+    const columnaNueva =
+      columnaOriginal >= largoPrefijoFuente
+        ? largoPrefijoNormalizado
+        : Math.min(columnaOriginal, largoPrefijoNormalizado);
+
+    return autocompletarDetallesDesdeNomenclador(antesDeLaLinea).length + columnaNueva;
   }
 
   function aplicarAutocompletadoDetalles(textarea) {
     if (!textarea) return;
 
-    const valorOriginal = String(textarea.value || "").replace(/\r/g, "");
-    const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
-    const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : inicio;
-    const colapsado = inicio === fin;
-
-    const resultado = autocompletarDetallesDesdeNomenclador(valorOriginal);
-    const valorNuevo = resultado.texto;
+    const valorOriginal = String(textarea.value || "");
+    const valorNuevo = autocompletarDetallesDesdeNomenclador(valorOriginal);
     if (valorNuevo === valorOriginal) return;
 
-    let nuevoInicio = inicio;
-    let nuevoFin = fin;
+    const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
+    const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : valorOriginal.length;
 
-    if (colapsado) {
-      const infoInicio = obtenerInfoLineaDesdePosicion(valorOriginal, inicio);
-      const lineaTransformada = resultado.lineas[infoInicio.lineIndex];
-
-      if (lineaTransformada && typeof lineaTransformada.cursor === "number") {
-        let base = 0;
-        for (let i = 0; i < infoInicio.lineIndex; i += 1) {
-          base += (resultado.lineas[i]?.texto || "").length;
-          base += 1;
-        }
-        nuevoInicio = base + lineaTransformada.cursor;
-        nuevoFin = nuevoInicio;
-      }
-    }
+    const nuevoInicio = calcularPosicionCursorDetalleAutocompletado(valorOriginal, inicio);
+    const nuevoFin = calcularPosicionCursorDetalleAutocompletado(valorOriginal, fin);
 
     textarea.value = valorNuevo;
 
