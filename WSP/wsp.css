@@ -1621,3 +1621,98 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
     font-size: 11px;
   }
 }
+
+
+/* ===== CONTROL SUPERIOR AJUSTE FINO ===== */
+#bloqueControlSuperior{
+  padding: 12px 14px;
+}
+
+#bloqueControlSuperior .control-superior-grid{
+  display: grid !important;
+  gap: 12px !important;
+  margin: 0 !important;
+  width: 100%;
+}
+
+#bloqueControlSuperior .control-superior-grid + .control-superior-grid{
+  margin-top: 12px !important;
+}
+
+#bloqueControlSuperior .control-superior-grid-3{
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+#bloqueControlSuperior .control-superior-grid-2{
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+#bloqueControlSuperior .control-superior-item{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 12px 12px !important;
+  min-height: 58px;
+  border: 1px solid rgba(7, 46, 109, 0.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.96) !important;
+  box-sizing: border-box;
+}
+
+#bloqueControlSuperior .control-superior-item > span{
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #0b3b86 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  text-align: left !important;
+  white-space: nowrap;
+}
+
+#bloqueControlSuperior .control-superior-item input[type="checkbox"],
+#bloqueControlSuperior.section input[type="checkbox"]{
+  position: static !important;
+  inset: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  flex: 0 0 auto !important;
+  accent-color: #0b4fb3;
+}
+
+#bloqueControlSuperiorOtrosTexto{
+  margin-top: 12px !important;
+}
+
+#bloqueControlSuperiorOtrosTexto > label{
+  display: block;
+  margin-bottom: 6px !important;
+}
+
+@media (max-width: 560px){
+  #bloqueControlSuperior .control-superior-item{
+    min-height: 54px;
+    padding: 10px 10px !important;
+    gap: 8px !important;
+  }
+
+  #bloqueControlSuperior .control-superior-item > span{
+    font-size: 11.5px !important;
+  }
+}
