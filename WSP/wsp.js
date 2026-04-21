@@ -709,6 +709,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function guardarInicioEnSupabase(payload) {
     const data = normalizarInicioGuardado(payload);
     if (!data) return false;
+    const { ts, ...dataParaSupabase } = data;
 
     try {
       const url = `${SUPABASE_URL}/rest/v1/wsp_inicios?on_conflict=guardia_fecha,operativo_key`;
@@ -718,7 +719,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates,return=minimal",
         }),
-        body: JSON.stringify(data),
+        body: JSON.stringify(dataParaSupabase),
       });
 
       if (!r.ok) {
