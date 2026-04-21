@@ -1221,53 +1221,204 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
-  function autocompletarLineaDetalleConNomenclador(linea) {
+  function extraerPartesDetalleLinea(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
-    if (!s) return original;
+    if (!s) return null;
 
     const patrones = [
-      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{1,2})\s+(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
-      { regex: /^(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
+      { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s*[-–—]\s*(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,2})\s+(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
+      { regex: /^(\d{1,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false },
     ];
 
     for (const patron of patrones) {
       const m = s.match(patron.regex);
       if (!m) continue;
 
-      const cantidad = patron.conCantidad ? m[1] : null;
-      const codigo = patron.conCantidad ? m[2] : m[1];
-      if (String(codigo || "").replace(/\D+/g, "") === "17117") return original;
-
-      const referencia = obtenerReferenciaNomenclador(codigo, "");
-      if (!referencia) return original;
-
-      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
-      return reconstruida || original;
+      return {
+        original,
+        originalTrim: s,
+        conCantidad: patron.conCantidad,
+        cantidad: patron.conCantidad ? m[1] : null,
+        codigo: patron.conCantidad ? m[2] : m[1],
+        descripcion: patron.conCantidad ? m[3] : m[2],
+      };
     }
 
-    return original;
+    return null;
+  }
+
+  function reconstruirLineaDetalleSinDescripcion(cantidad, codigo) {
+    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+    const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+
+    if (!codigoLimpio) {
+      if (cantidadLimpia) return `(${cantidadLimpia})`;
+      return "";
+    }
+
+    if (cantidadLimpia) return `(${cantidadLimpia}) ${codigoLimpio}`;
+    return `${codigoLimpio}`;
+  }
+
+  function obtenerPosicionCursorDespuesCodigoDetalle(cantidad, codigo) {
+    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+    const cantidadLimpia = cantidad == null ? null : formatearCantidad(cantidad);
+
+    if (!codigoLimpio) {
+      if (cantidadLimpia) return `(${cantidadLimpia})`.length;
+      return 0;
+    }
+
+    if (cantidadLimpia) return `(${cantidadLimpia}) ${codigoLimpio}`.length;
+    return codigoLimpio.length;
+  }
+
+  function autocompletarLineaDetalleConNomenclador(linea) {
+    const original = String(linea || "").replace(/\r/g, "");
+    const s = original.trim();
+    if (!s) {
+      return {
+        texto: original,
+        cursor: original.length,
+        partes: null,
+        autocompletada: false,
+      };
+    }
+
+    const partes = extraerPartesDetalleLinea(original);
+    if (!partes) {
+      return {
+        texto: original,
+        cursor: original.length,
+        partes: null,
+        autocompletada: false,
+      };
+    }
+
+    const codigoLimpio = String(partes.codigo || "").replace(/\D+/g, "");
+    const cursorCodigo = obtenerPosicionCursorDespuesCodigoDetalle(partes.cantidad, codigoLimpio);
+
+    if (codigoLimpio === "17117") {
+      return {
+        texto: original,
+        cursor: cursorCodigo,
+        partes,
+        autocompletada: false,
+      };
+    }
+
+    const referencia = obtenerReferenciaNomenclador(codigoLimpio, "");
+    if (!referencia) {
+      const sinDescripcion = reconstruirLineaDetalleSinDescripcion(partes.cantidad, codigoLimpio) || original;
+      return {
+        texto: sinDescripcion,
+        cursor: obtenerPosicionCursorDespuesCodigoDetalle(partes.cantidad, codigoLimpio),
+        partes,
+        autocompletada: false,
+      };
+    }
+
+    const reconstruida = reconstruirLineaDetalle(partes.cantidad, codigoLimpio, referencia) || original;
+    return {
+      texto: reconstruida,
+      cursor: obtenerPosicionCursorDespuesCodigoDetalle(partes.cantidad, codigoLimpio),
+      partes,
+      autocompletada: true,
+    };
+  }
+
+  function procesarAutocompletadoDetalles(texto) {
+    const original = String(texto || "").replace(/\r/g, "");
+    if (!original) {
+      return {
+        texto: original,
+        lineas: [],
+      };
+    }
+
+    const lineas = original.split("\n").map(autocompletarLineaDetalleConNomenclador);
+    return {
+      texto: lineas.map((item) => item.texto).join("\n"),
+      lineas,
+    };
   }
 
   function autocompletarDetallesDesdeNomenclador(texto) {
-    const original = String(texto || "").replace(/\r/g, "");
-    if (!original) return original;
-    return original.split("\n").map(autocompletarLineaDetalleConNomenclador).join("\n");
+    return procesarAutocompletadoDetalles(texto).texto;
+  }
+
+  function obtenerInfoLineaPorIndice(texto, indice) {
+    const valor = String(texto || "");
+    const total = valor.length;
+    const seguro = Math.max(0, Math.min(Number.isFinite(indice) ? indice : total, total));
+    const inicio = valor.lastIndexOf("\n", Math.max(0, seguro - 1)) + 1;
+    const finBruto = valor.indexOf("\n", seguro);
+    const fin = finBruto === -1 ? total : finBruto;
+    const linea = valor.slice(inicio, fin);
+
+    return {
+      inicio,
+      fin,
+      linea,
+      offset: seguro - inicio,
+    };
+  }
+
+  function obtenerInicioLineaEnTextoNuevo(lineasProcesadas, indiceLinea) {
+    let inicio = 0;
+    for (let i = 0; i < indiceLinea; i += 1) {
+      inicio += String(lineasProcesadas[i]?.texto || "").length;
+      inicio += 1;
+    }
+    return inicio;
+  }
+
+  function mapearCursorAutocompletado(valorOriginal, indiceOriginal, procesado) {
+    const info = obtenerInfoLineaPorIndice(valorOriginal, indiceOriginal);
+    const lineasOriginales = String(valorOriginal || "").replace(/\r/g, "").split("\n");
+
+    let acumulado = 0;
+    let indiceLinea = 0;
+    for (let i = 0; i < lineasOriginales.length; i += 1) {
+      const largo = lineasOriginales[i].length;
+      const fin = acumulado + largo;
+      if (indiceOriginal <= fin || i === lineasOriginales.length - 1) {
+        indiceLinea = i;
+        break;
+      }
+      acumulado = fin + 1;
+    }
+
+    const lineaProcesada = procesado?.lineas?.[indiceLinea];
+    if (lineaProcesada?.partes) {
+      const cursorOriginalCodigo = obtenerPosicionCursorDespuesCodigoDetalle(lineaProcesada.partes.cantidad, lineaProcesada.partes.codigo);
+      const cursorNuevoCodigo = Math.min(lineaProcesada.cursor, String(lineaProcesada.texto || "").length);
+      const offsetOriginal = info.offset;
+      const cursorAlFinalLinea = offsetOriginal >= info.linea.length;
+
+      if (offsetOriginal <= cursorOriginalCodigo || cursorAlFinalLinea) {
+        return obtenerInicioLineaEnTextoNuevo(procesado.lineas, indiceLinea) + cursorNuevoCodigo;
+      }
+    }
+
+    return autocompletarDetallesDesdeNomenclador(String(valorOriginal || "").slice(0, indiceOriginal)).length;
   }
 
   function aplicarAutocompletadoDetalles(textarea) {
     if (!textarea) return;
 
     const valorOriginal = String(textarea.value || "");
-    const valorNuevo = autocompletarDetallesDesdeNomenclador(valorOriginal);
+    const procesado = procesarAutocompletadoDetalles(valorOriginal);
+    const valorNuevo = procesado.texto;
     if (valorNuevo === valorOriginal) return;
 
     const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
     const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : valorOriginal.length;
-    const nuevoInicio = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, inicio)).length;
-    const nuevoFin = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, fin)).length;
+    const nuevoInicio = mapearCursorAutocompletado(valorOriginal, inicio, procesado);
+    const nuevoFin = mapearCursorAutocompletado(valorOriginal, fin, procesado);
 
     textarea.value = valorNuevo;
 
