@@ -1044,15 +1044,104 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return lugar;
   }
 
+  // Texto corto SOLO para mostrar en el desplegable de operativos.
+  // No modifica la franja original, ni las claves internas, ni lo que se envía por WhatsApp/Supabase.
+  function obtenerFuenteVisualFranja(franja) {
+    return normalizarBasicoSinAcentos([
+      franja?.titulo || "",
+      obtenerTextoRefOrdenDeFranja(franja),
+      franja?.lugar || "",
+    ].join(" "));
+  }
+
+  function compactarClaveVisual(txt) {
+    return normalizarBasicoSinAcentos(txt).replace(/[^a-z0-9]+/g, "");
+  }
+
+  function capitalizarLugarVisual(txt) {
+    return limpiarTextoSimple(txt)
+      .toLowerCase()
+      .replace(/\b\w/g, (l) => l.toUpperCase())
+      .replace(/\bRn\b/g, "RN")
+      .replace(/\bRp\b/g, "RP")
+      .replace(/\bKm\b/g, "KM")
+      .replace(/\bUor\b/g, "UOR")
+      .replace(/\bDicep\b/g, "DICEP");
+  }
+
+  function obtenerLugarVisualFranja(franja) {
+    let lugar = limpiarTextoSimple(franja?.lugar || "");
+    if (!lugar) return "sin lugar";
+
+    lugar = lugar
+      .replace(/^qth\s*[:\-]?\s*/i, "")
+      .replace(/^lugar\s*[:\-]?\s*/i, "")
+      .trim();
+
+    const clave = compactarClaveVisual(lugar);
+    const esRN168 = clave.includes("rn168") || clave.includes("rutanacional168");
+    const esRP1 = clave.includes("rp1") || clave.includes("rutaprovincial1");
+    const esKM18 = clave.includes("km18") || clave.includes("kilometro18");
+
+    if (esRN168 && esKM18) return "Base/Tunel";
+    if (esRN168 && esRP1) return "RN168 y RP1";
+
+    lugar = lugar
+      .replace(/\bruta\s+nacional\s*/gi, "RN")
+      .replace(/\bruta\s+provincial\s*/gi, "RP")
+      .replace(/\bkil[oó]metro\b/gi, "KM")
+      .replace(/\bpuente\s+carretero\b/gi, "Pte. Carretero")
+      .replace(/\bcabecera\b/gi, "Cab.")
+      .replace(/\bsanto\s+tome\b/gi, "Sto. Tome")
+      .replace(/\bsanta\s+fe\b/gi, "Sta. Fe");
+
+    lugar = capitalizarLugarVisual(lugar);
+
+    if (lugar.length > 24) {
+      return lugar.slice(0, 24).trim() + "...";
+    }
+
+    return lugar;
+  }
+
+  function obtenerTipoVisualFranja(franja) {
+    const fuente = obtenerFuenteVisualFranja(franja);
+
+    if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
+    if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
+    if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "Alcoholemia";
+    if (/\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(fuente)) return "OCV";
+    if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
+    if (/\blimpieza\b/.test(fuente)) return "Limpieza";
+    if (/\bablacion\b/.test(fuente)) return "Ablacion";
+    if (/\bestablecido\b/.test(fuente)) return "Establecido";
+    if (/\bpresencia\s+activa\b|\bpresencia\b/.test(fuente)) return "Presencia";
+    if (/\bmonitoreo\b/.test(fuente)) return "Monitoreo";
+    if (/\btraslado\b/.test(fuente)) return "Traslado";
+    if (/\bcustodia\b/.test(fuente)) return "Custodia";
+    if (/\bacompanamiento\b|\bacompanamieto\b|\bescolta\b/.test(fuente)) return "Acomp.";
+
+    return obtenerTipoCortoFranja(franja);
+  }
+
+  function obtenerSufijosVisualesFranja(franja) {
+    const fuente = obtenerFuenteVisualFranja(franja);
+    const sufijos = [];
+
+    if (/\buor\s*3\b|\buor3\b/.test(fuente)) sufijos.push("con UOR3");
+    if (/\btransito\b|\binspectores?\s+de\s+transito\b/.test(fuente)) sufijos.push("con Transito");
+
+    return sufijos;
+  }
+
   function construirTextoOpcionHorario(franja) {
     const horario = limpiarTextoSimple(franja?.horario || "");
-    const tipo = obtenerTipoCortoFranja(franja);
-    const lugar = obtenerLugarCortoFranja(franja);
-    const numeroOrden = obtenerNumeroOrdenDeFranja(franja);
+    const lugar = obtenerLugarVisualFranja(franja);
+    const tipo = obtenerTipoVisualFranja(franja);
+    const sufijos = obtenerSufijosVisualesFranja(franja);
+    const referencia = [tipo, ...sufijos].filter(Boolean).join(" ");
 
-    return numeroOrden
-      ? `${horario} - ${tipo} - ${lugar} - ${numeroOrden}`
-      : `${horario} - ${tipo} - ${lugar}`;
+    return `${horario} - ${lugar} - ${referencia}`;
   }
 
   function actualizarDatosFranja() {
