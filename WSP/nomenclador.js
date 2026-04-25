@@ -184,6 +184,7 @@ const NOMENCLADOR_CODIGOS = {
   "19078": { codigo: "19078", referencia: "publicidad" },
   "19082": { codigo: "19082", referencia: "publicidad" },
   "19095": { codigo: "19095", referencia: "señalamiento" },
+  "460": { codigo: "460/22", referencia: "Proc. Preventivo" },
 };
 
 function normalizeCodigoFalta(codigo) {
