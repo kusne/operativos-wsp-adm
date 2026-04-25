@@ -1499,10 +1499,79 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
+  function normalizarDetalleDecreto460(linea, { paraAutocompletar = false } = {}) {
+    let s = String(linea || "").replace(/\r/g, "").trim();
+    if (!s) return null;
+
+    s = s.replace(/\s+/g, " ").trim();
+
+    let cantidad = null;
+    let cuerpo = s;
+
+    const patronesCantidadInicial = [
+      /^\(\s*(\d{1,2})\s*\)\s*(.*)$/i,
+      /^(\d{1,2})\s*[-–—]\s*(.*)$/i,
+      /^(\d{1,2})\s+(.*)$/i,
+    ];
+
+    for (const regex of patronesCantidadInicial) {
+      const m = cuerpo.match(regex);
+      if (!m) continue;
+
+      const posibleCuerpo = limpiarDescripcionDetalle(m[2]);
+      const posibleFuente = normalizarBasicoSinAcentos(posibleCuerpo);
+      const esDecreto =
+        /\b(?:decreto|dto\.?|dec\.?)\s*(?:n[°º]?\s*)?460(?:\s*\/\s*22|22)?\b/.test(posibleFuente) ||
+        /\b460\s*\/\s*22\b/.test(posibleFuente) ||
+        /\b46022\b/.test(posibleFuente);
+
+      if (!esDecreto) continue;
+
+      cantidad = m[1];
+      cuerpo = posibleCuerpo;
+      break;
+    }
+
+    if (cantidad === null) {
+      const mFinal = cuerpo.match(/^(.*?)\s*\(\s*(\d{1,2})\s*\)\s*$/i);
+      if (mFinal) {
+        cuerpo = limpiarDescripcionDetalle(mFinal[1]);
+        cantidad = mFinal[2];
+      }
+    }
+
+    const fuente = normalizarBasicoSinAcentos(cuerpo);
+    const esDecreto =
+      /\b(?:decreto|dto\.?|dec\.?)\s*(?:n[°º]?\s*)?460(?:\s*\/\s*22|22)?\b/.test(fuente) ||
+      /\b460\s*\/\s*22\b/.test(fuente) ||
+      /\b46022\b/.test(fuente);
+
+    if (!esDecreto) return null;
+
+    const cantidadFinal = cantidad == null ? null : formatearCantidad(cantidad);
+    const detalleSinCantidad = "46022 Decreto 460/22";
+
+    if (paraAutocompletar && !cantidadFinal) return detalleSinCantidad;
+
+    return {
+      tipo: "detalle",
+      cantidad: cantidadFinal || formatearCantidad(1),
+      codigo: "46022",
+      descripcion: "Decreto 460/22",
+      texto: `(${cantidadFinal || formatearCantidad(1)}) ${detalleSinCantidad}`,
+      textoAutocompletar: cantidadFinal ? `(${cantidadFinal}) ${detalleSinCantidad}` : detalleSinCantidad,
+    };
+  }
+
   function autocompletarLineaDetalleConNomenclador(linea) {
     const original = String(linea || "").replace(/\r/g, "");
     const s = original.trim();
     if (!s) return original;
+
+    const decreto460 = normalizarDetalleDecreto460(s, { paraAutocompletar: true });
+    if (decreto460) {
+      return typeof decreto460 === "string" ? decreto460 : (decreto460.textoAutocompletar || original);
+    }
 
     const patrones = [
       { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
@@ -1559,6 +1628,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!s) return null;
 
     s = s.replace(/\s+/g, " ").trim();
+
+    const decreto460 = normalizarDetalleDecreto460(s);
+    if (decreto460) return decreto460;
 
     const patrones = [
       { regex: /^\(\s*(\d{1,2})\s*\)\s*(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true },
