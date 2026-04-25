@@ -1499,6 +1499,19 @@ ${bold(`Moviles ${organismo}:`)}`)
     return `${codigoLimpio} ${descripcionFinal}`;
   }
 
+  function esReferenciaDecreto460(txt) {
+    const fuente = normalizarBasicoSinAcentos(txt);
+    return /\b(?:decreto|dto\.?|dec\.?)\s*(?:n[°º]?\s*)?460(?:\s*\/\s*22|22)?\b/.test(fuente) ||
+      /\b460\s*\/\s*22\b/.test(fuente) ||
+      /\b46022\b/.test(fuente) ||
+      /^460$/.test(fuente) ||
+      /^460\b/.test(fuente);
+  }
+
+  function construirObservacionDecreto460(cantidad) {
+    return "Se Realizo (" + formatearCantidad(cantidad || 1) + ") Procedimiento Policial por Dcto. 460/22.";
+  }
+
   function normalizarDetalleDecreto460(linea, { paraAutocompletar = false } = {}) {
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
@@ -1519,13 +1532,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!m) continue;
 
       const posibleCuerpo = limpiarDescripcionDetalle(m[2]);
-      const posibleFuente = normalizarBasicoSinAcentos(posibleCuerpo);
-      const esDecreto =
-        /\b(?:decreto|dto\.?|dec\.?)\s*(?:n[°º]?\s*)?460(?:\s*\/\s*22|22)?\b/.test(posibleFuente) ||
-        /\b460\s*\/\s*22\b/.test(posibleFuente) ||
-        /\b46022\b/.test(posibleFuente);
-
-      if (!esDecreto) continue;
+      if (!esReferenciaDecreto460(posibleCuerpo)) continue;
 
       cantidad = m[1];
       cuerpo = posibleCuerpo;
@@ -1534,32 +1541,30 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (cantidad === null) {
       const mFinal = cuerpo.match(/^(.*?)\s*\(\s*(\d{1,2})\s*\)\s*$/i);
-      if (mFinal) {
+      if (mFinal && esReferenciaDecreto460(mFinal[1])) {
         cuerpo = limpiarDescripcionDetalle(mFinal[1]);
         cantidad = mFinal[2];
       }
     }
 
-    const fuente = normalizarBasicoSinAcentos(cuerpo);
-    const esDecreto =
-      /\b(?:decreto|dto\.?|dec\.?)\s*(?:n[°º]?\s*)?460(?:\s*\/\s*22|22)?\b/.test(fuente) ||
-      /\b460\s*\/\s*22\b/.test(fuente) ||
-      /\b46022\b/.test(fuente);
-
-    if (!esDecreto) return null;
+    if (!esReferenciaDecreto460(cuerpo)) return null;
 
     const cantidadFinal = cantidad == null ? null : formatearCantidad(cantidad);
-    const detalleSinCantidad = "46022 Decreto 460/22";
+    const cantidadSalida = cantidadFinal || formatearCantidad(1);
+    const referencia = obtenerReferenciaNomenclador("460", "Decreto 460/22") || "Decreto 460/22";
+    const detalleSinCantidad = "460/22 " + referencia;
+    const textoAutocompletar = cantidadFinal ? "(" + cantidadFinal + ") " + detalleSinCantidad : detalleSinCantidad;
 
     if (paraAutocompletar && !cantidadFinal) return detalleSinCantidad;
 
     return {
-      tipo: "detalle",
-      cantidad: cantidadFinal || formatearCantidad(1),
-      codigo: "46022",
-      descripcion: "Decreto 460/22",
-      texto: `(${cantidadFinal || formatearCantidad(1)}) ${detalleSinCantidad}`,
-      textoAutocompletar: cantidadFinal ? `(${cantidadFinal}) ${detalleSinCantidad}` : detalleSinCantidad,
+      tipo: "procedimiento460",
+      cantidad: cantidadSalida,
+      codigo: "460",
+      descripcion: referencia,
+      texto: "(" + cantidadSalida + ") " + detalleSinCantidad,
+      textoAutocompletar,
+      observacion: construirObservacionDecreto460(cantidadSalida),
     };
   }
 
@@ -1676,19 +1681,32 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const detalles = [];
     const observaciones = [];
+    const detalleItems = [];
 
     limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
       if (!item || !item.texto) return;
-      if (item.tipo === "detalle") detalles.push(item.texto);
-      else observaciones.push(item.texto);
+
+      if (item.tipo === "detalle") {
+        detalles.push(item.texto);
+        detalleItems.push(item.texto);
+        return;
+      }
+
+      if (item.tipo === "procedimiento460") {
+        observaciones.push(item.observacion || construirObservacionDecreto460(item.cantidad));
+        detalleItems.push(item.texto);
+        return;
+      }
+
+      observaciones.push(item.texto);
     });
 
     return {
       detalles: detalles.join("\n"),
       observaciones,
-      cantidadValidos: detalles.length,
-      detalleItems: detalles,
+      cantidadValidos: detalleItems.length,
+      detalleItems,
       tieneTexto: true,
     };
   }
