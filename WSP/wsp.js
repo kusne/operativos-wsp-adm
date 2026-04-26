@@ -520,13 +520,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const numeroOrden = numeroOrdenDesdeRegistroPublicado(rec);
 
         if (!horario || !lugar || !titulo) return;
+        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || row?.fecha_inicio_ejecucion);
+
         if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
-        if (!primeraFechaRegistro && rec?.fecha) primeraFechaRegistro = limpiarTextoSimple(rec.fecha);
+        if (!primeraFechaRegistro && fechaRegistro) primeraFechaRegistro = limpiarTextoSimple(fechaRegistro);
 
         franjas.push({
           horario,
           lugar,
           titulo,
+          fecha: fechaRegistro,
         });
       });
 
@@ -551,7 +554,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const params = new URLSearchParams({
         select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,activo,registros,updated_at",
         activo: "eq.true",
-        estado: "in.(A_EJECUTAR,EN_VIGENCIA)",
+        estado: "eq.EN_VIGENCIA",
         order: "fecha_inicio_ejecucion.asc",
       });
 
@@ -645,6 +648,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (f < inicio) f.setDate(f.getDate() + 1);
 
     return f >= inicio && f < fin;
+  }
+
+  function obtenerFechaFranjaOperativo(franja, orden) {
+    return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
+  }
+
+  function construirFechaHoraInicioFranja(franja, orden) {
+    const fechaBase = parseVigenciaFlexible(obtenerFechaFranjaOperativo(franja, orden));
+    const horaInicio = extraerHoraInicio(franja?.horario || "");
+
+    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
+    if (horaInicio === null) return null;
+
+    const fechaHora = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate());
+    fechaHora.setHours(horaInicio, 0, 0, 0);
+    return fechaHora;
+  }
+
+  function franjaIniciaEnGuardiaActual(franja, orden) {
+    const fechaHoraInicio = construirFechaHoraInicioFranja(franja, orden);
+
+    if (!fechaHoraInicio) {
+      return franjaEnGuardia(franja?.horario || "");
+    }
+
+    const inicioGuardia = getGuardiaInicio();
+    const finGuardia = new Date(inicioGuardia.getTime() + 86400000);
+
+    return fechaHoraInicio >= inicioGuardia && fechaHoraInicio <= finGuardia;
   }
 
   function parseVigenciaFlexible(v) {
@@ -1066,9 +1098,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
     let ordenes = OrdersSync.filtrarCaducadas(cargarOrdenesSeguro());
     guardarOrdenesSeguro(ordenes);
 
@@ -1078,11 +1107,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     ordenes.forEach((orden, idxOrden) => {
-      const vigencia = parseVigenciaFlexible(orden.vigencia);
-      if (!vigencia || vigencia > hoy) return;
-
       (orden.franjas || []).forEach((franja, idxFranja) => {
-        if (!franjaEnGuardia(franja.horario)) return;
+        if (!franjaIniciaEnGuardiaActual(franja, orden)) return;
 
         const operativo = construirOperativoPlano(franja, orden, idxOrden, idxFranja);
         operativosCache.push(operativo);
