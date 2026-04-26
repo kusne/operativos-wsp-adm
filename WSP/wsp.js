@@ -432,17 +432,136 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
   // ===== LECTURA DESDE SUPABASE ==========================
   // ======================================================
+  function pad2FechaOrdenes(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function fechaIsoADDMMAAAA(value) {
+    if (!value) return "";
+
+    const raw = String(value || "").trim();
+
+    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+
+    m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+    if (m) {
+      const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+      return `${pad2FechaOrdenes(m[1])}/${pad2FechaOrdenes(m[2])}/${year}`;
+    }
+
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return `${pad2FechaOrdenes(d.getDate())}/${pad2FechaOrdenes(d.getMonth() + 1)}/${d.getFullYear()}`;
+    }
+
+    return raw;
+  }
+
+  function horarioDesdeRegistroPublicado(rec) {
+    const hDesde = limpiarTextoSimple(rec?.horaDesde || rec?.desde || "");
+    const hHasta = limpiarTextoSimple(rec?.horaHasta || rec?.hasta || "");
+
+    if (hDesde && hHasta) return `${hDesde} A ${hHasta}`;
+
+    const horario = limpiarTextoSimple(rec?.horario || "");
+    if (horario) return horario;
+
+    return "";
+  }
+
+  function tituloDesdeRegistroPublicado(rec, row) {
+    const tipo = limpiarTextoSimple(rec?.tipo || "");
+    const orden = limpiarTextoSimple(rec?.orden || rec?.numOrden || "");
+    const titulo = limpiarTextoSimple(rec?.titulo || "");
+
+    if (titulo) return titulo;
+    if (tipo && orden) return `${tipo} ${orden}`;
+    if (tipo) return tipo;
+    if (orden) return orden;
+    return limpiarTextoSimple(row?.archivo_nombre || "Orden publicada");
+  }
+
+  function numeroOrdenDesdeRegistroPublicado(rec) {
+    return limpiarTextoSimple(rec?.orden || rec?.numOrden || "");
+  }
+
+  function registrosPublicadosDeFila(row) {
+    if (Array.isArray(row?.registros)) return row.registros;
+
+    if (typeof row?.registros === "string") {
+      try {
+        const parsed = JSON.parse(row.registros);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    return [];
+  }
+
+  function convertirOrdenesPublicadasAFormatoWsp(filas) {
+    const ordenes = [];
+    const rows = Array.isArray(filas) ? filas : [];
+
+    rows.forEach((row, idxRow) => {
+      const registros = registrosPublicadosDeFila(row);
+      if (!registros.length) return;
+
+      const franjas = [];
+      let primerNumeroOrden = "";
+      let primeraFechaRegistro = "";
+
+      registros.forEach((rec) => {
+        const horario = horarioDesdeRegistroPublicado(rec);
+        const lugar = limpiarTextoSimple(rec?.lugar || rec?.qth || "");
+        const titulo = tituloDesdeRegistroPublicado(rec, row);
+        const numeroOrden = numeroOrdenDesdeRegistroPublicado(rec);
+
+        if (!horario || !lugar || !titulo) return;
+        if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
+        if (!primeraFechaRegistro && rec?.fecha) primeraFechaRegistro = limpiarTextoSimple(rec.fecha);
+
+        franjas.push({
+          horario,
+          lugar,
+          titulo,
+        });
+      });
+
+      if (!franjas.length) return;
+
+      ordenes.push({
+        num: primerNumeroOrden,
+        textoRef: limpiarTextoSimple(row?.archivo_nombre || `Orden publicada ${idxRow + 1}`),
+        vigencia: fechaIsoADDMMAAAA(primeraFechaRegistro || row?.fecha_inicio_ejecucion),
+        caducidad: row?.modo_caducidad === "A_FINALIZAR"
+          ? "A FINALIZAR"
+          : fechaIsoADDMMAAAA(row?.fecha_caducidad),
+        franjas,
+      });
+    });
+
+    return ordenes;
+  }
+
   async function syncOrdenesDesdeServidor() {
     try {
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/ordenes_store?select=payload&order=updated_at.desc&limit=1`,
-        {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Accept: "application/json",
-          },
-        }
-      );
+      const params = new URLSearchParams({
+        select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,activo,registros,updated_at",
+        activo: "eq.true",
+        estado: "in.(A_EJECUTAR,EN_VIGENCIA)",
+        order: "fecha_inicio_ejecucion.asc",
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_publicadas?${params.toString()}`, {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          Accept: "application/json",
+        },
+      });
 
       if (!r.ok) {
         console.error("[WSP] Supabase REST error:", r.status, await r.text());
@@ -450,9 +569,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       }
 
       const data = await r.json();
-      if (!Array.isArray(data) || !Array.isArray(data[0]?.payload)) return false;
+      const ordenes = convertirOrdenesPublicadasAFormatoWsp(data);
 
-      guardarOrdenesSeguro(data[0].payload);
+      guardarOrdenesSeguro(ordenes);
       return true;
     } catch (e) {
       console.error("Error leyendo Supabase:", e);
