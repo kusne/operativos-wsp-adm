@@ -1737,3 +1737,37 @@ body.modo-control-superior #presenciaActiva,
 body.modo-control-superior #wrapPresenciaActiva{
   pointer-events: none !important;
 }
+
+/* ===== Contador de operativos disponibles ===== */
+.operativo-select-wrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  margin-bottom:10px;
+}
+
+.operativo-select-wrap select{
+  flex:1 1 auto;
+  min-width:0;
+  margin-bottom:0;
+}
+
+.contador-operativos-wsp{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  min-width:32px;
+  border:1px solid #000;
+  border-radius:999px;
+  background:#0b8f2a;
+  color:#fff;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:15px;
+  font-weight:800;
+  line-height:1;
+  box-shadow:0 2px 6px rgba(0,0,0,.18);
+  user-select:none;
+}
