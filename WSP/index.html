@@ -37,11 +37,13 @@
       <option value="FINALIZA">FINALIZA</option>
       <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
     </select>
-
     <label class="top-label">OPERATIVOS</label>
-    <select id="horario" class="obligatorio">
-      <option value="">Seleccionar Operativo</option>
-    </select>
+    <div class="operativo-select-wrap">
+      <select id="horario" class="obligatorio">
+        <option value="">Seleccionar Operativo</option>
+      </select>
+      <span id="contadorOperativosWsp" class="contador-operativos-wsp" title="Cantidad de operativos disponibles">0</span>
+    </div>
 
 
     <div id="bloqueControlSuperior" class="section hidden destacado">
@@ -372,7 +374,6 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
-
 
 
 
