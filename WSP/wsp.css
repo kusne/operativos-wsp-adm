@@ -1763,7 +1763,7 @@ body.modo-control-superior #wrapPresenciaActiva{
   position: absolute !important;
 
   /* menor número = más cerca del texto */
-  left: 180px !important;
+  left: 185px !important;
 
   top: 50% !important;
   transform: translateY(-50%) !important;
