@@ -1765,7 +1765,7 @@ body.modo-control-superior #wrapPresenciaActiva{
   position: absolute !important;
 
   /* Ubicación dentro del selector, al lado derecho del texto "Seleccionar Operativo" */
-  left: 215px !important;
+  left: 245px !important;
 
   top: 50% !important;
   transform: translateY(-50%) !important;
@@ -1796,6 +1796,6 @@ body.modo-control-superior #wrapPresenciaActiva{
 
 @media (max-width: 420px){
   .contador-operativos-wsp{
-    left: 230px !important;
+    left: 200px !important;
   }
 }
