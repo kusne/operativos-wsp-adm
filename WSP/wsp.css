@@ -1337,29 +1337,33 @@ label.check.check-inline-opcion > span{
 /* ===== AJUSTE FINO FINAL: CHECKS CHICOS Y VISIBLES A LA IZQUIERDA ===== */
 #bloquePresenciaActiva.control-opcion,
 #bloqueMostrarResultadosFinaliza.control-opcion{
-  display: block !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
   width: 100% !important;
   margin: 0 0 10px 0 !important;
   padding: 0 !important;
-  border: 0 !important;
   background: transparent !important;
+  border: 0 !important;
   box-shadow: none !important;
 }
 
 #wrapPresenciaActiva.check-inline-opcion,
 #wrapMostrarResultadosFinaliza.check-inline-opcion{
-  display: flex !important;
-  align-items: center !important;
+  display: inline-flex !important;
   justify-content: flex-start !important;
+  align-items: center !important;
   gap: 6px !important;
-  width: 100% !important;
-  padding: 0 !important;
+  width: auto !important;
+  max-width: none !important;
   margin: 0 !important;
+  padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   min-height: 0 !important;
-  line-height: 1.15 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
 #wrapPresenciaActiva.check-inline-opcion > input[type="checkbox"],
@@ -1367,9 +1371,13 @@ label.check.check-inline-opcion > span{
   position: static !important;
   left: auto !important;
   top: auto !important;
-  transform: scale(0.92) !important;
+  transform: scale(0.95) !important;
   transform-origin: center center !important;
   margin: 0 !important;
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
   flex: 0 0 auto !important;
 }
 
@@ -1378,20 +1386,19 @@ label.check.check-inline-opcion > span{
   display: inline-block !important;
   margin: 0 !important;
   padding: 0 !important;
-  font-size: 14px !important;
+  line-height: 1 !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
-  line-height: 1.15 !important;
-  letter-spacing: 0 !important;
+  white-space: nowrap !important;
 }
 
 #wrapPresenciaActiva.check-inline-opcion > span{
-  color: #ffffff !important;
+  color: var(--gold) !important;
 }
 
 #wrapMostrarResultadosFinaliza.check-inline-opcion > span{
-  color: #eef1f6 !important;
+  color: #072E6D !important;
 }
-
 /* =========================================================
    AJUSTE FINAL SOLICITADO (REGLA DE ORO)
    - SOLO corrige posición y visibilidad de:
@@ -1738,40 +1745,57 @@ body.modo-control-superior #wrapPresenciaActiva{
   pointer-events: none !important;
 }
 
-/* ===== Contador dentro del desplegable de operativos ===== */
+/* ===== Contador dentro del selector, al lado del texto Seleccionar Operativo ===== */
 .operativo-select-wrap{
-  position:relative;
-  display:block;
-  width:100%;
-  margin-bottom:10px;
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  margin-bottom: 10px !important;
 }
 
 .operativo-select-wrap select{
-  width:100%;
-  margin-bottom:0;
-  padding-right:82px; /* deja espacio para el círculo y la flecha del select */
+  width: 100% !important;
+  margin-bottom: 0 !important;
+
+  /* deja espacio a la derecha para la flecha nativa del selector */
+  padding-right: 44px !important;
 }
 
 .contador-operativos-wsp{
-  position:absolute;
-  right:38px; /* queda dentro del select, antes de la flecha nativa */
-  top:50%;
-  transform:translateY(-50%);
-  z-index:2;
-  pointer-events:none;
-  width:28px;
-  height:28px;
-  min-width:28px;
-  border:1px solid #000;
-  border-radius:999px;
-  background:#0b8f2a;
-  color:#fff;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  font-size:14px;
-  font-weight:800;
-  line-height:1;
-  box-shadow:0 1px 4px rgba(0,0,0,.22);
-  user-select:none;
+  position: absolute !important;
+
+  /* Ubicación dentro del selector, al lado derecho del texto "Seleccionar Operativo" */
+  left: 245px !important;
+
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+
+  z-index: 5 !important;
+  pointer-events: none !important;
+
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+
+  border: 1px solid #000 !important;
+  border-radius: 999px !important;
+  background: #0b8f2a !important;
+  color: #fff !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  box-shadow: 0 1px 4px rgba(0,0,0,.22) !important;
+  user-select: none !important;
+}
+
+@media (max-width: 420px){
+  .contador-operativos-wsp{
+    left: 230px !important;
+  }
 }
