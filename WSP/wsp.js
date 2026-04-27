@@ -620,94 +620,80 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return start;
   }
 
-  function extraerHoraMinutoInicio(h) {
-    const s = String(h || "")
-      .toLowerCase()
-      .replace(/[–—]/g, "-")
-      .replace(/;/g, ":")
-      .trim();
+  // Primer filtro visual de WSP: siempre mira desde la fecha actual 06:00
+  // hasta la fecha siguiente 05:59:59, sin retroceder al día anterior aunque sean antes de las 06:00.
+  function getVentanaOperativosIndividualesWsp() {
+    const hoy = new Date();
+    const desde = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth(),
+      hoy.getDate(),
+      6,
+      0,
+      0,
+      0
+    );
 
-    const patrones = [
-      /(\d{1,2})\s*[:.]\s*(\d{2})/,
-      /(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/,
-      /\b(\d{1,2})\b/
-    ];
+    const hasta = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth(),
+      hoy.getDate() + 1,
+      5,
+      59,
+      59,
+      999
+    );
 
-    for (const rx of patrones) {
-      const m = s.match(rx);
-      if (!m) continue;
-
-      const hh = parseInt(m[1], 10);
-      const mm = m[2] != null ? parseInt(m[2], 10) : 0;
-
-      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
-        return { hh, mm };
-      }
-    }
-
-    return null;
+    return { desde, hasta };
   }
 
   function extraerHoraInicio(h) {
-    const parsed = extraerHoraMinutoInicio(h);
-    return parsed ? parsed.hh : null;
+    const s = String(h || "").toLowerCase();
+
+    let m = s.match(/(\d{1,2})\s*:\s*\d{2}/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return n >= 0 && n <= 23 ? n : null;
+    }
+
+    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      return n >= 0 && n <= 23 ? n : null;
+    }
+
+    m = s.match(/\b(\d{1,2})\b/);
+    if (!m) return null;
+
+    const n = parseInt(m[1], 10);
+    return n >= 0 && n <= 23 ? n : null;
   }
 
   function franjaEnGuardia(h) {
-    const inicioHora = extraerHoraMinutoInicio(h);
-    if (!inicioHora) return true;
+    const hi = extraerHoraInicio(h);
+    if (hi === null) return true;
 
-    const inicio = getGuardiaInicio();
-    const fin = new Date(inicio.getTime() + 86400000);
-    const f = new Date(inicio);
-    f.setHours(inicioHora.hh, inicioHora.mm, 0, 0);
-    if (f < inicio) f.setDate(f.getDate() + 1);
+    const { desde, hasta } = getVentanaOperativosIndividualesWsp();
+    const f = new Date(desde);
+    f.setHours(hi, 0, 0, 0);
+    if (f < desde) f.setDate(f.getDate() + 1);
 
-    return f >= inicio && f < fin;
+    return f >= desde && f <= hasta;
   }
 
   function obtenerFechaFranjaOperativo(franja, orden) {
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
   }
 
-  function parseFechaFranjaWsp(value) {
-    const raw = limpiarTextoSimple(value || "").replace(/\.$/, "");
-    if (!raw) return null;
-
-    try {
-      if (typeof Dates !== "undefined" && Dates?.parseVigenciaToDate) {
-        const d = Dates.parseVigenciaToDate(raw);
-        if (d instanceof Date && !isNaN(d.getTime())) return d;
-      }
-    } catch {}
-
-    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
-
-    m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
-    if (m) {
-      const dd = Number(m[1]);
-      const mm = Number(m[2]);
-      let yy = Number(m[3]);
-      if (yy < 100) yy += 2000;
-      return new Date(yy, mm - 1, dd, 12, 0, 0, 0);
-    }
-
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
-
-    return null;
-  }
-
   function construirFechaHoraInicioFranja(franja, orden) {
-    const fechaBase = parseFechaFranjaWsp(obtenerFechaFranjaOperativo(franja, orden));
-    const horaInicio = extraerHoraMinutoInicio(franja?.horario || "");
+    const fechaBase = parseVigenciaFlexible(obtenerFechaFranjaOperativo(franja, orden));
+    const horaInicio = extraerHoraInicio(franja?.horario || "");
 
     if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
-    if (!horaInicio) return null;
+    if (horaInicio === null) return null;
 
     const fechaHora = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate());
-    fechaHora.setHours(horaInicio.hh, horaInicio.mm, 0, 0);
+    fechaHora.setHours(horaInicio, 0, 0, 0);
     return fechaHora;
   }
 
@@ -718,14 +704,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return franjaEnGuardia(franja?.horario || "");
     }
 
-    const inicioGuardia = getGuardiaInicio();
-    const finGuardia = new Date(inicioGuardia.getTime() + 86400000);
+    const { desde, hasta } = getVentanaOperativosIndividualesWsp();
 
-    return fechaHoraInicio >= inicioGuardia && fechaHoraInicio < finGuardia;
+    return fechaHoraInicio >= desde && fechaHoraInicio <= hasta;
   }
 
   function parseVigenciaFlexible(v) {
-    return parseFechaFranjaWsp(v);
+    try {
+      const d = Dates?.parseVigenciaToDate?.(v);
+      if (d instanceof Date && !isNaN(d)) return d;
+    } catch {}
+
+    const iso = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+    const latam = String(v || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (latam) return new Date(Number(latam[3]), Number(latam[2]) - 1, Number(latam[1]));
+
+    return null;
   }
 
   function pad2(n) {
