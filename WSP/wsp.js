@@ -51,7 +51,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // Cache en memoria
   let ordenesCache = [];
   let operativosCache = [];
-  let ordenesServidorLeidas = false;
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
 
@@ -507,13 +506,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const rows = Array.isArray(filas) ? filas : [];
 
     rows.forEach((row, idxRow) => {
-      /*
-        WSP no filtra por caducidad local ni por fecha general de la orden.
-        La disponibilidad visual se decide por la ventana de cada franja individual.
-        Solo se excluyen órdenes desactivadas o manualmente no activas.
-      */
       if (String(row?.estado_manual || "ACTIVA").toUpperCase() !== "ACTIVA") return;
       if (row?.activo === false) return;
+
+      const estadoOrden = String(row?.estado || "").toUpperCase();
+      if (estadoOrden && !["EN_VIGENCIA", "A_EJECUTAR"].includes(estadoOrden)) return;
 
       const registros = registrosPublicadosDeFila(row);
       if (!registros.length) return;
@@ -531,15 +528,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const numeroOrden = numeroOrdenDesdeRegistroPublicado(rec);
 
         if (!horario || !lugar || !titulo) return;
-
-        const fechaRegistro = fechaIsoADDMMAAAA(
-          rec?.fecha || rec?.__fechaOperativo || row?.fecha_inicio_ejecucion
-        );
-
-        const sortKeyCrudo = Number(rec?.sortKey ?? rec?.__inicioTs);
-        const inicioTs = Number.isFinite(sortKeyCrudo)
-          ? sortKeyCrudo
-          : construirInicioTsDesdeFechaYHorario(fechaRegistro, horario);
+        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || row?.fecha_inicio_ejecucion);
+        const sortKey = Number(rec?.sortKey || rec?.__inicioTs || rec?.inicioTs || rec?.inicio_ts || NaN);
 
         if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
         if (!primeraFechaRegistro && fechaRegistro) primeraFechaRegistro = limpiarTextoSimple(fechaRegistro);
@@ -549,9 +539,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           lugar,
           titulo,
           fecha: fechaRegistro,
-          __fechaOperativo: fechaRegistro,
-          sortKey: Number.isFinite(inicioTs) ? inicioTs : undefined,
-          __inicioTs: Number.isFinite(inicioTs) ? inicioTs : undefined,
+          sortKey: Number.isFinite(sortKey) ? sortKey : undefined,
+          __inicioTs: Number.isFinite(sortKey) ? sortKey : undefined,
         });
       });
 
@@ -576,6 +565,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const params = new URLSearchParams({
         select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,estado_manual,activo,registros,updated_at",
         activo: "eq.true",
+        estado: "in.(EN_VIGENCIA,A_EJECUTAR)",
         estado_manual: "eq.ACTIVA",
         order: "fecha_inicio_ejecucion.asc",
       });
@@ -596,7 +586,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const data = await r.json();
       const ordenes = convertirOrdenesPublicadasAFormatoWsp(data);
 
-      ordenesServidorLeidas = true;
       guardarOrdenesSeguro(ordenes);
       return true;
     } catch (e) {
@@ -660,7 +649,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return getVentanaOperativosWsp().desde;
   }
 
-  function extraerHoraMinutoInicio(h) {
+  function extraerHoraInicio(h) {
+    const hora = extraerHoraInicioCompleta(h);
+    return hora ? hora.hh : null;
+  }
+
+  function extraerHoraInicioCompleta(h) {
     const s = String(h || "").toLowerCase();
 
     let m = s.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
@@ -670,26 +664,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return { hh, mm };
     }
 
-    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/);
+    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})/);
     if (m) {
       const hh = parseInt(m[1], 10);
       if (hh >= 0 && hh <= 23) return { hh, mm: 0 };
     }
 
-    m = s.match(/\b(\d{1,2})\b/);
+    m = s.match(/(\d{1,2})/);
     if (!m) return null;
 
     const hh = parseInt(m[1], 10);
     return hh >= 0 && hh <= 23 ? { hh, mm: 0 } : null;
   }
 
-  function extraerHoraInicio(h) {
-    const hora = extraerHoraMinutoInicio(h);
-    return hora ? hora.hh : null;
-  }
-
   function franjaEnGuardia(h) {
-    const hora = extraerHoraMinutoInicio(h);
+    const hora = extraerHoraInicioCompleta(h);
     if (!hora) return true;
 
     const { desde, hasta } = getVentanaOperativosWsp();
@@ -704,12 +693,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
   }
 
-  function construirInicioTsDesdeFechaYHorario(fechaValor, horarioValor) {
-    const fechaBase = parseVigenciaFlexible(fechaValor);
-    const horaInicio = extraerHoraMinutoInicio(horarioValor || "");
+  function construirFechaHoraInicioFranja(franja, orden) {
+    const ts = Number(franja?.__inicioTs || franja?.sortKey || franja?.inicioTs || franja?.inicio_ts || NaN);
+    if (Number.isFinite(ts)) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) return d;
+    }
 
-    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return NaN;
-    if (!horaInicio) return NaN;
+    const fechaBase = parseVigenciaFlexible(obtenerFechaFranjaOperativo(franja, orden));
+    const horaInicio = extraerHoraInicioCompleta(franja?.horario || "");
+
+    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
+    if (!horaInicio) return null;
 
     return new Date(
       fechaBase.getFullYear(),
@@ -719,24 +714,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       horaInicio.mm,
       0,
       0
-    ).getTime();
-  }
-
-  function construirFechaHoraInicioFranja(franja, orden) {
-    const inicioTs = Number(franja?.__inicioTs ?? franja?.sortKey);
-    if (Number.isFinite(inicioTs) && inicioTs > 0) {
-      const d = new Date(inicioTs);
-      if (!isNaN(d.getTime())) return d;
-    }
-
-    const tsCalculado = construirInicioTsDesdeFechaYHorario(
-      obtenerFechaFranjaOperativo(franja, orden),
-      franja?.horario || ""
     );
-
-    if (!Number.isFinite(tsCalculado)) return null;
-
-    return new Date(tsCalculado);
   }
 
   function franjaIniciaEnGuardiaActual(franja, orden) {
@@ -753,22 +731,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function parseVigenciaFlexible(v) {
     try {
       const d = Dates?.parseVigenciaToDate?.(v);
-      if (d instanceof Date && !isNaN(d.getTime())) return d;
+      if (d instanceof Date && !isNaN(d)) return d;
     } catch {}
 
-    const raw = String(v || "").trim();
+    const iso = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
 
-    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const latam = String(v || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (latam) return new Date(Number(latam[3]), Number(latam[2]) - 1, Number(latam[1]));
 
-    m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-    if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-
-    m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
-    if (m) return new Date(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-
-    const d = new Date(raw);
-    if (!isNaN(d.getTime())) return d;
+    const latamCorto = String(v || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (latamCorto) return new Date(2000 + Number(latamCorto[3]), Number(latamCorto[2]) - 1, Number(latamCorto[1]));
 
     return null;
   }
@@ -1177,11 +1150,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
-    const ordenes = ordenesServidorLeidas
-      ? (Array.isArray(ordenesCache) ? ordenesCache : [])
-      : cargarOrdenesSeguro();
-
-    const disponibles = [];
+    const ordenes = cargarOrdenesSeguro();
 
     operativosCache = [];
     if (selHorario) {
@@ -1189,29 +1158,27 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     ordenes.forEach((orden, idxOrden) => {
-      (orden.franjas || []).forEach((franja, idxFranja) => {
+      const franjasOrdenadas = (orden.franjas || [])
+        .map((franja, idxFranja) => ({ franja, idxFranja, inicio: construirFechaHoraInicioFranja(franja, orden) }))
+        .sort((a, b) => {
+          const at = a.inicio instanceof Date && !isNaN(a.inicio.getTime()) ? a.inicio.getTime() : Number.MAX_SAFE_INTEGER;
+          const bt = b.inicio instanceof Date && !isNaN(b.inicio.getTime()) ? b.inicio.getTime() : Number.MAX_SAFE_INTEGER;
+          return at - bt;
+        });
+
+      franjasOrdenadas.forEach(({ franja, idxFranja }) => {
         if (!franjaIniciaEnGuardiaActual(franja, orden)) return;
-        disponibles.push(construirOperativoPlano(franja, orden, idxOrden, idxFranja));
+
+        const operativo = construirOperativoPlano(franja, orden, idxOrden, idxFranja);
+        operativosCache.push(operativo);
+
+        if (!selHorario) return;
+        const option = document.createElement("option");
+        option.value = operativo.__key;
+        option.text = construirTextoOpcionHorario(operativo);
+        option.title = construirTextoOpcionHorario(operativo);
+        selHorario.appendChild(option);
       });
-    });
-
-    disponibles.sort((a, b) => {
-      const aTs = Number(a?.__inicioTs ?? a?.sortKey);
-      const bTs = Number(b?.__inicioTs ?? b?.sortKey);
-
-      if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return aTs - bTs;
-      return limpiarTextoSimple(a?.horario || "").localeCompare(limpiarTextoSimple(b?.horario || ""));
-    });
-
-    operativosCache = disponibles;
-
-    operativosCache.forEach((operativo) => {
-      if (!selHorario) return;
-      const option = document.createElement("option");
-      option.value = operativo.__key;
-      option.text = construirTextoOpcionHorario(operativo);
-      option.title = construirTextoOpcionHorario(operativo);
-      selHorario.appendChild(option);
     });
 
     if (selHorario && valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
