@@ -529,14 +529,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
         if (!primeraFechaRegistro && fechaRegistro) primeraFechaRegistro = limpiarTextoSimple(fechaRegistro);
 
-        const inicioTs = construirInicioTsDesdeFechaYHorario(fechaRegistro, horario);
-
         franjas.push({
           horario,
           lugar,
           titulo,
           fecha: fechaRegistro,
-          __inicioTs: Number.isFinite(inicioTs) ? inicioTs : null,
         });
       });
 
@@ -624,54 +621,46 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function extraerHoraMinutoInicio(h) {
-    const s = String(h || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const s = String(h || "")
+      .toLowerCase()
+      .replace(/[–—]/g, "-")
+      .replace(/;/g, ":")
+      .trim();
 
-    let m = s.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
-    if (m) {
+    const patrones = [
+      /(\d{1,2})\s*[:.]\s*(\d{2})/,
+      /(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/,
+      /\b(\d{1,2})\b/
+    ];
+
+    for (const rx of patrones) {
+      const m = s.match(rx);
+      if (!m) continue;
+
       const hh = parseInt(m[1], 10);
-      const mm = parseInt(m[2], 10);
-      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return { hh, mm };
-      return null;
+      const mm = m[2] != null ? parseInt(m[2], 10) : 0;
+
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+        return { hh, mm };
+      }
     }
 
-    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})\b/);
-    if (m) {
-      const hh = parseInt(m[1], 10);
-      return hh >= 0 && hh <= 23 ? { hh, mm: 0 } : null;
-    }
-
-    m = s.match(/\b(\d{1,2})\b/);
-    if (!m) return null;
-
-    const hh = parseInt(m[1], 10);
-    return hh >= 0 && hh <= 23 ? { hh, mm: 0 } : null;
+    return null;
   }
 
   function extraerHoraInicio(h) {
-    const hm = extraerHoraMinutoInicio(h);
-    return hm ? hm.hh : null;
-  }
-
-  function construirInicioTsDesdeFechaYHorario(fecha, horario) {
-    const fechaBase = parseVigenciaFlexible(fecha);
-    const horaInicio = extraerHoraMinutoInicio(horario || "");
-
-    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return NaN;
-    if (!horaInicio) return NaN;
-
-    const fechaHora = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate());
-    fechaHora.setHours(horaInicio.hh, horaInicio.mm, 0, 0);
-    return fechaHora.getTime();
+    const parsed = extraerHoraMinutoInicio(h);
+    return parsed ? parsed.hh : null;
   }
 
   function franjaEnGuardia(h) {
-    const hm = extraerHoraMinutoInicio(h);
-    if (!hm) return true;
+    const inicioHora = extraerHoraMinutoInicio(h);
+    if (!inicioHora) return true;
 
     const inicio = getGuardiaInicio();
     const fin = new Date(inicio.getTime() + 86400000);
     const f = new Date(inicio);
-    f.setHours(hm.hh, hm.mm, 0, 0);
+    f.setHours(inicioHora.hh, inicioHora.mm, 0, 0);
     if (f < inicio) f.setDate(f.getDate() + 1);
 
     return f >= inicio && f < fin;
@@ -681,20 +670,45 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
   }
 
-  function construirFechaHoraInicioFranja(franja, orden) {
-    const inicioTs = Number(franja?.__inicioTs);
-    if (Number.isFinite(inicioTs) && inicioTs > 0) {
-      const d = new Date(inicioTs);
-      if (!isNaN(d.getTime())) return d;
+  function parseFechaFranjaWsp(value) {
+    const raw = limpiarTextoSimple(value || "").replace(/\.$/, "");
+    if (!raw) return null;
+
+    try {
+      if (typeof Dates !== "undefined" && Dates?.parseVigenciaToDate) {
+        const d = Dates.parseVigenciaToDate(raw);
+        if (d instanceof Date && !isNaN(d.getTime())) return d;
+      }
+    } catch {}
+
+    let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+
+    m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+    if (m) {
+      const dd = Number(m[1]);
+      const mm = Number(m[2]);
+      let yy = Number(m[3]);
+      if (yy < 100) yy += 2000;
+      return new Date(yy, mm - 1, dd, 12, 0, 0, 0);
     }
 
-    const ts = construirInicioTsDesdeFechaYHorario(
-      obtenerFechaFranjaOperativo(franja, orden),
-      franja?.horario || ""
-    );
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
 
-    if (!Number.isFinite(ts)) return null;
-    return new Date(ts);
+    return null;
+  }
+
+  function construirFechaHoraInicioFranja(franja, orden) {
+    const fechaBase = parseFechaFranjaWsp(obtenerFechaFranjaOperativo(franja, orden));
+    const horaInicio = extraerHoraMinutoInicio(franja?.horario || "");
+
+    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
+    if (!horaInicio) return null;
+
+    const fechaHora = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate());
+    fechaHora.setHours(horaInicio.hh, horaInicio.mm, 0, 0);
+    return fechaHora;
   }
 
   function franjaIniciaEnGuardiaActual(franja, orden) {
@@ -711,23 +725,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function parseVigenciaFlexible(v) {
-    try {
-      const d = Dates?.parseVigenciaToDate?.(v);
-      if (d instanceof Date && !isNaN(d)) return d;
-    } catch {}
-
-    const raw = String(v || "").trim();
-
-    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-
-    const latam = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (latam) {
-      const year = latam[3].length === 2 ? 2000 + Number(latam[3]) : Number(latam[3]);
-      return new Date(year, Number(latam[2]) - 1, Number(latam[1]));
-    }
-
-    return null;
+    return parseFechaFranjaWsp(v);
   }
 
   function pad2(n) {
