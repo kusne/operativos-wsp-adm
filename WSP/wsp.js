@@ -7,6 +7,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const selTipo = document.getElementById("tipo");
   const selOrden = document.getElementById("orden");
   const selHorario = document.getElementById("horario");
+  const contadorOperativosWsp = document.getElementById("contadorOperativosWsp");
 
   const divFinaliza = document.getElementById("finaliza");
   const divDetalles = document.getElementById("bloqueDetalles");
@@ -53,6 +54,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
+
+  function actualizarContadorOperativosWsp(cantidad = operativosCache.length) {
+    if (!contadorOperativosWsp) return;
+    const n = Math.max(0, parseInt(cantidad, 10) || 0);
+    contadorOperativosWsp.textContent = String(n);
+  }
 
   const OBS_PRESENCIA_ACTIVA_INICIA = "Se inicia con Presencia Activa por inclemencias del tiempo ( lluvias).Se adjunta vistas Fotograficas.";
   const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
@@ -616,6 +623,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       selHorario.value = "";
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
     }
+    actualizarContadorOperativosWsp(0);
   }
 
   // ===== Guardia =====
@@ -1184,6 +1192,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (selHorario && valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
       selHorario.value = valorSeleccionado;
     }
+
+    actualizarContadorOperativosWsp(operativosCache.length);
   }
 
   function limpiarTextoSimple(txt) {
