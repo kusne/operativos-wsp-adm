@@ -506,6 +506,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const rows = Array.isArray(filas) ? filas : [];
 
     rows.forEach((row, idxRow) => {
+      if (String(row?.estado_manual || "ACTIVA").toUpperCase() !== "ACTIVA") return;
+      if (row?.activo === false) return;
+      if (String(row?.estado || "").toUpperCase() && String(row?.estado || "").toUpperCase() !== "EN_VIGENCIA") return;
+
       const registros = registrosPublicadosDeFila(row);
       if (!registros.length) return;
 
@@ -552,9 +556,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function syncOrdenesDesdeServidor() {
     try {
       const params = new URLSearchParams({
-        select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,activo,registros,updated_at",
+        select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,estado_manual,activo,registros,updated_at",
         activo: "eq.true",
         estado: "eq.EN_VIGENCIA",
+        estado_manual: "eq.ACTIVA",
         order: "fecha_inicio_ejecucion.asc",
       });
 
