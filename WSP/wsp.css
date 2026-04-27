@@ -1756,16 +1756,14 @@ body.modo-control-superior #wrapPresenciaActiva{
 .operativo-select-wrap select{
   width: 100% !important;
   margin-bottom: 0 !important;
-
-  /* deja espacio a la derecha para la flecha nativa del selector */
   padding-right: 44px !important;
 }
 
 .contador-operativos-wsp{
   position: absolute !important;
 
-  /* Ubicación dentro del selector, al lado derecho del texto "Seleccionar Operativo" */
-  left: 215px !important;
+  /* menor número = más cerca del texto */
+  left: 185px !important;
 
   top: 50% !important;
   transform: translateY(-50%) !important;
@@ -1792,10 +1790,4 @@ body.modo-control-superior #wrapPresenciaActiva{
 
   box-shadow: 0 1px 4px rgba(0,0,0,.22) !important;
   user-select: none !important;
-}
-
-@media (max-width: 420px){
-  .contador-operativos-wsp{
-    left: 200px !important;
-  }
 }
