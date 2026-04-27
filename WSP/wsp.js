@@ -614,37 +614,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ===== Guardia =====
   function getGuardiaInicio() {
     const now = new Date();
-    const start = new Date(now);
-    start.setHours(6, 0, 0, 0);
-    if (now < start) start.setDate(start.getDate() - 1);
-    return start;
-  }
-
-  // Primer filtro visual de WSP: siempre mira desde la fecha actual 06:00
-  // hasta la fecha siguiente 05:59:59, sin retroceder al día anterior aunque sean antes de las 06:00.
-  function getVentanaOperativosIndividualesWsp() {
-    const hoy = new Date();
-    const desde = new Date(
-      hoy.getFullYear(),
-      hoy.getMonth(),
-      hoy.getDate(),
-      6,
-      0,
-      0,
-      0
-    );
-
-    const hasta = new Date(
-      hoy.getFullYear(),
-      hoy.getMonth(),
-      hoy.getDate() + 1,
-      5,
-      59,
-      59,
-      999
-    );
-
-    return { desde, hasta };
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 6, 0, 0, 0);
   }
 
   function extraerHoraInicio(h) {
@@ -673,12 +643,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const hi = extraerHoraInicio(h);
     if (hi === null) return true;
 
-    const { desde, hasta } = getVentanaOperativosIndividualesWsp();
-    const f = new Date(desde);
+    const inicio = getGuardiaInicio();
+    const fin = new Date(inicio.getTime() + 86400000);
+    const f = new Date(inicio);
     f.setHours(hi, 0, 0, 0);
-    if (f < desde) f.setDate(f.getDate() + 1);
+    if (f < inicio) f.setDate(f.getDate() + 1);
 
-    return f >= desde && f <= hasta;
+    return f >= inicio && f < fin;
   }
 
   function obtenerFechaFranjaOperativo(franja, orden) {
@@ -704,9 +675,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return franjaEnGuardia(franja?.horario || "");
     }
 
-    const { desde, hasta } = getVentanaOperativosIndividualesWsp();
+    const inicioGuardia = getGuardiaInicio();
+    const finGuardia = new Date(inicioGuardia);
+    finGuardia.setDate(finGuardia.getDate() + 1);
 
-    return fechaHoraInicio >= desde && fechaHoraInicio <= hasta;
+    return fechaHoraInicio >= inicioGuardia && fechaHoraInicio < finGuardia;
   }
 
   function parseVigenciaFlexible(v) {
