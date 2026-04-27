@@ -1765,7 +1765,7 @@ body.modo-control-superior #wrapPresenciaActiva{
   position: absolute !important;
 
   /* Ubicación dentro del selector, al lado derecho del texto "Seleccionar Operativo" */
-  left: 245px !important;
+  left: 215px !important;
 
   top: 50% !important;
   transform: translateY(-50%) !important;
