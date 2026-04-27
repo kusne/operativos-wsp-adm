@@ -1738,26 +1738,30 @@ body.modo-control-superior #wrapPresenciaActiva{
   pointer-events: none !important;
 }
 
-/* ===== Contador de operativos disponibles ===== */
+/* ===== Contador dentro del desplegable de operativos ===== */
 .operativo-select-wrap{
-  display:flex;
-  align-items:center;
-  gap:8px;
+  position:relative;
+  display:block;
   width:100%;
   margin-bottom:10px;
 }
 
 .operativo-select-wrap select{
-  flex:1 1 auto;
-  min-width:0;
+  width:100%;
   margin-bottom:0;
+  padding-right:82px; /* deja espacio para el círculo y la flecha del select */
 }
 
 .contador-operativos-wsp{
-  flex:0 0 auto;
-  width:32px;
-  height:32px;
-  min-width:32px;
+  position:absolute;
+  right:38px; /* queda dentro del select, antes de la flecha nativa */
+  top:50%;
+  transform:translateY(-50%);
+  z-index:2;
+  pointer-events:none;
+  width:28px;
+  height:28px;
+  min-width:28px;
   border:1px solid #000;
   border-radius:999px;
   background:#0b8f2a;
@@ -1765,9 +1769,9 @@ body.modo-control-superior #wrapPresenciaActiva{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  font-size:15px;
+  font-size:14px;
   font-weight:800;
   line-height:1;
-  box-shadow:0 2px 6px rgba(0,0,0,.18);
+  box-shadow:0 1px 4px rgba(0,0,0,.22);
   user-select:none;
 }
