@@ -1840,3 +1840,58 @@ body.modo-control-superior #wrapPresenciaActiva{
   box-shadow: 0 1px 4px rgba(0,0,0,.22) !important;
   user-select: none !important;
 }
+
+/* =========================================================
+   FIX FINAL: contador junto al título OPERATIVOS
+   Mantiene el contador dentro del encabezado, no flotando sobre listas.
+   ========================================================= */
+.operativos-title-row{
+  position: static !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  margin: 0 0 6px 0 !important;
+}
+
+.operativos-title-label{
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+#contadorOperativosWsp.contador-operativos-wsp,
+.contador-operativos-wsp{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: auto !important;
+  pointer-events: none !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 28px !important;
+
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+
+  border: 2px solid #ff0000 !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #0b3d91 !important;
+
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.22) !important;
+  user-select: none !important;
+}
