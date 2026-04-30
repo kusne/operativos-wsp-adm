@@ -1745,12 +1745,61 @@ body.modo-control-superior #wrapPresenciaActiva{
   pointer-events: none !important;
 }
 
-/* ===== Contador dentro del selector, al lado del texto Seleccionar Operativo ===== */
+/* ===== Contador de operativos junto al título OPERATIVOS ===== */
+.operativos-title-row{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  width: 100% !important;
+  margin: 0 0 6px 0 !important;
+}
+
+.operativos-title-row .top-label,
+.operativos-title-label{
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
 .operativo-select-wrap{
   position: relative !important;
   display: block !important;
   width: 100% !important;
   margin-bottom: 10px !important;
+}
+
+.operativo-select-wrap select{
+  width: 100% !important;
+  margin-bottom: 0 !important;
+  padding-right: 44px !important;
+}
+
+.contador-operativos-wsp{
+  position: static !important;
+  transform: none !important;
+  z-index: auto !important;
+  pointer-events: none !important;
+
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+
+  border: 1px solid #000000 !important;
+  border-radius: 999px !important;
+  background: #00a63c !important;
+  color: #ffffff !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  box-shadow: 0 1px 4px rgba(0,0,0,.22) !important;
+  user-select: none !important;
 }
 
 .operativo-select-wrap select{
