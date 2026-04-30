@@ -627,9 +627,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   // ===== Guardia =====
-  function getVentanaOperativosWsp() {
-    const now = new Date();
-
+  function getVentanaOperativosWsp(now = new Date()) {
+    /*
+      Ventana operativa BMZCN:
+      - NO cambia a las 00:00.
+      - Cambia recién a las 06:00.
+      - Desde 06:00 inclusive hasta 06:00 del día siguiente exclusivo.
+      Ejemplo: si son las 02:00 del jueves, la guardia vigente sigue siendo
+      miércoles 06:00 → jueves 06:00.
+    */
     const desde = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -640,15 +646,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       0
     );
 
-    const hasta = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 1,
-      5,
-      59,
-      59,
-      999
-    );
+    if (now < desde) {
+      desde.setDate(desde.getDate() - 1);
+    }
+
+    const hasta = new Date(desde);
+    hasta.setDate(hasta.getDate() + 1);
 
     return { desde, hasta };
   }
@@ -694,7 +697,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     if (f < desde) f.setDate(f.getDate() + 1);
 
-    return f >= desde && f <= hasta;
+    return f >= desde && f < hasta;
   }
 
   function obtenerFechaFranjaOperativo(franja, orden) {
@@ -733,7 +736,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     const { desde, hasta } = getVentanaOperativosWsp();
-    return fechaHoraInicio >= desde && fechaHoraInicio <= hasta;
+    return fechaHoraInicio >= desde && fechaHoraInicio < hasta;
   }
 
   function parseVigenciaFlexible(v) {
