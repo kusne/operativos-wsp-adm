@@ -1295,10 +1295,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/^lugar\s*[:\-]?\s*/i, "")
       .trim();
 
+    const lugarNorm = normalizarBasicoSinAcentos(lugar);
+    const fuenteVisual = obtenerFuenteVisualFranja(franja);
     const clave = compactarClaveVisual(lugar);
     const esRN168 = clave.includes("rn168") || clave.includes("rutanacional168");
     const esRP1 = clave.includes("rp1") || clave.includes("rutaprovincial1");
     const esKM18 = clave.includes("km18") || clave.includes("kilometro18");
+
+    /*
+      Abreviaciones visuales del desplegable.
+      Solo afectan cómo se muestra la referencia en el select.
+      No modifican franja.lugar, claves internas, Supabase ni el texto enviado por WhatsApp.
+    */
+    if (/zona\s+de\s+boliches\s+bailables\s+lindantes\s+a\s+rn\s*(?:n\s*)?168/.test(lugarNorm)) return "Zona de Boliches";
+    if (/rn\s*168\s*km\s*18\s*peaje\s*tunel\s*subfluvial/.test(lugarNorm)) return "RN 168 KM18 Peaje";
+    if (/rn\s*168\s*km\s*16\s*ascendente/.test(lugarNorm)) return "RN 168 KM16 ASC";
+    if (/rp\s*0?1\s*km\s*0?6\s+con\s+sub\s*-?\s*base\s+rincon\s+uor\s*3\s*-?\s*coordinado/.test(lugarNorm)) return "RP01 KM06 con Sub-Base";
+    if (/rp\s*1\s*km\s*8\s+coordinado\s+con\s+sub\s*-?\s*base\s+rincon/.test(lugarNorm)) return "RP 1 KM8 con Sub Base";
+    if (/rn\s*168\s*km\s*7[,.]?5\s*asc/.test(lugarNorm)) return "RN 168 KM 7,5 ASC";
+    if (/rn\s*11\s*km\s*454\s+sauce\s+viejo.*aeropuerto/.test(lugarNorm)) return "RN 11 KM454 Aeropuerto";
+    if (/aup\s*0?1\s*km\s*141/.test(lugarNorm)) return "AUP01 KM141";
+    if (/rp\s*2\s+y\s+rp\s*5/.test(lugarNorm)) return "RP 2 y RP 5";
+    if (/rp\s*1\s+y\s+rn\s*168.*parada\s+de\s+colectivo/.test(lugarNorm)) return "RP 1 y RN 168 P. de Colectivo";
+    if (/rn\s*168\s+del\s+km\s*18\s+al\s+0?0\s+rp\s*1\s+del\s+km\s*0?0\s+al\s+20/.test(lugarNorm)) return "RN168/RP1";
+    if (/rn\s*168\s+del\s+km\s*18\s+al\s+0?0/.test(lugarNorm)) return "RN168 Km18/Km 00";
+    if (/operativo\s+retorno\s+cuidado\s+corredor\s+de\s+la\s+costa\s*-?\s*rn\s*168/.test(fuenteVisual)) return "Retorno";
+    if (/(?:^|\s)ascendente(?:\s|$)/.test(lugarNorm)) lugar = lugar.replace(/\bascendente\b/gi, "ASC");
+    if (/(?:^|\s)descendente(?:\s|$)/.test(lugarNorm)) lugar = lugar.replace(/\bdescendente\b/gi, "DESC");
 
     if (esRN168 && esKM18) return "Base/Tunel";
     if (esRN168 && esRP1) return "RN168 y RP1";
@@ -1310,7 +1333,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/\bpuente\s+carretero\b/gi, "Pte. Carretero")
       .replace(/\bcabecera\b/gi, "Cab.")
       .replace(/\bsanto\s+tome\b/gi, "Sto. Tome")
-      .replace(/\bsanta\s+fe\b/gi, "Sta. Fe");
+      .replace(/\bsanta\s+fe\b/gi, "Sta. Fe")
+      .replace(/\bascendente\b/gi, "ASC")
+      .replace(/\bdescendente\b/gi, "DESC");
 
     lugar = capitalizarLugarVisual(lugar);
 
@@ -1325,7 +1350,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fuente = obtenerFuenteVisualFranja(franja);
 
     if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
-    if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
+    if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b|\bdispositivo\s+de\s+control\s+estrategico\s+provincial\b/.test(fuente)) return "DICEP";
+    if (/\bnocturnidad\s+controlada\b/.test(fuente)) return "Nocturnidad";
+    if (/\bcinemometro\s+con\s+detencion\b|\bcinemometro\b|\bcinemometro\b/.test(fuente)) return "Cinemómetro";
+    if (/\bretorno\s+cuidado\b|\boperativo\s+retorno\b/.test(fuente)) return "Retorno";
     if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "Alcoholemia";
     if (/\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(fuente)) return "OCV";
     if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
@@ -1345,7 +1373,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fuente = obtenerFuenteVisualFranja(franja);
     const sufijos = [];
 
-    if (/\buor\s*3\b|\buor3\b/.test(fuente)) sufijos.push("con UOR3");
+    if (/\bsub\s*-?\s*base\b.*\buor\s*3\b|\buor\s*3\b.*\bsub\s*-?\s*base\b/.test(fuente)) {
+      sufijos.push("con SUB BASE");
+    } else if (/\buor\s*3\b|\buor3\b/.test(fuente)) {
+      sufijos.push("con UOR3");
+    }
     if (/\btransito\b|\binspectores?\s+de\s+transito\b/.test(fuente)) sufijos.push("con Transito");
 
     return sufijos;
