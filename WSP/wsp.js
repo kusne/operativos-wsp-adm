@@ -1286,170 +1286,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/\bDicep\b/g, "DICEP");
   }
 
-  // ===== ABREVIACIONES VISUALES DEL DESPLEGABLE =====
-  // Estas reglas SOLO afectan cómo se ve el texto dentro del select "OPERATIVOS".
-  // No modifican franja.lugar, franja.titulo, claves internas, Supabase ni WhatsApp.
-  function normalizarVisualWsp(txt) {
-    return String(txt || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[°º]/g, "")
-      .replace(/[()]/g, " ")
-      .replace(/[._]+/g, " ")
-      .replace(/[–—]+/g, "-")
-      .replace(/\s*-\s*/g, " - ")
-      .replace(/\s*,\s*/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toUpperCase();
-  }
-
-  function compactarVisualWsp(txt) {
-    return normalizarVisualWsp(txt).replace(/[^A-Z0-9]+/g, "");
-  }
-
-  function contieneVisualWsp(fuente, patron) {
-    const f = compactarVisualWsp(fuente);
-    const p = compactarVisualWsp(patron);
-    return Boolean(f && p && f.includes(p));
-  }
-
-  function aplicarAbreviacionLugarVisualWsp(lugarOriginal) {
-    const original = limpiarTextoSimple(lugarOriginal || "");
-    const n = normalizarVisualWsp(original);
-    const c = compactarVisualWsp(original);
-
-    if (!original) return "";
-
-    // Reglas específicas pedidas para lugares/referencias largas.
-    if (
-      c.includes("ZONADEBOLICHESBAILABLESLINDANTESARN168") ||
-      (c.includes("ZONADEBOLICHES") && c.includes("RN168"))
-    ) return "ZONA DE BOLICHES";
-
-    if (
-      c.includes("RN168KM18PEAJETUNELSUBFLUVIAL") ||
-      (c.includes("RN168") && c.includes("KM18") && c.includes("PEAJE") && c.includes("TUNEL"))
-    ) return "RN 168 KM18 PEAJE";
-
-    if (c.includes("RN168KM16ASCENDENTE") || (c.includes("RN168") && c.includes("KM16") && c.includes("ASCENDENTE"))) {
-      return "RN 168 KM16 ASC";
-    }
-
-    if (
-      c.includes("RP01KM06CONSUBBASERINCONUOR3COORDINADO") ||
-      c.includes("RP1KM06CONSUBBASERINCONUOR3COORDINADO") ||
-      (c.includes("RP01KM06") && c.includes("SUBBASE"))
-    ) return "RP01 KM06 CON SUB-BASE";
-
-    if (
-      c.includes("RP1KM8COORDINADOCONSUBBASERINCON") ||
-      c.includes("RP01KM8COORDINADOCONSUBBASERINCON") ||
-      (c.includes("RP1KM8") && c.includes("SUBBASE"))
-    ) return "RP 1 KM8 CON SUB BASE";
-
-    if (
-      c.includes("OPERATIVORETORNOCUIDADOCORREDORDELACOSTARN168") ||
-      c.includes("RETORNOCUIDADOCORREDORDELACOSTARN168")
-    ) return "RETORNO";
-
-    if (
-      c.includes("RN168DELKM18AL00RP1DELKM00AL20") ||
-      (c.includes("RN168DELKM18AL00") && c.includes("RP1DELKM00AL20"))
-    ) return "RN168/RP1";
-
-    if (c.includes("RN168DELKM18AL00")) return "RN168 Km18/Km 00";
-
-    if (
-      c.includes("RP1YRN168ALTURAPARADADECOLECTIVO") ||
-      (c.includes("RP1YRN168") && c.includes("PARADADECOLECTIVO"))
-    ) return "RP 1 Y RN 168 P. DE COLECTIVO";
-
-    if (
-      c.includes("AUP01KM141BMNUOR3") ||
-      c.includes("AUP1KM141BMNUOR3") ||
-      c.includes("AUP01KM141")
-    ) return "AUP01 KM141";
-
-    if (
-      c.includes("RN168KM75ASCBMCONUFIVAMBOSSENTIDOS") ||
-      (c.includes("RN168") && (c.includes("KM75") || c.includes("KM7 5")) && c.includes("ASC"))
-    ) return "RN 168 KM 7,5 ASC";
-
-    if (
-      c.includes("RN11KM454SAUCEVIEJOALTURAAEROPUERTOBMNUOR3") ||
-      (c.includes("RN11KM454") && c.includes("AEROPUERTO"))
-    ) return "RN 11 KM454 AEROPUERTO";
-
-    if (
-      c.includes("RP2YRP5MONTEVERABMNUOR3") ||
-      (c.includes("RP2YRP5") && c.includes("MONTEVERA"))
-    ) return "RP 2 Y RP 5";
-
-    // Abreviaciones generales de sentido.
-    let lugar = original
-      .replace(/\bASCENDENTE\b/gi, "ASC")
-      .replace(/\bDESCENDENTE\b/gi, "DESC")
-      .replace(/\bruta\s+nacional\s*/gi, "RN")
-      .replace(/\bruta\s+provincial\s*/gi, "RP")
-      .replace(/\bkil[oó]metro\b/gi, "KM")
-      .replace(/\bpuente\s+carretero\b/gi, "Pte. Carretero")
-      .replace(/\bcabecera\b/gi, "Cab.")
-      .replace(/\bsanto\s+tome\b/gi, "Sto. Tome")
-      .replace(/\bsanta\s+fe\b/gi, "Sta. Fe");
-
-    return limpiarTextoSimple(lugar);
-  }
-
-  function aplicarAbreviacionTipoVisualWsp(franja) {
-    const fuente = normalizarVisualWsp([
-      franja?.titulo || "",
-      franja?.tipo || "",
-      obtenerTextoRefOrdenDeFranja(franja),
-      franja?.lugar || "",
-    ].join(" "));
-
-    const c = compactarVisualWsp(fuente);
-
-    if (!c) return "";
-
-    if (
-      c.includes("OPERATIVOESPECIALMULTIAGENCIALDENOMINADODICEP") ||
-      c.includes("DISPOSITIVODECONTROLESTRATEGICOPROVINCIAL") ||
-      c.includes("DICEP")
-    ) return "DICEP";
-
-    if (c.includes("NOCTURNIDADCONTROLADA")) return "NOCTURNIDAD";
-
-    if (c.includes("CINEMOMETROCONDETENCION") || c.includes("CINEMOMETRO")) return "CINEMÓMETRO";
-
-    if (
-      c.includes("ALCOHOLEMIAENCONJUNTOCONUOR3") ||
-      (c.includes("ALCOHOLEMIA") && c.includes("UOR3"))
-    ) return "ALCOHOLEMIA";
-
-    if (
-      c.includes("OPERATIVODECONTROLVEHICULARENCONJUNTOCONSUBBASEUOR3") ||
-      (c.includes("CONTROLVEHICULAR") && c.includes("SUBBASE") && c.includes("UOR3"))
-    ) return "OCV";
-
-    if (
-      c.includes("OPERATIVODECONTROLVEHICULARENCONJUNTOCONUOR3") ||
-      (c.includes("CONTROLVEHICULAR") && c.includes("UOR3"))
-    ) return "OCV";
-
-    if (c.includes("OPERATIVOORDENAMIENTOVEHICULAR") || c.includes("ORDENAMIENTOVEHICULAR")) {
-      return "ORDENAMIENTO";
-    }
-
-    if (
-      c.includes("OPERATIVORETORNOCUIDADOCORREDORDELACOSTARN168") ||
-      c.includes("RETORNOCUIDADO")
-    ) return "RETORNO";
-
-    return "";
-  }
-
   function obtenerLugarVisualFranja(franja) {
     let lugar = limpiarTextoSimple(franja?.lugar || "");
     if (!lugar) return "sin lugar";
@@ -1459,20 +1295,114 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/^lugar\s*[:\-]?\s*/i, "")
       .trim();
 
-    const abreviado = aplicarAbreviacionLugarVisualWsp(lugar);
-    if (abreviado) {
-      return abreviado.length > 30 ? abreviado.slice(0, 30).trim() + "..." : abreviado;
-    }
+    const fuenteVisual = normalizarBasicoSinAcentos([
+      franja?.lugar || "",
+      franja?.titulo || "",
+      obtenerTextoRefOrdenDeFranja(franja)
+    ].join(" "));
 
-    const clave = compactarClaveVisual(lugar);
-    const esRN168 = clave.includes("rn168") || clave.includes("rutanacional168");
-    const esRP1 = clave.includes("rp1") || clave.includes("rutaprovincial1");
-    const esKM18 = clave.includes("km18") || clave.includes("kilometro18");
+    const clave = compactarClaveVisual(fuenteVisual);
+    const lugarClave = compactarClaveVisual(lugar);
 
-    if (esRN168 && esKM18) return "Base/Tunel";
+    // ===== Abreviaciones específicas SOLO para el desplegable =====
+    // Estas reglas van antes de las abreviaciones genéricas para que no las pisen.
+    if (
+      clave.includes("rn168delkm18al00rp1delkm00al20") ||
+      clave.includes("rn168km18al00rp1km00al20")
+    ) return "RN168/RP1";
+
+    if (
+      clave.includes("rn168delkm18al00") ||
+      clave.includes("rn168km18al00")
+    ) return "RN168 Km18/Km 00";
+
+    if (
+      clave.includes("rn168km18peajetunelsubfluvial") ||
+      (clave.includes("rn168") && clave.includes("km18") && clave.includes("peaje"))
+    ) return "RN 168 KM18 PEAJE";
+
+    if (
+      clave.includes("rn168km16ascendente") ||
+      clave.includes("rn168km16asc") ||
+      (clave.includes("rn168") && clave.includes("km16") && (clave.includes("ascendente") || clave.includes("asc")))
+    ) return "RN 168 KM16 ASC";
+
+    if (
+      clave.includes("rn168km75asc") ||
+      clave.includes("rn168km7,5asc") ||
+      clave.includes("rn168km7.5asc") ||
+      (clave.includes("rn168") && (clave.includes("km75") || clave.includes("km7,5") || clave.includes("km7.5")) && clave.includes("asc"))
+    ) return "RN 168 KM 7,5 ASC";
+
+    if (
+      clave.includes("zonadebolichesbailableslindantesarn168") ||
+      (clave.includes("zonadeboliches") && clave.includes("rn168"))
+    ) return "ZONA DE BOLICHES";
+
+    if (
+      clave.includes("rp01km06consubbaserinconuor3coordinado") ||
+      clave.includes("rp1km6consubbaserinconuor3coordinado") ||
+      (clave.includes("rp1") && clave.includes("km6") && (clave.includes("subbase") || clave.includes("coordinado")))
+    ) return "RP01 KM06 CON SUB-BASE";
+
+    if (
+      clave.includes("rp1yrn168alturaparadadecolectivo") ||
+      (clave.includes("rp1") && clave.includes("rn168") && clave.includes("paradadecolectivo"))
+    ) return "RP 1 Y RN 168 P. DE COLECTIVO";
+
+    if (
+      clave.includes("aup01km141") ||
+      clave.includes("aup1km141")
+    ) return "AUP01 KM141";
+
+    if (
+      clave.includes("rn11km454sauceviejoalturaaeropuerto") ||
+      (clave.includes("rn11") && clave.includes("km454") && clave.includes("aeropuerto"))
+    ) return "RN 11 KM454 AEROPUERTO";
+
+    if (
+      clave.includes("rp1km8coordinadoconsubbaserincon") ||
+      (clave.includes("rp1") && clave.includes("km8") && clave.includes("subbase"))
+    ) return "RP 1 KM8 CON SUB BASE";
+
+    if (
+      clave.includes("rp2yrp5montevera") ||
+      (clave.includes("rp2") && clave.includes("rp5") && clave.includes("montevera"))
+    ) return "RP 2 Y RP 5";
+
+    // Si el lugar completo es en realidad una referencia operativa, también se resume.
+    if (clave.includes("operativoretorno") && clave.includes("corredordelacosta")) return "RETORNO";
+
+    const esRN168 = lugarClave.includes("rn168") || lugarClave.includes("rutanacional168");
+    const esRP1 = lugarClave.includes("rp1") || lugarClave.includes("rutaprovincial1");
+    const esKM18 = lugarClave.includes("km18") || lugarClave.includes("kilometro18");
+
     if (esRN168 && esRP1) return "RN168 y RP1";
+    if (esRN168 && esKM18 && lugarClave.includes("peaje")) return "RN 168 KM18 PEAJE";
+    if (esRN168 && esKM18) return "Base/Tunel";
 
-    lugar = capitalizarLugarVisual(lugar);
+    lugar = lugar
+      .replace(/\bruta\s+nacional\s*/gi, "RN")
+      .replace(/\bruta\s+provincial\s*/gi, "RP")
+      .replace(/\br\.?\s*n\.?\s*/gi, "RN ")
+      .replace(/\br\.?\s*p\.?\s*/gi, "RP ")
+      .replace(/\bkil[oó]metro\b/gi, "KM")
+      .replace(/\bascendente\b/gi, "ASC")
+      .replace(/\bdescendente\b/gi, "DESC")
+      .replace(/\bpuente\s+carretero\b/gi, "Pte. Carretero")
+      .replace(/\bcabecera\b/gi, "Cab.")
+      .replace(/\bsanto\s+tome\b/gi, "Sto. Tome")
+      .replace(/\bsanta\s+fe\b/gi, "Sta. Fe")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    lugar = capitalizarLugarVisual(lugar)
+      .replace(/\bAsc\b/g, "ASC")
+      .replace(/\bDesc\b/g, "DESC")
+      .replace(/\bPeaje\b/g, "PEAJE")
+      .replace(/\bTunel\b/g, "Tunel")
+      .replace(/\bSub-Base\b/g, "Sub-Base")
+      .replace(/\bSub Base\b/g, "Sub Base");
 
     if (lugar.length > 24) {
       return lugar.slice(0, 24).trim() + "...";
@@ -1482,19 +1412,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerTipoVisualFranja(franja) {
-    const abreviadoPedido = aplicarAbreviacionTipoVisualWsp(franja);
-    if (abreviadoPedido) return abreviadoPedido;
-
     const fuente = obtenerFuenteVisualFranja(franja);
+    const clave = compactarClaveVisual(fuente);
+
+    // ===== Abreviaciones específicas SOLO para el desplegable =====
+    if (clave.includes("nocturnidadcontrolada")) return "Nocturnidad";
+    if (clave.includes("cinemometrocondetencion") || clave.includes("cinemmetrocondetencion")) return "Cinemómetro";
+    if (clave.includes("operativoespecialmultiagencial") || clave.includes("dicep") || clave.includes("dispositivodecontrolestrategicoprovincial")) return "DICEP";
+    if (clave.includes("operativoretorno") && clave.includes("corredordelacosta")) return "Retorno";
+    if (clave.includes("operativoordenamientovehicular")) return "Ordenamiento";
+
+    if (
+      clave.includes("operativodecontrolvehicularenconjuntoconsubbaseuor3") ||
+      clave.includes("operativodecontrolvehicularenconjuntoconsubbase")
+    ) return "OCV";
+
+    if (
+      clave.includes("operativodecontrolvehicularenconjuntoconuor3") ||
+      clave.includes("operativodecontrolvehicular")
+    ) return "OCV";
+
+    if (clave.includes("alcoholemiaenconjuntoconuor3") || clave.includes("alcoholemia")) return "Alcoholemia";
 
     if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
     if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
-    if (/\bnocturnidad\s+controlada\b|\bnocturnidad\b/.test(fuente)) return "NOCTURNIDAD";
-    if (/\bcinemometro\b|\bcinemometro\s+con\s+detencion\b/.test(fuente)) return "CINEMÓMETRO";
-    if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "ALCOHOLEMIA";
+    if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "Alcoholemia";
     if (/\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(fuente)) return "OCV";
-    if (/\bordenamiento\b/.test(fuente)) return "ORDENAMIENTO";
-    if (/\bretorno\b/.test(fuente)) return "RETORNO";
+    if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
     if (/\blimpieza\b/.test(fuente)) return "Limpieza";
     if (/\bablacion\b/.test(fuente)) return "Ablacion";
     if (/\bestablecido\b/.test(fuente)) return "Establecido";
@@ -1508,24 +1452,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerSufijosVisualesFranja(franja) {
-    const fuente = normalizarVisualWsp([
-      franja?.titulo || "",
-      franja?.tipo || "",
-      obtenerTextoRefOrdenDeFranja(franja),
-      franja?.lugar || "",
-    ].join(" "));
-    const c = compactarVisualWsp(fuente);
+    const fuente = obtenerFuenteVisualFranja(franja);
+    const clave = compactarClaveVisual(fuente);
     const sufijos = [];
 
-    if (c.includes("SUBBASE") && c.includes("UOR3")) {
+    if (clave.includes("subbase")) {
       sufijos.push("con SUB BASE");
-    } else if (c.includes("UOR3")) {
+    } else if (/\buor\s*3\b|\buor3\b/.test(fuente)) {
       sufijos.push("con UOR3");
     }
 
-    if (c.includes("TRANSITO") || c.includes("INSPECTORESDETRANSITO")) {
-      sufijos.push("con Transito");
-    }
+    if (/\btransito\b|\binspectores?\s+de\s+transito\b/.test(fuente)) sufijos.push("con Transito");
 
     return sufijos;
   }
