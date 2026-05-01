@@ -62,7 +62,7 @@ const NOMENCLADOR_CODIGOS = {
   "4228": { codigo: "4228", referencia: "sin inscripción de autopartes" },
   "4231": { codigo: "4231", referencia: "comercio de luces antirreglamentarias" },
   "4245": { codigo: "4245", referencia: "comercio de caños de escapes antirreglamentarios" },
-  "5011": { codigo: "5011", referencia: "negar documentación exigible" },
+  "5011": { codigo: "5011", referencia: "no exhibe documentación exigible" },
   "5024": { codigo: "5024", referencia: "cédula de identificación" },
   "5038": { codigo: "5038", referencia: "sin portar comprobante de seguro" },
   "5041": { codigo: "5041", referencia: "sin seguro vigente" },
