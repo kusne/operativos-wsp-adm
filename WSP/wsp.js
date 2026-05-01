@@ -1295,37 +1295,83 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/^lugar\s*[:\-]?\s*/i, "")
       .trim();
 
-    const lugarNorm = normalizarBasicoSinAcentos(lugar);
-    const fuenteVisual = obtenerFuenteVisualFranja(franja);
-    const clave = compactarClaveVisual(lugar);
-    const esRN168 = clave.includes("rn168") || clave.includes("rutanacional168");
-    const esRP1 = clave.includes("rp1") || clave.includes("rutaprovincial1");
-    const esKM18 = clave.includes("km18") || clave.includes("kilometro18");
-
     /*
       Abreviaciones visuales del desplegable.
       Solo afectan cómo se muestra la referencia en el select.
       No modifican franja.lugar, claves internas, Supabase ni el texto enviado por WhatsApp.
     */
-    if (/zona\s+de\s+boliches\s+bailables\s+lindantes\s+a\s+rn\s*(?:n\s*)?168/.test(lugarNorm)) return "Zona de Boliches";
-    if (/rn\s*168\s*km\s*18\s*peaje\s*tunel\s*subfluvial/.test(lugarNorm)) return "RN 168 KM18 Peaje";
-    if (/rn\s*168\s*km\s*16\s*ascendente/.test(lugarNorm)) return "RN 168 KM16 ASC";
-    if (/rp\s*0?1\s*km\s*0?6\s+con\s+sub\s*-?\s*base\s+rincon\s+uor\s*3\s*-?\s*coordinado/.test(lugarNorm)) return "RP01 KM06 con Sub-Base";
-    if (/rp\s*1\s*km\s*8\s+coordinado\s+con\s+sub\s*-?\s*base\s+rincon/.test(lugarNorm)) return "RP 1 KM8 con Sub Base";
-    if (/rn\s*168\s*km\s*7[,.]?5\s*asc/.test(lugarNorm)) return "RN 168 KM 7,5 ASC";
-    if (/rn\s*11\s*km\s*454\s+sauce\s+viejo.*aeropuerto/.test(lugarNorm)) return "RN 11 KM454 Aeropuerto";
-    if (/aup\s*0?1\s*km\s*141/.test(lugarNorm)) return "AUP01 KM141";
-    if (/rp\s*2\s+y\s+rp\s*5/.test(lugarNorm)) return "RP 2 y RP 5";
-    if (/rp\s*1\s+y\s+rn\s*168.*parada\s+de\s+colectivo/.test(lugarNorm)) return "RP 1 y RN 168 P. de Colectivo";
-    if (/rn\s*168\s+del\s+km\s*18\s+al\s+0?0\s+rp\s*1\s+del\s+km\s*0?0\s+al\s+20/.test(lugarNorm)) return "RN168/RP1";
-    if (/rn\s*168\s+del\s+km\s*18\s+al\s+0?0/.test(lugarNorm)) return "RN168 Km18/Km 00";
-    if (/operativo\s+retorno\s+cuidado\s+corredor\s+de\s+la\s+costa\s*-?\s*rn\s*168/.test(fuenteVisual)) return "Retorno";
-    if (/(?:^|\s)ascendente(?:\s|$)/.test(lugarNorm)) lugar = lugar.replace(/\bascendente\b/gi, "ASC");
-    if (/(?:^|\s)descendente(?:\s|$)/.test(lugarNorm)) lugar = lugar.replace(/\bdescendente\b/gi, "DESC");
+    const lugarNorm = normalizarBasicoSinAcentos(lugar)
+      .replace(/[._–—/]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const clave = compactarClaveVisual(lugar);
+    const fuenteVisual = obtenerFuenteVisualFranja(franja);
 
-    if (esRN168 && esKM18) return "Base/Tunel";
-    if (esRN168 && esRP1) return "RN168 y RP1";
+    // Casos puntuales de lugares largos.
+    if (
+      clave.includes("zonadebolichesbailableslindantesarn168") ||
+      clave.includes("zonadebolichesbailableslindantesarnn168")
+    ) return "ZONA DE BOLICHES";
 
+    if (
+      clave.includes("rn168km18peajetunelsubfluvial") ||
+      clave.includes("rutanacional168km18peajetunelsubfluvial")
+    ) return "RN 168 KM18 PEAJE";
+
+    if (clave.includes("rn168km16ascendente") || clave.includes("rn168km16asc")) {
+      return "RN 168 KM16 ASC";
+    }
+
+    if (
+      clave.includes("rp01km06consubbaserinconuor3coordinado") ||
+      clave.includes("rp1km6consubbaserinconuor3coordinado") ||
+      clave.includes("rp01km06consubbaseuor3coordinado")
+    ) return "RP01 KM06 CON SUB-BASE";
+
+    if (
+      clave.includes("rp1km8coordinadoconsubbaserincon") ||
+      clave.includes("rp01km08coordinadoconsubbaserincon")
+    ) return "RP 1 KM8 CON SUB BASE";
+
+    if (
+      clave.includes("rp1yrn168alturaparadadecolectivo") ||
+      clave.includes("rp01yrn168alturaparadadecolectivo")
+    ) return "RP 1 Y RN 168 P. DE COLECTIVO";
+
+    if (
+      clave.includes("rn168delkm18al00rp1delkm00al20") ||
+      clave.includes("rn168delkm18al0rp1delkm0al20")
+    ) return "RN168/RP1";
+
+    if (clave.includes("rn168delkm18al00") || clave.includes("rn168delkm18al0")) {
+      return "RN168 Km18/Km 00";
+    }
+
+    if (
+      clave.includes("rn168km75asc") ||
+      clave.includes("rn168km7,5asc") ||
+      clave.includes("rn168km7.5asc")
+    ) return "RN 168 KM 7,5 ASC";
+
+    if (
+      clave.includes("rn11km454sauceviejoalturaaeropuerto") ||
+      clave.includes("rn11km454aeropuerto")
+    ) return "RN 11 KM454 AEROPUERTO";
+
+    if (clave.includes("aup01km141") || clave.includes("aup1km141")) {
+      return "AUP01 KM141";
+    }
+
+    if (clave.includes("rp2yrp5montevera") || clave.includes("rp2yrp5")) {
+      return "RP 2 Y RP 5";
+    }
+
+    // Si un texto de tipo/operativo vino cargado como lugar, también se resume visualmente.
+    if (/operativo\s+retorno\s+cuidado\s+corredor\s+de\s+la\s+costa\s*-?\s*rn\s*168/.test(fuenteVisual)) {
+      return "RETORNO";
+    }
+
+    // Reglas generales ya existentes + abreviaciones de sentido.
     lugar = lugar
       .replace(/\bruta\s+nacional\s*/gi, "RN")
       .replace(/\bruta\s+provincial\s*/gi, "RP")
@@ -1336,6 +1382,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replace(/\bsanta\s+fe\b/gi, "Sta. Fe")
       .replace(/\bascendente\b/gi, "ASC")
       .replace(/\bdescendente\b/gi, "DESC");
+
+    const esRN168 = clave.includes("rn168") || clave.includes("rutanacional168");
+    const esRP1 = clave.includes("rp1") || clave.includes("rutaprovincial1");
+    const esKM18 = clave.includes("km18") || clave.includes("kilometro18");
+
+    if (esRN168 && esKM18) return "Base/Tunel";
+    if (esRN168 && esRP1) return "RN168 y RP1";
 
     lugar = capitalizarLugarVisual(lugar);
 
@@ -1349,14 +1402,37 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function obtenerTipoVisualFranja(franja) {
     const fuente = obtenerFuenteVisualFranja(franja);
 
-    if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
-    if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b|\bdispositivo\s+de\s+control\s+estrategico\s+provincial\b/.test(fuente)) return "DICEP";
-    if (/\bnocturnidad\s+controlada\b/.test(fuente)) return "Nocturnidad";
-    if (/\bcinemometro\s+con\s+detencion\b|\bcinemometro\b|\bcinemometro\b/.test(fuente)) return "Cinemómetro";
-    if (/\bretorno\s+cuidado\b|\boperativo\s+retorno\b/.test(fuente)) return "Retorno";
-    if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "Alcoholemia";
+    /*
+      Orden de prioridad: primero los tipos más específicos.
+      Solo cambia la etiqueta visual del desplegable.
+    */
+    if (
+      /\bdicep\b/.test(fuente) ||
+      /\bmultiagencial\b/.test(fuente) ||
+      /\bmulti\s+agencial\b/.test(fuente) ||
+      /\bdispositivo\s+de\s+control\s+estrategico\s+provincial\b/.test(fuente)
+    ) return "DICEP";
+
+    if (/\bnocturnidad\s+controlada\b|\bnocturnidad\b/.test(fuente)) return "NOCTURNIDAD";
+
+    if (
+      /\bcinemometro\s+con\s+detencion\b/.test(fuente) ||
+      /\bcinemometro\b/.test(fuente)
+    ) return "CINEMÓMETRO";
+
+    if (/\boperativo\s+retorno\s+cuidado\b|\bretorno\s+cuidado\b|\boperativo\s+retorno\b/.test(fuente)) {
+      return "RETORNO";
+    }
+
+    if (/\bordenamiento\s+vehicular\b|\boperativo\s+ordenamiento\s+vehicular\b|\bordenamiento\b/.test(fuente)) {
+      return "ORDENAMIENTO";
+    }
+
+    if (/\balcoholemia\b|\balcoholimetr/.test(fuente)) return "ALCOHOLEMIA";
+
     if (/\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(fuente)) return "OCV";
-    if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
+
+    if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
     if (/\blimpieza\b/.test(fuente)) return "Limpieza";
     if (/\bablacion\b/.test(fuente)) return "Ablacion";
     if (/\bestablecido\b/.test(fuente)) return "Establecido";
@@ -1373,11 +1449,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fuente = obtenerFuenteVisualFranja(franja);
     const sufijos = [];
 
-    if (/\bsub\s*-?\s*base\b.*\buor\s*3\b|\buor\s*3\b.*\bsub\s*-?\s*base\b/.test(fuente)) {
+    if (/\bsub\s*-?\s*base\b.*\buor\s*3\b|\buor\s*3\b.*\bsub\s*-?\s*base\b|\bsub\s*-?\s*base\b/.test(fuente)) {
       sufijos.push("con SUB BASE");
     } else if (/\buor\s*3\b|\buor3\b/.test(fuente)) {
       sufijos.push("con UOR3");
     }
+
     if (/\btransito\b|\binspectores?\s+de\s+transito\b/.test(fuente)) sufijos.push("con Transito");
 
     return sufijos;
