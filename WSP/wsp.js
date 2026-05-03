@@ -508,6 +508,86 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return [];
   }
 
+
+  function normalizarArrayJsonWsp(value) {
+    if (Array.isArray(value)) {
+      return value.map((v) => limpiarTextoSimple(v)).filter(Boolean);
+    }
+
+    if (typeof value === "string") {
+      const raw = value.trim();
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.map((v) => limpiarTextoSimple(v)).filter(Boolean);
+        }
+      } catch {}
+      return [limpiarTextoSimple(raw)].filter(Boolean);
+    }
+
+    return [];
+  }
+
+  function timestampOperativoAMs(value) {
+    if (!value) return NaN;
+    const d = new Date(String(value).trim());
+    return !isNaN(d.getTime()) ? d.getTime() : NaN;
+  }
+
+  function tituloDesdeOperativoPublicado(row) {
+    const tipo = limpiarTextoSimple(row?.tipo || "Operativo");
+    const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
+    const ordenTxt = ordenes.join(" / ");
+
+    if (tipo && ordenTxt) return `${tipo} ${ordenTxt}`;
+    if (tipo) return tipo;
+    if (ordenTxt) return ordenTxt;
+    return "Operativo";
+  }
+
+  function convertirOperativosPublicadosAFormatoWsp(filas) {
+    const rows = Array.isArray(filas) ? filas : [];
+    const franjas = [];
+
+    rows.forEach((row) => {
+      if (row?.activo === false) return;
+      if (row?.sin_efecto === true) return;
+
+      const hDesde = limpiarTextoSimple(row?.hora_desde || "");
+      const hHasta = limpiarTextoSimple(row?.hora_hasta || "");
+      const lugar = limpiarTextoSimple(row?.lugar || "");
+      const titulo = tituloDesdeOperativoPublicado(row);
+      const fechaRegistro = fechaIsoADDMMAAAA(row?.fecha_operativo || "");
+      const inicioMs = timestampOperativoAMs(row?.inicio_operativo);
+      const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
+      const archivos = normalizarArrayJsonWsp(row?.archivos_origen);
+
+      if (!hDesde || !hHasta || !lugar || !titulo || !fechaRegistro) return;
+
+      franjas.push({
+        horario: `${hDesde} A ${hHasta}`,
+        lugar,
+        titulo,
+        fecha: fechaRegistro,
+        sortKey: Number.isFinite(inicioMs) ? inicioMs : undefined,
+        __inicioTs: Number.isFinite(inicioMs) ? inicioMs : undefined,
+        __operativoPublicadoId: row?.id || null,
+        __operativoKey: limpiarTextoSimple(row?.operativo_key || ""),
+        __ordenNum: ordenes.join(" / "),
+        __ordenTextoRef: archivos.join(" / ") || "Operativos publicados",
+      });
+    });
+
+    return [{
+      num: "",
+      textoRef: "Operativos publicados",
+      vigencia: fechaIsoADDMMAAAA(getGuardiaFechaISO()),
+      caducidad: "",
+      franjas,
+    }];
+  }
+
   function convertirOrdenesPublicadasAFormatoWsp(filas) {
     const ordenes = [];
     const rows = Array.isArray(filas) ? filas : [];
@@ -535,13 +615,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const numeroOrden = numeroOrdenDesdeRegistroPublicado(rec);
 
         if (!horario || !lugar || !titulo) return;
-
-        /*
-          Filtro 06:00→06:00:
-          La fecha del operativo debe salir del registro publicado.
-          No se usa fecha_inicio_ejecucion como reemplazo porque una orden puede contener varios días.
-        */
-        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || rec?.fechaOriginal || rec?.__fechaOperativo || "");
+        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || row?.fecha_inicio_ejecucion);
         const sortKey = Number(rec?.sortKey || rec?.__inicioTs || rec?.inicioTs || rec?.inicio_ts || NaN);
 
         if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
@@ -552,7 +626,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           lugar,
           titulo,
           fecha: fechaRegistro,
-          __publicadoSupabase: true,
           sortKey: Number.isFinite(sortKey) ? sortKey : undefined,
           __inicioTs: Number.isFinite(sortKey) ? sortKey : undefined,
         });
@@ -576,15 +649,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   async function syncOrdenesDesdeServidor() {
     try {
+      const guardiaFecha = getGuardiaFechaISO();
       const params = new URLSearchParams({
-        select: "id,archivo_nombre,fecha_inicio_ejecucion,fecha_caducidad,modo_caducidad,estado,estado_manual,activo,registros,updated_at",
+        select: "id,operativo_key,guardia_fecha,fecha_operativo,inicio_operativo,hora_desde,hora_hasta,lugar,lugar_normalizado,tipo,ordenes_origen,archivos_origen,activo,sin_efecto,error_en_la_orden,error_motivo,registro_original,updated_at",
+        guardia_fecha: `eq.${guardiaFecha}`,
         activo: "eq.true",
-        estado: "in.(EN_VIGENCIA,A_EJECUTAR)",
-        estado_manual: "eq.ACTIVA",
-        order: "fecha_inicio_ejecucion.asc",
+        sin_efecto: "eq.false",
+        order: "inicio_operativo.asc",
       });
 
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_publicadas?${params.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -593,17 +667,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       if (!r.ok) {
-        console.error("[WSP] Supabase REST error:", r.status, await r.text());
+        const txt = await r.text().catch(() => "");
+        console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
+        guardarOrdenesSeguro([]);
+        actualizarContadorOperativosWsp(0);
         return false;
       }
 
       const data = await r.json();
-      const ordenes = convertirOrdenesPublicadasAFormatoWsp(data);
+      const ordenes = convertirOperativosPublicadosAFormatoWsp(data);
 
       guardarOrdenesSeguro(ordenes);
       return true;
     } catch (e) {
-      console.error("Error leyendo Supabase:", e);
+      console.error("Error leyendo operativos_publicados:", e);
+      guardarOrdenesSeguro([]);
+      actualizarContadorOperativosWsp(0);
       return false;
     }
   }
@@ -708,10 +787,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerFechaFranjaOperativo(franja, orden) {
-    if (franja?.__publicadoSupabase === true) {
-      return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
-    }
-
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
   }
 
@@ -743,9 +818,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fechaHoraInicio = construirFechaHoraInicioFranja(franja, orden);
 
     if (!fechaHoraInicio) {
-      // En registros publicados de Supabase no se acepta contar solo por horario:
-      // debe existir inicio real por sortKey o por fecha + horaDesde/horario.
-      if (franja?.__publicadoSupabase === true) return false;
       return franjaEnGuardia(franja?.horario || "");
     }
 
