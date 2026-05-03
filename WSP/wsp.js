@@ -535,7 +535,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const numeroOrden = numeroOrdenDesdeRegistroPublicado(rec);
 
         if (!horario || !lugar || !titulo) return;
-        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || row?.fecha_inicio_ejecucion);
+
+        /*
+          Filtro 06:00→06:00:
+          La fecha del operativo debe salir del registro publicado.
+          No se usa fecha_inicio_ejecucion como reemplazo porque una orden puede contener varios días.
+        */
+        const fechaRegistro = fechaIsoADDMMAAAA(rec?.fecha || rec?.fechaOriginal || rec?.__fechaOperativo || "");
         const sortKey = Number(rec?.sortKey || rec?.__inicioTs || rec?.inicioTs || rec?.inicio_ts || NaN);
 
         if (!primerNumeroOrden && numeroOrden) primerNumeroOrden = numeroOrden;
@@ -546,6 +552,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           lugar,
           titulo,
           fecha: fechaRegistro,
+          __publicadoSupabase: true,
           sortKey: Number.isFinite(sortKey) ? sortKey : undefined,
           __inicioTs: Number.isFinite(sortKey) ? sortKey : undefined,
         });
@@ -701,6 +708,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerFechaFranjaOperativo(franja, orden) {
+    if (franja?.__publicadoSupabase === true) {
+      return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
+    }
+
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || orden?.vigencia || "");
   }
 
@@ -732,6 +743,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const fechaHoraInicio = construirFechaHoraInicioFranja(franja, orden);
 
     if (!fechaHoraInicio) {
+      // En registros publicados de Supabase no se acepta contar solo por horario:
+      // debe existir inicio real por sortKey o por fecha + horaDesde/horario.
+      if (franja?.__publicadoSupabase === true) return false;
       return franjaEnGuardia(franja?.horario || "");
     }
 
