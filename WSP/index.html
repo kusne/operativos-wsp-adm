@@ -36,6 +36,7 @@
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
       <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
+      <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
     <div class="operativos-title-row">
       <label class="top-label operativos-title-label">OPERATIVOS</label>
@@ -80,6 +81,67 @@
         </label>
       </div>
     </div>
+
+    <!-- CONTROL DE MÓVILES -->
+    <div id="bloqueControlMoviles" class="section hidden destacado control-moviles-section">
+      <label>Control de móviles</label>
+
+      <div id="controlMovilesEstado" class="control-moviles-estado">Cargando móviles en servicio...</div>
+
+      <div id="controlMovilesChips" class="control-moviles-chips" aria-live="polite"></div>
+
+      <div id="controlMovilesFormulario" class="control-moviles-form hidden">
+        <div class="control-movil-seleccionado">
+          <span>Móvil seleccionado</span>
+          <strong id="controlMovilNumeroSeleccionado">---</strong>
+        </div>
+
+        <div class="control-moviles-grid-inputs">
+          <div class="control-moviles-field">
+            <label for="controlMovilKilometraje">Kilometraje</label>
+            <input type="number" id="controlMovilKilometraje" min="0" step="1" inputmode="numeric" placeholder="Ej: 29246">
+          </div>
+
+          <div class="control-moviles-field">
+            <label for="controlMovilCombustible">Combustible</label>
+            <select id="controlMovilCombustible">
+              <option value="">vacío</option>
+              <option value="reserva">reserva</option>
+              <option value="1/4">1/4</option>
+              <option value="+1/4">+1/4</option>
+              <option value="-1/2">-1/2</option>
+              <option value="1/2">1/2</option>
+              <option value="+1/2">+1/2</option>
+              <option value="3/4">3/4</option>
+              <option value="+3/4">+3/4</option>
+              <option value="lleno">lleno</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="control-moviles-field">
+          <label for="controlMovilObservaciones">Observaciones</label>
+          <textarea id="controlMovilObservaciones" rows="3" placeholder="Novedades u observaciones del control"></textarea>
+        </div>
+
+        <div class="control-moviles-fotos">
+          <div class="control-moviles-field">
+            <label for="controlMovilFoto1">Foto 1</label>
+            <input type="file" id="controlMovilFoto1" accept="image/*" capture="environment">
+            <img id="controlMovilPreview1" class="control-movil-preview hidden" alt="Vista previa foto 1">
+          </div>
+
+          <div class="control-moviles-field">
+            <label for="controlMovilFoto2">Foto 2</label>
+            <input type="file" id="controlMovilFoto2" accept="image/*" capture="environment">
+            <img id="controlMovilPreview2" class="control-movil-preview hidden" alt="Vista previa foto 2">
+          </div>
+        </div>
+
+        <button type="button" id="btnCambiarMovilControl" class="control-moviles-btn-secundario">Cambiar móvil</button>
+      </div>
+    </div>
+
 
     <!-- PERSONAL -->
     <div class="section obligatorio destacado" id="bloquePersonal">
@@ -374,7 +436,6 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
-
 
 
 
