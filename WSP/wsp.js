@@ -27,6 +27,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const textareaObs = document.getElementById("obs");
   const btnEnviar = document.getElementById("btnEnviar");
 
+  // ===== CONTROL DE MÓVILES =====
+  const bloqueControlMoviles = document.getElementById("bloqueControlMoviles");
+  const controlMovilesEstado = document.getElementById("controlMovilesEstado");
+  const controlMovilesChips = document.getElementById("controlMovilesChips");
+  const controlMovilesFormulario = document.getElementById("controlMovilesFormulario");
+  const controlMovilNumeroSeleccionado = document.getElementById("controlMovilNumeroSeleccionado");
+  const controlMovilKilometraje = document.getElementById("controlMovilKilometraje");
+  const controlMovilCombustible = document.getElementById("controlMovilCombustible");
+  const controlMovilObservaciones = document.getElementById("controlMovilObservaciones");
+  const controlMovilFoto1 = document.getElementById("controlMovilFoto1");
+  const controlMovilFoto2 = document.getElementById("controlMovilFoto2");
+  const controlMovilPreview1 = document.getElementById("controlMovilPreview1");
+  const controlMovilPreview2 = document.getElementById("controlMovilPreview2");
+  const btnCambiarMovilControl = document.getElementById("btnCambiarMovilControl");
+
   const inputAlcotest = document.getElementById("Alcotest");
   const inputPositivaSancionable = document.getElementById("positivaSancionable");
   const inputPositivaNoSancionable = document.getElementById("positivaNoSancionable");
@@ -55,6 +70,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
 
+  let controlMovilesCache = [];
+  let controlMovilSeleccionado = null;
+  let controlMovilesCargados = false;
+
   function actualizarContadorOperativosWsp(cantidad = operativosCache.length) {
     if (!contadorOperativosWsp) return;
     const n = Math.max(0, parseInt(cantidad, 10) || 0);
@@ -63,6 +82,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const OBS_PRESENCIA_ACTIVA_INICIA = "Se inicia con Presencia Activa por inclemencias del tiempo ( lluvias).Se adjunta vistas Fotograficas.";
   const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
+
+  const CONTROL_MOVILES_TABLE = "moviles_controles";
+  const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
+  const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -1515,6 +1538,395 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return `${horario} - ${lugar} - ${referencia}`;
   }
 
+  // ======================================================
+  // ===== CONTROL DE MÓVILES ==============================
+  // ======================================================
+  function esControlMovilesActivo() {
+    return selTipo?.value === "CONTROL MOVILES";
+  }
+
+  function setTextoEstadoControlMoviles(texto) {
+    if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
+  }
+
+  function normalizarCombustibleControlMovil(value) {
+    const v = limpiarTextoSimple(value || "").toLowerCase();
+    return CONTROL_MOVILES_COMBUSTIBLES.includes(v) ? v : "";
+  }
+
+  function normalizarTipoMovilControl(value) {
+    const v = normalizarBasicoSinAcentos(value || "");
+    if (v === "pick up" || v === "pickup") return "PICK UP";
+    if (v === "furgon") return "FURGÓN";
+    if (v === "sedan") return "SEDAN";
+    if (v === "moto" || v === "motos") return "MOTO";
+    return limpiarTextoSimple(value || "").toUpperCase();
+  }
+
+  function normalizarMovilControl(row) {
+    const condicion = row?.condicion === true || String(row?.condicion).toLowerCase() === "true";
+    return {
+      id: row?.id || null,
+      numero: limpiarTextoSimple(row?.numero || ""),
+      tipo: normalizarTipoMovilControl(row?.tipo || row?.categoria || ""),
+      modelo: limpiarTextoSimple(row?.modelo || ""),
+      dominio: limpiarTextoSimple(row?.dominio || "").toUpperCase(),
+      kilometraje: String(row?.kilometraje ?? "").replace(/\D+/g, ""),
+      combustible: normalizarCombustibleControlMovil(row?.combustible),
+      condicion,
+    };
+  }
+
+  function prioridadTipoControlMovil(movil) {
+    const t = normalizarTipoMovilControl(movil?.tipo);
+    if (t === "PICK UP") return 1;
+    if (t === "FURGÓN") return 2;
+    if (t === "SEDAN") return 3;
+    if (t === "MOTO") return 4;
+    return 9;
+  }
+
+  function prioridadNumeroPickUpControl(movil) {
+    const n = limpiarTextoSimple(movil?.numero);
+    const orden = ["12428", "10139"];
+    const idx = orden.indexOf(n);
+    return idx >= 0 ? idx : 99;
+  }
+
+  function prioridadModeloMotoControl(movil) {
+    const m = normalizarBasicoSinAcentos(movil?.modelo || "");
+    if (m.includes("250")) return 1;
+    if (m.includes("300")) return 2;
+    if (m.includes("650")) return 3;
+    if (m.includes("400")) return 4;
+    return 9;
+  }
+
+  function ordenarMovilesControl(a, b) {
+    const ta = prioridadTipoControlMovil(a);
+    const tb = prioridadTipoControlMovil(b);
+    if (ta !== tb) return ta - tb;
+
+    if (ta === 1) {
+      const pa = prioridadNumeroPickUpControl(a);
+      const pb = prioridadNumeroPickUpControl(b);
+      if (pa !== pb) return pa - pb;
+    }
+
+    if (ta === 4) {
+      const ma = prioridadModeloMotoControl(a);
+      const mb = prioridadModeloMotoControl(b);
+      if (ma !== mb) return ma - mb;
+    }
+
+    return String(a?.numero || "").localeCompare(String(b?.numero || ""), "es", { numeric: true });
+  }
+
+  async function cargarMovilesControlDesdeSupabase({ forzar = false } = {}) {
+    if (controlMovilesCargados && !forzar) return controlMovilesCache;
+
+    setTextoEstadoControlMoviles("Cargando móviles en servicio...");
+
+    const params = new URLSearchParams({
+      select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,condicion,activo",
+      condicion: "eq.true",
+      activo: "eq.true",
+      order: "numero.asc",
+    });
+
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        throw new Error(`Supabase ${r.status}: ${txt}`);
+      }
+
+      const data = await r.json();
+      controlMovilesCache = (Array.isArray(data) ? data : [])
+        .map(normalizarMovilControl)
+        .filter((m) => m.numero && m.condicion)
+        .sort(ordenarMovilesControl);
+
+      controlMovilesCargados = true;
+      renderControlMovilesChips();
+      return controlMovilesCache;
+    } catch (e) {
+      console.warn("[WSP] No se pudieron cargar móviles en servicio.", e);
+      controlMovilesCache = [];
+      renderControlMovilesChips();
+      setTextoEstadoControlMoviles("No se pudieron cargar móviles en servicio. Revisá Supabase.");
+      return [];
+    }
+  }
+
+  function renderControlMovilesChips() {
+    if (!controlMovilesChips) return;
+
+    controlMovilesChips.innerHTML = "";
+
+    if (!controlMovilesCache.length) {
+      setTextoEstadoControlMoviles("No hay móviles en servicio para controlar.");
+      return;
+    }
+
+    setTextoEstadoControlMoviles("Seleccione un móvil en servicio.");
+
+    controlMovilesCache.forEach((movil) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "control-movil-chip";
+      btn.dataset.numero = movil.numero;
+      btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}<small>${escapeHtmlControlMovil(movil.modelo || movil.tipo || "")}</small>`;
+      btn.addEventListener("click", () => seleccionarMovilControl(movil.numero));
+      controlMovilesChips.appendChild(btn);
+    });
+  }
+
+  function escapeHtmlControlMovil(str) {
+    return String(str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function seleccionarMovilControl(numero) {
+    const movil = controlMovilesCache.find((m) => String(m.numero) === String(numero));
+    if (!movil) return;
+
+    controlMovilSeleccionado = movil;
+
+    if (controlMovilesChips) controlMovilesChips.classList.add("hidden");
+    if (controlMovilesFormulario) controlMovilesFormulario.classList.remove("hidden");
+    if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero;
+    if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
+    if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
+    if (controlMovilObservaciones) controlMovilObservaciones.value = "";
+    limpiarFotosControlMovil();
+    setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
+  }
+
+  function volverASeleccionMovilControl() {
+    controlMovilSeleccionado = null;
+    if (controlMovilesFormulario) controlMovilesFormulario.classList.add("hidden");
+    if (controlMovilesChips) controlMovilesChips.classList.remove("hidden");
+    if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = "---";
+    if (controlMovilKilometraje) controlMovilKilometraje.value = "";
+    if (controlMovilCombustible) controlMovilCombustible.value = "";
+    if (controlMovilObservaciones) controlMovilObservaciones.value = "";
+    limpiarFotosControlMovil();
+    setTextoEstadoControlMoviles(controlMovilesCache.length ? "Seleccione un móvil en servicio." : "No hay móviles en servicio para controlar.");
+  }
+
+  function limpiarFotosControlMovil() {
+    [controlMovilFoto1, controlMovilFoto2].forEach((input) => {
+      if (input) input.value = "";
+    });
+    [controlMovilPreview1, controlMovilPreview2].forEach((img) => {
+      if (!img) return;
+      img.src = "";
+      img.classList.add("hidden");
+    });
+  }
+
+  function mostrarPreviewControlMovil(input, preview) {
+    if (!input || !preview) return;
+    const file = input.files?.[0];
+    if (!file) {
+      preview.src = "";
+      preview.classList.add("hidden");
+      return;
+    }
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove("hidden");
+  }
+
+  function normalizarKilometrajeControlMovil(value) {
+    return String(value || "").replace(/\D+/g, "");
+  }
+
+  function extensionArchivoControlMovil(file) {
+    const name = String(file?.name || "");
+    const m = name.match(/\.([a-z0-9]{2,5})$/i);
+    if (m) return m[1].toLowerCase();
+    const type = String(file?.type || "").toLowerCase();
+    if (type.includes("png")) return "png";
+    if (type.includes("webp")) return "webp";
+    return "jpg";
+  }
+
+  async function subirFotoControlMovil(file, numero, slot) {
+    if (!file) return "";
+
+    const ext = extensionArchivoControlMovil(file);
+    const safeNumero = String(numero || "movil").replace(/[^0-9a-z_-]+/gi, "");
+    const path = `${safeNumero}/${getGuardiaFechaISO()}_${Date.now()}_${slot}.${ext}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${CONTROL_MOVILES_BUCKET}/${path}`;
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: headersSupabase({
+        "Content-Type": file.type || "application/octet-stream",
+        "x-upsert": "false",
+      }),
+      body: file,
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`No se pudo subir foto ${slot}: ${r.status} ${txt}`);
+    }
+
+    return `${SUPABASE_URL}/storage/v1/object/public/${CONTROL_MOVILES_BUCKET}/${path}`;
+  }
+
+  async function insertarRegistroControlMovil(payload) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_TABLE}`, {
+      method: "POST",
+      headers: headersSupabase({
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        Accept: "application/json",
+      }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`No se pudo insertar control: ${r.status} ${txt}`);
+    }
+
+    return r.json().catch(() => null);
+  }
+
+  async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?numero=eq.${encodeURIComponent(Number(numero))}`, {
+      method: "PATCH",
+      headers: headersSupabase({
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      }),
+      body: JSON.stringify({
+        kilometraje: Number(kilometraje),
+        combustible,
+        observaciones_novedades: observaciones,
+      }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`No se pudo actualizar móvil: ${r.status} ${txt}`);
+    }
+  }
+
+  async function guardarControlMovil() {
+    if (!controlMovilSeleccionado) {
+      alert("Seleccione un móvil en servicio.");
+      return;
+    }
+
+    const kilometraje = normalizarKilometrajeControlMovil(controlMovilKilometraje?.value || "");
+    const combustible = normalizarCombustibleControlMovil(controlMovilCombustible?.value || "");
+    const observaciones = limpiarTextoSimple(controlMovilObservaciones?.value || "");
+
+    if (!kilometraje) {
+      alert("Complete el kilometraje. Solo se aceptan números.");
+      controlMovilKilometraje?.focus();
+      return;
+    }
+
+    if (!CONTROL_MOVILES_COMBUSTIBLES.includes(combustible)) {
+      alert("Seleccione un combustible válido.");
+      controlMovilCombustible?.focus();
+      return;
+    }
+
+    try {
+      if (btnEnviar) {
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = "Guardando control...";
+      }
+
+      const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
+      const foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, controlMovilSeleccionado.numero, "foto2");
+
+      await insertarRegistroControlMovil({
+        movil_id: controlMovilSeleccionado.id,
+        numero_movil: Number(controlMovilSeleccionado.numero),
+        kilometraje: Number(kilometraje),
+        combustible,
+        observaciones,
+        foto_1_url: foto1 || null,
+        foto_2_url: foto2 || null,
+        guardia_fecha: getGuardiaFechaISO(),
+      });
+
+      await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones);
+
+      controlMovilesCargados = false;
+      await cargarMovilesControlDesdeSupabase({ forzar: true });
+      volverASeleccionMovilControl();
+      alert("Control de móvil guardado correctamente.");
+    } catch (e) {
+      console.error("[WSP] Error guardando control de móvil", e);
+      alert("No se pudo guardar el control de móvil. Revisá tabla, bucket Storage y permisos de Supabase.");
+    } finally {
+      if (btnEnviar) {
+        btnEnviar.disabled = false;
+        btnEnviar.textContent = esControlMovilesActivo() ? "Guardar control móvil" : "Enviar por WhatsApp";
+      }
+    }
+  }
+
+  function setUIControlMovilesActiva(activa) {
+    if (bloqueControlMoviles) bloqueControlMoviles.classList.toggle("hidden", !activa);
+    document.body.classList.toggle("modo-control-moviles", !!activa);
+
+    if (activa) {
+      setUIControlSuperiorActiva(false);
+      setControlSuperiorVisible(false);
+      setPersonalVisible(false);
+      setMovilidadVisible(false);
+      setElementosVisibles(false);
+      setObservacionesVisible(false);
+      if (divFinaliza) divFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
+      if (divMismosElementos) divMismosElementos.classList.add("hidden");
+      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+      limpiarSeleccionOperativo();
+      if (btnEnviar) btnEnviar.textContent = "Guardar control móvil";
+      cargarMovilesControlDesdeSupabase();
+    } else {
+      if (btnEnviar) btnEnviar.textContent = "Enviar por WhatsApp";
+      volverASeleccionMovilControl();
+    }
+  }
+
+  function bindControlMovilesEventos() {
+    if (controlMovilKilometraje) {
+      controlMovilKilometraje.addEventListener("input", () => {
+        controlMovilKilometraje.value = normalizarKilometrajeControlMovil(controlMovilKilometraje.value);
+      });
+    }
+
+    if (controlMovilFoto1) {
+      controlMovilFoto1.addEventListener("change", () => mostrarPreviewControlMovil(controlMovilFoto1, controlMovilPreview1));
+    }
+
+    if (controlMovilFoto2) {
+      controlMovilFoto2.addEventListener("change", () => mostrarPreviewControlMovil(controlMovilFoto2, controlMovilPreview2));
+    }
+
+    if (btnCambiarMovilControl) {
+      btnCambiarMovilControl.addEventListener("click", volverASeleccionMovilControl);
+    }
+  }
+
   function actualizarDatosFranja() {
     const key = selHorario?.value || "";
     franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
@@ -1536,12 +1948,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function actualizarTipo() {
+    const controlMoviles = esControlMovilesActivo();
     const controlSuperior = esControlSuperiorActivo();
     const fin = selTipo.value === "FINALIZA";
 
     if (chkPresenciaActiva) {
       chkPresenciaActiva.checked = false;
     }
+
+    if (controlMoviles) {
+      setUIControlMovilesActiva(true);
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
+      return;
+    }
+
+    setUIControlMovilesActiva(false);
 
     if (controlSuperior) {
       setUIControlSuperiorActiva(true);
@@ -2373,6 +2795,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
     setControlSuperiorVisible(false);
+    setUIControlMovilesActiva(false);
     setObservacionesVisible(true);
 
     limpiarGraduaciones(graduacionesSancionable);
@@ -2503,6 +2926,11 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
+    if (esControlMovilesActivo()) {
+      await guardarControlMovil();
+      return;
+    }
+
     if (!franjaSeleccionada) return;
 
     if (esControlSuperiorActivo()) {
@@ -2746,6 +3174,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       aplicarAutocompletadoDetalles(detallesInput);
     });
   }
+
+  bindControlMovilesEventos();
 
   btnEnviar.addEventListener("click", enviar);
 
