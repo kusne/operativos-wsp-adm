@@ -2115,3 +2115,89 @@ body.modo-control-moviles #btnEnviar{
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   CONTROL DE MÓVILES - CORRECCIÓN DE FLUJO Y VISUAL V4
+   Reglas:
+   - Pantalla principal: chips visibles + botón azul Salir visible.
+   - Móvil seleccionado: chips ocultos + solo botón rojo Guardar visible.
+   - Móviles base: solo número.
+   - Motos: número + cilindrada.
+   ========================================================= */
+body.modo-control-moviles:not(.control-movil-seleccionado-activo) #controlMovilesChips{
+  display: grid !important;
+}
+
+body.modo-control-moviles:not(.control-movil-seleccionado-activo) #controlMovilesFormulario{
+  display: none !important;
+}
+
+body.modo-control-moviles:not(.control-movil-seleccionado-activo) #btnEnviar{
+  display: block !important;
+  background: #0B3D91 !important;
+  color: #ffffff !important;
+}
+
+body.modo-control-moviles.control-movil-seleccionado-activo #controlMovilesChips{
+  display: none !important;
+}
+
+body.modo-control-moviles.control-movil-seleccionado-activo #controlMovilesFormulario{
+  display: grid !important;
+}
+
+body.modo-control-moviles.control-movil-seleccionado-activo #btnEnviar{
+  display: none !important;
+}
+
+.control-moviles-grupo-base .control-moviles-grupo-grid{
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.control-moviles-grupo-motos .control-moviles-grupo-grid{
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.control-movil-chip{
+  font-size: 22px !important;
+  line-height: 1.05 !important;
+}
+
+.control-moviles-grupo-base .control-movil-chip small{
+  display: none !important;
+}
+
+.control-moviles-grupo-motos .control-movil-chip{
+  font-size: 18px !important;
+  gap: 4px !important;
+}
+
+.control-moviles-grupo-motos .control-movil-chip small{
+  display: inline !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+}
+
+.control-moviles-btn-guardar{
+  background: #B11A1A !important;
+  color: #ffffff !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 10px 20px rgba(177, 26, 26, 0.25) !important;
+}
+
+.control-moviles-btn-guardar:hover{
+  filter: brightness(1.05) !important;
+}
+
+@media (max-width: 430px){
+  .control-moviles-grupo-base .control-moviles-grupo-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .control-moviles-grupo-motos .control-moviles-grupo-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
