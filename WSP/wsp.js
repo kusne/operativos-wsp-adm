@@ -1549,6 +1549,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
   }
 
+  function actualizarBotonSalirControlMoviles() {
+    if (!btnEnviar) return;
+
+    const enControlMoviles = esControlMovilesActivo();
+    const hayMovilSeleccionado = !!controlMovilSeleccionado;
+
+    /*
+      Flujo solicitado:
+      - Pantalla principal con chips: se ve SOLO el botón azul "Salir".
+      - Pantalla de móvil seleccionado: se oculta el botón azul y queda SOLO el botón rojo "Guardar".
+    */
+    if (!enControlMoviles) {
+      btnEnviar.classList.remove("hidden");
+      return;
+    }
+
+    btnEnviar.classList.toggle("hidden", hayMovilSeleccionado);
+    btnEnviar.textContent = "Salir";
+  }
+
   function normalizarCombustibleControlMovil(value) {
     const v = limpiarTextoSimple(value || "").toLowerCase();
     return CONTROL_MOVILES_COMBUSTIBLES.includes(v) ? v : "";
@@ -1674,15 +1694,58 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     setTextoEstadoControlMoviles("Seleccione un móvil en servicio.");
 
-    controlMovilesCache.forEach((movil) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "control-movil-chip";
-      btn.dataset.numero = movil.numero;
-      btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}<small>${escapeHtmlControlMovil(movil.modelo || movil.tipo || "")}</small>`;
-      btn.addEventListener("click", () => seleccionarMovilControl(movil.numero));
-      controlMovilesChips.appendChild(btn);
-    });
+    const movilesBase = controlMovilesCache
+      .filter((movil) => normalizarTipoMovilControl(movil?.tipo) !== "MOTO")
+      .sort(ordenarMovilesControl);
+
+    const motos = controlMovilesCache
+      .filter((movil) => normalizarTipoMovilControl(movil?.tipo) === "MOTO")
+      .sort(ordenarMovilesControl);
+
+    const crearGrupo = (titulo, rows, tipoGrupo) => {
+      if (!rows.length) return;
+
+      const box = document.createElement("div");
+      box.className = `control-moviles-grupo control-moviles-grupo-${tipoGrupo}`;
+
+      const title = document.createElement("div");
+      title.className = "control-moviles-grupo-titulo";
+      title.textContent = titulo;
+      box.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.className = "control-moviles-grupo-grid";
+
+      rows.forEach((movil) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "control-movil-chip";
+        btn.dataset.numero = movil.numero;
+
+        const detalle = tipoGrupo === "motos" ? cilindradaMotoControl(movil) : "";
+        btn.innerHTML = detalle
+          ? `${escapeHtmlControlMovil(movil.numero)} <small>${escapeHtmlControlMovil(detalle)}</small>`
+          : `${escapeHtmlControlMovil(movil.numero)}`;
+
+        btn.addEventListener("click", () => seleccionarMovilControl(movil.numero));
+        grid.appendChild(btn);
+      });
+
+      box.appendChild(grid);
+      controlMovilesChips.appendChild(box);
+    };
+
+    crearGrupo("Móviles", movilesBase, "base");
+    crearGrupo("Motos", motos, "motos");
+  }
+
+  function cilindradaMotoControl(movil) {
+    const modelo = normalizarBasicoSinAcentos(movil?.modelo || "");
+    if (modelo.includes("250")) return "(250cc.)";
+    if (modelo.includes("300")) return "(300cc.)";
+    if (modelo.includes("650")) return "(650cc.)";
+    if (modelo.includes("400")) return "(400cc.)";
+    return "";
   }
 
   function escapeHtmlControlMovil(str) {
@@ -1708,6 +1771,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilObservaciones) controlMovilObservaciones.value = "";
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
+    actualizarBotonSalirControlMoviles();
   }
 
   function volverASeleccionMovilControl() {
@@ -1720,6 +1784,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilObservaciones) controlMovilObservaciones.value = "";
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles(controlMovilesCache.length ? "Seleccione un móvil en servicio." : "No hay móviles en servicio para controlar.");
+    actualizarBotonSalirControlMoviles();
   }
 
   function limpiarFotosControlMovil() {
@@ -1846,9 +1911,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     try {
-      if (btnEnviar) {
-        btnEnviar.disabled = true;
-        btnEnviar.textContent = "Guardando control...";
+      if (btnCambiarMovilControl) {
+        btnCambiarMovilControl.disabled = true;
+        btnCambiarMovilControl.textContent = "Guardando...";
       }
 
       const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
@@ -1875,10 +1940,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.error("[WSP] Error guardando control de móvil", e);
       alert("No se pudo guardar el control de móvil. Revisá tabla, bucket Storage y permisos de Supabase.");
     } finally {
-      if (btnEnviar) {
-        btnEnviar.disabled = false;
-        btnEnviar.textContent = esControlMovilesActivo() ? "Guardar control móvil" : "Enviar por WhatsApp";
+      if (btnCambiarMovilControl) {
+        btnCambiarMovilControl.disabled = false;
+        btnCambiarMovilControl.textContent = "Guardar";
       }
+      actualizarBotonSalirControlMoviles();
     }
   }
 
@@ -1899,12 +1965,27 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
       if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
       limpiarSeleccionOperativo();
-      if (btnEnviar) btnEnviar.textContent = "Guardar control móvil";
       cargarMovilesControlDesdeSupabase();
+      actualizarBotonSalirControlMoviles();
     } else {
-      if (btnEnviar) btnEnviar.textContent = "Enviar por WhatsApp";
+      if (btnEnviar) {
+        btnEnviar.classList.remove("hidden");
+        btnEnviar.textContent = "Enviar por WhatsApp";
+      }
       volverASeleccionMovilControl();
     }
+  }
+
+  function salirControlMoviles() {
+    try {
+      window.close();
+    } catch (e) {}
+
+    setTimeout(() => {
+      if (window.closed) return;
+      if (selTipo) selTipo.value = "INICIA";
+      actualizarTipo();
+    }, 120);
   }
 
   function bindControlMovilesEventos() {
@@ -1923,7 +2004,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (btnCambiarMovilControl) {
-      btnCambiarMovilControl.addEventListener("click", volverASeleccionMovilControl);
+      btnCambiarMovilControl.addEventListener("click", guardarControlMovil);
     }
   }
 
@@ -2927,7 +3008,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (esControlMovilesActivo()) {
-      await guardarControlMovil();
+      salirControlMoviles();
       return;
     }
 
