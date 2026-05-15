@@ -84,6 +84,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
 
   const CONTROL_MOVILES_TABLE = "moviles_controles";
+  const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
@@ -1859,12 +1860,30 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return "jpg";
   }
 
+  function fechaHoraLocalISOControlMovil(d) {
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+
+  function obtenerGuardiaControlMovil() {
+    const desde = getGuardiaInicio();
+    const hasta = new Date(desde);
+    hasta.setDate(hasta.getDate() + 1);
+
+    return {
+      guardia_fecha: toFechaISO(desde),
+      guardia_inicio: fechaHoraLocalISOControlMovil(desde),
+      guardia_fin: fechaHoraLocalISOControlMovil(hasta),
+    };
+  }
+
   async function subirFotoControlMovil(file, numero, slot) {
-    if (!file) return "";
+    if (!file) return null;
 
     const ext = extensionArchivoControlMovil(file);
     const safeNumero = String(numero || "movil").replace(/[^0-9a-z_-]+/gi, "");
-    const path = `${safeNumero}/${getGuardiaFechaISO()}_${Date.now()}_${slot}.${ext}`;
+    const guardia = obtenerGuardiaControlMovil();
+    const path = `${guardia.guardia_fecha}/${safeNumero}/${Date.now()}_${slot}.${ext}`;
     const url = `${SUPABASE_URL}/storage/v1/object/${CONTROL_MOVILES_BUCKET}/${path}`;
 
     const r = await fetch(url, {
@@ -1881,7 +1900,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       throw new Error(`No se pudo subir foto ${slot}: ${r.status} ${txt}`);
     }
 
-    return `${SUPABASE_URL}/storage/v1/object/public/${CONTROL_MOVILES_BUCKET}/${path}`;
+    return {
+      url: `${SUPABASE_URL}/storage/v1/object/public/${CONTROL_MOVILES_BUCKET}/${path}`,
+      path,
+      slot,
+    };
   }
 
   async function insertarRegistroControlMovil(payload) {
@@ -1901,6 +1924,47 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     return r.json().catch(() => null);
+  }
+
+  function normalizarControlMovilInsertado(resp) {
+    if (Array.isArray(resp)) return resp[0] || null;
+    return resp || null;
+  }
+
+  async function insertarFotosGuardiaControlMovil({ control, fotos, numero, movilId, observaciones, guardia }) {
+    const fotosValidas = (Array.isArray(fotos) ? fotos : []).filter((foto) => foto && foto.url);
+    if (!fotosValidas.length) return true;
+
+    const controlId = control?.id ? String(control.id) : null;
+    const payload = fotosValidas.map((foto) => ({
+      control_id: controlId,
+      movil_id: movilId == null ? null : String(movilId),
+      numero_movil: Number(numero),
+      guardia_fecha: guardia.guardia_fecha,
+      guardia_inicio: guardia.guardia_inicio,
+      guardia_fin: guardia.guardia_fin,
+      foto_url: foto.url,
+      foto_path: foto.path || null,
+      slot: foto.slot || null,
+      fuente: "WSP",
+      observaciones: observaciones || "",
+    }));
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_FOTOS_TABLE}`, {
+      method: "POST",
+      headers: headersSupabase({
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      }),
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`No se pudo insertar foto/s de guardia: ${r.status} ${txt}`);
+    }
+
+    return true;
   }
 
   async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones) {
@@ -1951,18 +2015,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         btnCambiarMovilControl.textContent = "Guardando...";
       }
 
+      const guardiaControl = obtenerGuardiaControlMovil();
       const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
       const foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, controlMovilSeleccionado.numero, "foto2");
 
-      await insertarRegistroControlMovil({
+      const controlInsertadoResp = await insertarRegistroControlMovil({
         movil_id: controlMovilSeleccionado.id,
         numero_movil: Number(controlMovilSeleccionado.numero),
         kilometraje: Number(kilometraje),
         combustible,
         observaciones,
-        foto_1_url: foto1 || null,
-        foto_2_url: foto2 || null,
-        guardia_fecha: getGuardiaFechaISO(),
+        guardia_fecha: guardiaControl.guardia_fecha,
+        guardia_inicio: guardiaControl.guardia_inicio,
+        guardia_fin: guardiaControl.guardia_fin,
+        fuente: "WSP",
+      });
+
+      const controlInsertado = normalizarControlMovilInsertado(controlInsertadoResp);
+
+      await insertarFotosGuardiaControlMovil({
+        control: controlInsertado,
+        fotos: [foto1, foto2],
+        numero: controlMovilSeleccionado.numero,
+        movilId: controlMovilSeleccionado.id,
+        observaciones,
+        guardia: guardiaControl,
       });
 
       await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones);
