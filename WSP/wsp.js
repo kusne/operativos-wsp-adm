@@ -74,6 +74,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilSeleccionado = null;
   let controlMovilesCargados = false;
 
+  const detallesAutocompletadoState = new WeakMap();
+
   function actualizarContadorOperativosWsp(cantidad = operativosCache.length) {
     if (!contadorOperativosWsp) return;
     const n = Math.max(0, parseInt(cantidad, 10) || 0);
@@ -1877,22 +1879,92 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     };
   }
 
+  async function cargarImagenParaCanvas(file) {
+    if (!file) return null;
+
+    if (typeof createImageBitmap === "function") {
+      try {
+        return await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (e) {
+        try {
+          return await createImageBitmap(file);
+        } catch {}
+      }
+    }
+
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("No se pudo leer la imagen."));
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  async function normalizarImagenControlMovil(file) {
+    if (!file || !String(file.type || "").toLowerCase().startsWith("image/")) return file;
+
+    try {
+      const imagen = await cargarImagenParaCanvas(file);
+      if (!imagen) return file;
+
+      const anchoOriginal = imagen.width || imagen.naturalWidth || 0;
+      const altoOriginal = imagen.height || imagen.naturalHeight || 0;
+      if (!anchoOriginal || !altoOriginal) return file;
+
+      const maxLado = 1800;
+      const escala = Math.min(1, maxLado / Math.max(anchoOriginal, altoOriginal));
+      const ancho = Math.max(1, Math.round(anchoOriginal * escala));
+      const alto = Math.max(1, Math.round(altoOriginal * escala));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = ancho;
+      canvas.height = alto;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return file;
+      ctx.drawImage(imagen, 0, 0, ancho, alto);
+
+      if (typeof imagen.close === "function") {
+        try { imagen.close(); } catch {}
+      }
+
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, "image/jpeg", 0.88);
+      });
+
+      if (!blob) return file;
+
+      const nombreBase = String(file.name || "foto-control.jpg").replace(/\.[a-z0-9]{2,5}$/i, "");
+      return new File([blob], `${nombreBase}.jpg`, { type: "image/jpeg" });
+    } catch (e) {
+      console.warn("[WSP] No se pudo normalizar la orientación de la foto. Se sube el archivo original.", e);
+      return file;
+    }
+  }
+
   async function subirFotoControlMovil(file, numero, slot) {
     if (!file) return null;
 
-    const ext = extensionArchivoControlMovil(file);
+    const archivoSubida = await normalizarImagenControlMovil(file);
     const safeNumero = String(numero || "movil").replace(/[^0-9a-z_-]+/gi, "");
     const guardia = obtenerGuardiaControlMovil();
-    const path = `${guardia.guardia_fecha}/${safeNumero}/${Date.now()}_${slot}.${ext}`;
+    const path = `${guardia.guardia_fecha}/${safeNumero}/${Date.now()}_${slot}.jpg`;
     const url = `${SUPABASE_URL}/storage/v1/object/${CONTROL_MOVILES_BUCKET}/${path}`;
 
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
-        "Content-Type": file.type || "application/octet-stream",
+        "Content-Type": archivoSubida.type || "image/jpeg",
         "x-upsert": "false",
       }),
-      body: file,
+      body: archivoSubida,
     });
 
     if (!r.ok) {
@@ -1907,6 +1979,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     };
   }
 
+  
   async function insertarRegistroControlMovil(payload) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_TABLE}`, {
       method: "POST",
@@ -2604,31 +2677,175 @@ ${bold(`Moviles ${organismo}:`)}`)
     return original;
   }
 
+  function analizarLineaDetalleParaAutocompletar(linea) {
+    const original = String(linea || "").replace(/\r/g, "");
+    const s = original.trim();
+    if (!s) return null;
+
+    const decreto460 = normalizarDetalleDecreto460(s, { paraAutocompletar: true });
+    if (decreto460) {
+      const texto = typeof decreto460 === "string" ? decreto460 : (decreto460.textoAutocompletar || original);
+      const mCodigo = texto.match(/460(?:\s*\/\s*22|22)?/i);
+      return {
+        texto,
+        codigo: "460",
+        descripcion: limpiarDescripcionDetalle(texto.replace(/^.*?460(?:\s*\/\s*22|22)?/i, "")),
+        cursorDespuesCodigo: mCodigo ? mCodigo.index + mCodigo[0].length : Math.min(texto.length, 3),
+      };
+    }
+
+    const patrones = [
+      { regex: /^(\s*\(\s*(\d{1,2})\s*\)\s*)(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true, grupoCodigo: 3 },
+      { regex: /^(\s*(\d{1,2})\s*[-–—]\s*)(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true, grupoCodigo: 3 },
+      { regex: /^(\s*(\d{1,2})\s+)(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: true, grupoCodigo: 3 },
+      { regex: /^(\s*)(\d{4,5})(?:\s*[-:;,.–—]\s*|\s+)?(.*)$/i, conCantidad: false, grupoCodigo: 2 },
+    ];
+
+    for (const patron of patrones) {
+      const m = s.match(patron.regex);
+      if (!m) continue;
+
+      const cantidad = patron.conCantidad ? m[2] : null;
+      const codigo = patron.conCantidad ? m[3] : m[2];
+      if (String(codigo || "").replace(/\D+/g, "") === "17117") return null;
+
+      const referencia = obtenerReferenciaNomenclador(codigo, "");
+      if (!referencia) return null;
+
+      const reconstruida = reconstruirLineaDetalle(cantidad, codigo, referencia);
+      if (!reconstruida) return null;
+
+      const idxCodigo = reconstruida.indexOf(String(codigo));
+      return {
+        texto: reconstruida,
+        codigo: String(codigo || "").replace(/\D+/g, ""),
+        descripcion: limpiarDescripcionDetalle(referencia),
+        cursorDespuesCodigo: idxCodigo >= 0 ? idxCodigo + String(codigo).length : reconstruida.length,
+      };
+    }
+
+    return null;
+  }
+
   function autocompletarDetallesDesdeNomenclador(texto) {
     const original = String(texto || "").replace(/\r/g, "");
     if (!original) return original;
-    return original.split("\n").map(autocompletarLineaDetalleConNomenclador).join("\n");
+    return original.split("\n").map((linea) => {
+      const analisis = analizarLineaDetalleParaAutocompletar(linea);
+      return analisis?.texto || autocompletarLineaDetalleConNomenclador(linea);
+    }).join("\n");
   }
 
-  function aplicarAutocompletadoDetalles(textarea) {
+  function obtenerCodigoActualLineaDetalle(linea) {
+    const s = String(linea || "").replace(/\r/g, "").trim();
+    if (!s) return "";
+
+    const patrones = [
+      /^\(\s*\d{1,2}\s*\)\s*(\d{0,5})/i,
+      /^\d{1,2}\s*[-–—]\s*(\d{0,5})/i,
+      /^\d{1,2}\s+(\d{0,5})/i,
+      /^(\d{0,5})/i,
+    ];
+
+    for (const regex of patrones) {
+      const m = s.match(regex);
+      const codigo = String(m?.[1] || "").replace(/\D+/g, "");
+      if (codigo) return codigo;
+    }
+
+    return "";
+  }
+
+  function limpiarDescripcionAutocompletadaObsoleta(linea, meta) {
+    if (!meta || !meta.descripcion) return linea;
+
+    const codigoActual = obtenerCodigoActualLineaDetalle(linea);
+    if (codigoActual === String(meta.codigo || "")) return linea;
+
+    const texto = String(linea || "");
+    const descripcion = String(meta.descripcion || "");
+    const idx = texto.toLowerCase().indexOf(descripcion.toLowerCase());
+    if (idx < 0) return linea;
+
+    const antes = texto.slice(0, idx).replace(/[\s:;,.–—-]+$/g, "").trimEnd();
+    const despues = texto.slice(idx + descripcion.length).trim();
+    return despues ? `${antes} ${despues}`.trim() : antes;
+  }
+
+  function calcularLineaYColumnaDesdePosicion(texto, posicion) {
+    const hastaCursor = String(texto || "").slice(0, Math.max(0, posicion));
+    const partes = hastaCursor.split("\n");
+    return {
+      linea: partes.length - 1,
+      columna: partes[partes.length - 1].length,
+    };
+  }
+
+  function longitudHastaLinea(lineas, lineaObjetivo) {
+    let total = 0;
+    for (let i = 0; i < lineaObjetivo; i += 1) {
+      total += String(lineas[i] || "").length + 1;
+    }
+    return total;
+  }
+
+  function aplicarAutocompletadoDetalles(textarea, { forzar = false } = {}) {
     if (!textarea) return;
 
     const valorOriginal = String(textarea.value || "");
-    const valorNuevo = autocompletarDetallesDesdeNomenclador(valorOriginal);
-    if (valorNuevo === valorOriginal) return;
-
     const inicio = typeof textarea.selectionStart === "number" ? textarea.selectionStart : valorOriginal.length;
-    const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : valorOriginal.length;
-    const nuevoInicio = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, inicio)).length;
-    const nuevoFin = autocompletarDetallesDesdeNomenclador(valorOriginal.slice(0, fin)).length;
+    const fin = typeof textarea.selectionEnd === "number" ? textarea.selectionEnd : inicio;
+    const seleccionColapsada = inicio === fin;
+    const cursorOriginal = calcularLineaYColumnaDesdePosicion(valorOriginal, inicio);
+    const metasPrevias = detallesAutocompletadoState.get(textarea) || [];
+
+    const lineasOriginales = valorOriginal.split("\n");
+    const lineasLimpias = lineasOriginales.map((linea, idx) => limpiarDescripcionAutocompletadaObsoleta(linea, metasPrevias[idx]));
+    const lineasNuevas = [];
+    const metasNuevas = [];
+    let cursorNuevo = null;
+
+    lineasLimpias.forEach((linea, idx) => {
+      const analisis = analizarLineaDetalleParaAutocompletar(linea);
+      if (analisis?.texto) {
+        lineasNuevas.push(analisis.texto);
+        metasNuevas[idx] = {
+          codigo: analisis.codigo,
+          descripcion: analisis.descripcion,
+          texto: analisis.texto,
+        };
+
+        if (seleccionColapsada && idx === cursorOriginal.linea && (linea !== analisis.texto || forzar)) {
+          cursorNuevo = longitudHastaLinea(lineasNuevas, idx) + analisis.cursorDespuesCodigo;
+        }
+        return;
+      }
+
+      lineasNuevas.push(linea);
+      metasNuevas[idx] = null;
+    });
+
+    const valorNuevo = lineasNuevas.join("\n");
+    detallesAutocompletadoState.set(textarea, metasNuevas);
+
+    if (valorNuevo === valorOriginal) return;
 
     textarea.value = valorNuevo;
 
     try {
-      textarea.setSelectionRange(nuevoInicio, nuevoFin);
+      if (cursorNuevo != null) {
+        textarea.setSelectionRange(cursorNuevo, cursorNuevo);
+      } else {
+        const lineaActual = Math.min(cursorOriginal.linea, lineasNuevas.length - 1);
+        const base = longitudHastaLinea(lineasNuevas, lineaActual);
+        const columna = Math.min(cursorOriginal.columna, String(lineasNuevas[lineaActual] || "").length);
+        const pos = Math.max(0, Math.min(valorNuevo.length, base + columna));
+        textarea.setSelectionRange(pos, pos);
+      }
     } catch {}
   }
 
+  
   function normalizarLineaDetalle(linea) {
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
@@ -3379,7 +3596,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       aplicarAutocompletadoDetalles(detallesInput);
     });
     detallesInput.addEventListener("blur", () => {
-      aplicarAutocompletadoDetalles(detallesInput);
+      aplicarAutocompletadoDetalles(detallesInput, { forzar: true });
     });
   }
 
