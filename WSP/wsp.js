@@ -74,6 +74,59 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilSeleccionado = null;
   let controlMovilesCargados = false;
 
+  const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
+  let autoCierreWspTimer = null;
+
+  function programarCierreVentanaWsp() {
+    if (autoCierreWspTimer) {
+      clearTimeout(autoCierreWspTimer);
+      autoCierreWspTimer = null;
+    }
+
+    autoCierreWspTimer = setTimeout(() => {
+      try {
+        if (window.electronAPI && typeof window.electronAPI.closeCurrentWindow === "function") {
+          window.electronAPI.closeCurrentWindow();
+          return;
+        }
+      } catch (e) {
+        console.warn("[WSP] No se pudo cerrar mediante electronAPI.closeCurrentWindow.", e);
+      }
+
+      try {
+        if (window.electronAPI && typeof window.electronAPI.cerrarVentanaActual === "function") {
+          window.electronAPI.cerrarVentanaActual();
+          return;
+        }
+      } catch (e) {
+        console.warn("[WSP] No se pudo cerrar mediante electronAPI.cerrarVentanaActual.", e);
+      }
+
+      try {
+        window.close();
+      } catch (e) {
+        console.warn("[WSP] El navegador bloqueó window.close().", e);
+      }
+    }, AUTO_CIERRE_WSP_MS);
+  }
+
+  function abrirWhatsappYCerrarWspLuego(texto) {
+    const url = "https://wa.me/?text=" + encodeURIComponent(texto || "");
+
+    programarCierreVentanaWsp();
+
+    try {
+      const win = window.open(url, "_blank");
+      if (win) return;
+    } catch (e) {
+      console.warn("[WSP] No se pudo abrir WhatsApp en ventana nueva. Se usa navegación actual.", e);
+    }
+
+    // Respaldo: mantiene el comportamiento anterior si el navegador bloquea la ventana nueva.
+    // En este caso el cierre automático puede no ejecutarse porque la página navega a WhatsApp.
+    window.location.href = url;
+  }
+
   const detallesAutocompletadoState = new WeakMap();
 
   function actualizarContadorOperativosWsp(cantidad = operativosCache.length) {
@@ -3387,9 +3440,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       resetUI();
-      setTimeout(() => {
-        window.location.href = "https://wa.me/?text=" + encodeURIComponent(resultadoControlSuperior.texto);
-      }, 0);
+      abrirWhatsappYCerrarWspLuego(resultadoControlSuperior.texto);
       return;
     }
 
@@ -3541,10 +3592,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     resetUI();
-
-    setTimeout(() => {
-      window.location.href = "https://wa.me/?text=" + encodeURIComponent(textoFinal);
-    }, 0);
+    abrirWhatsappYCerrarWspLuego(textoFinal);
   }
 
   // ===== Eventos =====
