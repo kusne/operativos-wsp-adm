@@ -2200,3 +2200,723 @@ body.modo-control-moviles.control-movil-seleccionado-activo #btnEnviar{
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+/* =========================================================
+   CONTROL DE MÓVILES - FUERA DE SERVICIO + BLOQUEO REALTIME
+   ========================================================= */
+.control-moviles-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 42px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.control-moviles-header > label:first-child,
+.control-moviles-fuera-servicio-check{
+  color: #072E6D !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.control-moviles-header > label:first-child{
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.45);
+  margin: 0 !important;
+  min-height: 30px;
+}
+
+.control-moviles-fuera-servicio-check{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-direction: row !important;
+  gap: 7px;
+  margin: 0 2px 0 auto !important;
+  padding: 2px 0 2px 18px !important;
+  white-space: nowrap;
+  min-height: 30px;
+}
+
+.control-moviles-fuera-servicio-check input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  transform: scale(1.45) !important;
+  cursor: pointer;
+}
+
+.control-moviles-fuera-servicio-check span{
+  display: inline-block !important;
+  color: #072E6D !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+}
+
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled{
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled + span{
+  opacity: 1;
+  cursor: default;
+}
+
+.control-movil-chip.control-movil-chip-controlado{
+  background: #FFD966 !important;
+  border-color: #B8890A !important;
+  color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.28), 0 6px 14px rgba(0,0,0,0.16) !important;
+}
+
+.control-movil-chip.control-movil-chip-bloqueado{
+  opacity: 0.86;
+  cursor: not-allowed !important;
+  filter: grayscale(0.12);
+}
+
+.control-movil-chip.control-movil-chip-bloqueado:hover{
+  filter: grayscale(0.12) !important;
+  border-color: #B8890A !important;
+}
+
+.control-movil-chip.control-movil-chip-fuera-servicio{
+  border-style: dashed !important;
+}
+
+.control-movil-candado{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* =========================================================
+   CONTROL DE MÓVILES - CHECK FUERA DE SERVICIO AISLADO V2
+   Objetivo: que el checkbox NO herede las reglas globales de checkboxes.
+   Corrige especialmente el desplazamiento en teléfono causado por
+   .section input[type="checkbox"]:first-of-type y reglas antiguas.
+   ========================================================= */
+#bloqueControlMoviles .control-moviles-header-aislado{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 22px !important;
+  width: 100% !important;
+  margin: 0 0 8px 0 !important;
+  padding: 0 !important;
+}
+
+#bloqueControlMoviles .control-moviles-titulo-aislado,
+#bloqueControlMoviles .control-moviles-fuera-servicio-text{
+  color: #072E6D !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+#bloqueControlMoviles .control-moviles-titulo-aislado{
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 30px !important;
+  margin: 0 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  background: rgba(255,255,255,0.45) !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-aislado{
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  min-height: 30px !important;
+  margin: 0 2px 0 auto !important;
+  padding: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  color: #072E6D !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  float: none !important;
+  display: inline-block !important;
+  flex: 0 0 auto !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  vertical-align: middle !important;
+  cursor: pointer !important;
+  accent-color: #0B3D91;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input:disabled{
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+}
+
+#bloqueControlMoviles .control-moviles-fuera-servicio-text{
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 430px){
+  #bloqueControlMoviles .control-moviles-header-aislado{
+    gap: 16px !important;
+  }
+
+  #bloqueControlMoviles .control-moviles-titulo-aislado,
+  #bloqueControlMoviles .control-moviles-fuera-servicio-text{
+    font-size: 16px !important;
+  }
+
+  #bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input{
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+  }
+}
+
+/* =========================================================
+   CONTROL DE MÓVILES - ENCABEZADO FINAL AISLADO V4
+   Corrige Android/móvil: alinea ambos textos en la misma fila
+   y deja el checkbox a la izquierda de "Fuera de Servicio".
+   No depende de label.check ni de reglas globales de checkbox.
+   ========================================================= */
+#bloqueControlMoviles .control-moviles-header-final{
+  display: grid !important;
+  grid-template-columns: auto max-content !important;
+  align-items: center !important;
+  column-gap: 10px !important;
+  width: 100% !important;
+  margin: 0 0 8px 0 !important;
+  padding: 0 !important;
+}
+
+#bloqueControlMoviles .control-moviles-titulo-final,
+#bloqueControlMoviles .control-moviles-fuera-servicio-text-final{
+  color: #072E6D !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 22px !important;
+  letter-spacing: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlMoviles .control-moviles-titulo-final{
+  justify-self: start !important;
+  align-self: center !important;
+  min-width: 0 !important;
+}
+
+#bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+  position: static !important;
+  display: grid !important;
+  grid-template-columns: 22px max-content !important;
+  align-items: center !important;
+  justify-content: end !important;
+  justify-self: end !important;
+  align-self: center !important;
+  column-gap: 7px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+  color: #072E6D !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  float: none !important;
+  display: block !important;
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  vertical-align: middle !important;
+  align-self: center !important;
+  justify-self: center !important;
+  accent-color: #0B3D91 !important;
+  cursor: pointer !important;
+}
+
+#bloqueControlMoviles .control-moviles-fuera-servicio-text-final{
+  display: block !important;
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
+  justify-self: start !important;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final:disabled{
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final:disabled + .control-moviles-fuera-servicio-text-final{
+  opacity: 1 !important;
+}
+
+@media (max-width: 430px){
+  #bloqueControlMoviles .control-moviles-header-final{
+    column-gap: 8px !important;
+  }
+
+  #bloqueControlMoviles .control-moviles-titulo-final,
+  #bloqueControlMoviles .control-moviles-fuera-servicio-text-final,
+  #bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+    font-size: 15px !important;
+    line-height: 21px !important;
+  }
+
+  #bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+    grid-template-columns: 21px max-content !important;
+    column-gap: 6px !important;
+    height: 21px !important;
+    min-height: 21px !important;
+  }
+
+  #bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final{
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    min-height: 19px !important;
+    max-width: 19px !important;
+    max-height: 19px !important;
+  }
+}
+
+/* =========================================================
+   CONTROL DE MÓVILES - AYUDA EMERGENTE V1
+   Botón circular ? arriba/derecha del desplegable principal.
+   Aislado de reglas globales de botones/checkboxes.
+   ========================================================= */
+.tipo-label-ayuda-row{
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  gap: 12px !important;
+  margin: 0 0 6px 0 !important;
+  padding: 0 !important;
+}
+
+.control-moviles-ayuda-wrap{
+  position: relative !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 80 !important;
+}
+
+body.modo-control-moviles .control-moviles-ayuda-wrap{
+  display: flex !important;
+}
+
+.control-moviles-ayuda-btn{
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 3px solid #0B3D91 !important;
+  border-radius: 999px !important;
+  background: #FFFFFF !important;
+  color: #0B3D91 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.18) !important;
+  transform: none !important;
+}
+
+.control-moviles-ayuda-btn:hover,
+.control-moviles-ayuda-btn:focus,
+.control-moviles-ayuda-btn.ayuda-activa{
+  outline: none !important;
+  background: #EEF4FF !important;
+  box-shadow: 0 0 0 4px rgba(11,61,145,0.22), 0 3px 8px rgba(0,0,0,0.18) !important;
+}
+
+.control-moviles-ayuda-btn::after{
+  content: "Leer";
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 6px) !important;
+  display: none !important;
+  padding: 4px 8px !important;
+  border-radius: 8px !important;
+  background: #0B3D91 !important;
+  color: #FFFFFF !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  z-index: 95 !important;
+}
+
+.control-moviles-ayuda-btn:hover::after,
+.control-moviles-ayuda-btn:focus::after{
+  display: block !important;
+}
+
+.control-moviles-ayuda-popup{
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 12px) !important;
+  width: min(320px, calc(100vw - 36px)) !important;
+  padding: 12px 14px !important;
+  border: 3px solid #0B3D91 !important;
+  border-radius: 14px !important;
+  background: #FFFFFF !important;
+  color: #0B1220 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.32) !important;
+  z-index: 120 !important;
+}
+
+.control-moviles-ayuda-popup::before{
+  content: "";
+  position: absolute !important;
+  right: 10px !important;
+  top: -10px !important;
+  width: 14px !important;
+  height: 14px !important;
+  background: #FFFFFF !important;
+  border-left: 3px solid #0B3D91 !important;
+  border-top: 3px solid #0B3D91 !important;
+  transform: rotate(45deg) !important;
+}
+
+.control-moviles-ayuda-popup strong{
+  display: block !important;
+  margin: 0 0 6px 0 !important;
+  color: #0B3D91 !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+.control-moviles-ayuda-popup p{
+  margin: 0 !important;
+  color: #0B1220 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+}
+
+.control-moviles-ayuda-popup.hidden{
+  display: none !important;
+}
+
+@media (max-width: 430px){
+  .control-moviles-ayuda-btn{
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    max-width: 28px !important;
+    max-height: 28px !important;
+    font-size: 20px !important;
+  }
+
+  .control-moviles-ayuda-popup{
+    width: min(300px, calc(100vw - 34px)) !important;
+  }
+}
+
+/* =========================================================
+   FIX FINAL - AYUDA + FUERA DE SERVICIO CONTROL MÓVILES
+   - El botón ? queda flotante donde fue marcado: arriba/derecha del desplegable.
+   - El encabezado interno vuelve a una sola línea:
+     Control de móviles ................ [ ] Fuera de Servicio
+   - No toca Supabase, Realtime, locks ni guardado.
+   ========================================================= */
+.app{
+  position: relative !important;
+}
+
+/* Anula la fila anterior para que no empuje ni desordene el label INICIA/FINALIZA */
+.tipo-label-ayuda-row{
+  display: contents !important;
+}
+
+/* Botón de ayuda: flotante, arriba/derecha del desplegable, no dentro del título */
+#controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
+  position: absolute !important;
+  display: none !important;
+  top: 128px !important;
+  right: 106px !important;
+  width: 34px !important;
+  height: 34px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 250 !important;
+}
+
+body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
+  display: block !important;
+}
+
+#controlMovilesAyudaBtn.control-moviles-ayuda-btn{
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  min-height: 34px !important;
+  max-width: 34px !important;
+  max-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 3px solid #0B3D91 !important;
+  border-radius: 999px !important;
+  background: #FFFFFF !important;
+  color: #0B3D91 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 24px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.22) !important;
+  transform: none !important;
+}
+
+#controlMovilesAyudaBtn.control-moviles-ayuda-btn::after{
+  content: "Leer" !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 6px) !important;
+  display: none !important;
+  padding: 4px 8px !important;
+  border-radius: 8px !important;
+  background: #0B3D91 !important;
+  color: #FFFFFF !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  z-index: 260 !important;
+}
+
+#controlMovilesAyudaBtn.control-moviles-ayuda-btn:hover::after,
+#controlMovilesAyudaBtn.control-moviles-ayuda-btn:focus::after{
+  display: block !important;
+}
+
+#controlMovilesAyudaPopup.control-moviles-ayuda-popup{
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 12px) !important;
+  width: min(320px, calc(100vw - 34px)) !important;
+  padding: 12px 14px !important;
+  border: 3px solid #0B3D91 !important;
+  border-radius: 14px !important;
+  background: #FFFFFF !important;
+  color: #0B1220 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.32) !important;
+  z-index: 270 !important;
+}
+
+#controlMovilesAyudaPopup.control-moviles-ayuda-popup.hidden{
+  display: none !important;
+}
+
+/* Encabezado interno Control de móviles / Fuera de Servicio */
+#bloqueControlMoviles .control-moviles-header-final{
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-height: 24px !important;
+  margin: 0 0 8px 0 !important;
+  padding: 0 !important;
+  gap: 12px !important;
+}
+
+#bloqueControlMoviles .control-moviles-titulo-final{
+  flex: 1 1 auto !important;
+  display: block !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #072E6D !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+  flex: 0 0 auto !important;
+  position: static !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #072E6D !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+}
+
+#bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final{
+  order: 1 !important;
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  float: none !important;
+  display: inline-block !important;
+  flex: 0 0 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  vertical-align: middle !important;
+  accent-color: #0B3D91 !important;
+}
+
+#bloqueControlMoviles .control-moviles-fuera-servicio-text-final{
+  order: 2 !important;
+  display: inline-block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #072E6D !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 430px){
+  #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
+    top: 126px !important;
+    right: 102px !important;
+  }
+
+  #bloqueControlMoviles .control-moviles-titulo-final,
+  #bloqueControlMoviles .control-moviles-fuera-servicio-text-final,
+  #bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+    font-size: 15px !important;
+    line-height: 21px !important;
+  }
+
+  #bloqueControlMoviles #wrapControlMovilFueraServicio.control-moviles-fuera-servicio-final{
+    gap: 6px !important;
+    height: 21px !important;
+    min-height: 21px !important;
+  }
+
+  #bloqueControlMoviles #controlMovilFueraServicio.control-moviles-fuera-servicio-input-final{
+    flex-basis: 19px !important;
+    width: 19px !important;
+    height: 19px !important;
+    min-width: 19px !important;
+    min-height: 19px !important;
+    max-width: 19px !important;
+    max-height: 19px !important;
+  }
+}
