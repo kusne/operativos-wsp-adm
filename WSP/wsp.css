@@ -2202,63 +2202,81 @@ body.modo-control-moviles.control-movil-seleccionado-activo #btnEnviar{
 }
 
 /* =========================================================
-   CONTROL DE MÓVILES - Fuera de Servicio + foco controlado
+   CONTROL DE MÓVILES - FUERA DE SERVICIO + BLOQUEO REALTIME
    ========================================================= */
-#bloqueControlMoviles .control-moviles-header{
+.control-moviles-header{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 34px;
   width: 100%;
+  margin-bottom: 4px;
 }
 
-#bloqueControlMoviles .control-moviles-header > label:first-child{
+.control-moviles-header > label:first-child{
   color: #072E6D !important;
   font-weight: 900 !important;
   display: inline-block;
   padding: 2px 6px;
   border-radius: 6px;
   background: rgba(255,255,255,0.45);
-  margin: 0;
+  margin-bottom: 0 !important;
 }
 
-.control-moviles-fuera-servicio{
-  margin-left: auto;
-  display: none;
+.control-moviles-fuera-servicio-check{
+  display: inline-flex !important;
   align-items: center;
   justify-content: flex-end;
   gap: 5px;
-  white-space: nowrap;
+  margin: 0 4px 0 auto !important;
+  padding: 4px 2px 4px 12px !important;
   color: #072E6D;
   font-size: 13px;
   font-weight: 900;
   line-height: 1;
-  padding: 2px 2px 2px 14px;
+  white-space: nowrap;
+  min-height: 26px;
 }
 
-body.control-movil-seleccionado-activo .control-moviles-fuera-servicio{
-  display: inline-flex;
+.control-moviles-fuera-servicio-check input[type="checkbox"]{
+  margin: 0 !important;
+  transform: scale(1.2) !important;
+  cursor: pointer;
 }
 
-.control-moviles-fuera-servicio input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(1.25) !important;
-  margin: 0 2px 0 0 !important;
-  flex: 0 0 auto;
-}
-
-.control-moviles-fuera-servicio span{
-  display: inline-block;
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled,
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled + span{
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .control-movil-chip.control-movil-chip-controlado{
   background: #FFD966 !important;
   border-color: #B8890A !important;
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.35), 0 6px 14px rgba(0,0,0,0.14) !important;
+  color: #111827 !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.28), 0 6px 14px rgba(0,0,0,0.16) !important;
+}
+
+.control-movil-chip.control-movil-chip-bloqueado{
+  opacity: 0.86;
+  cursor: not-allowed !important;
+  filter: grayscale(0.12);
+}
+
+.control-movil-chip.control-movil-chip-bloqueado:hover{
+  filter: grayscale(0.12) !important;
+  border-color: #B8890A !important;
 }
 
 .control-movil-chip.control-movil-chip-fuera-servicio{
-  opacity: 0.92;
+  border-style: dashed !important;
+}
+
+.control-movil-candado{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  font-size: 16px;
+  line-height: 1;
 }
