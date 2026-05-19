@@ -74,7 +74,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
   let controlMovilesCargados = false;
-  let controlMovilesControladosSesion = new Set();
+  let controlMovilesLocks = new Map();
+  let controlMovilesHeartbeatTimer = null;
+  let controlMovilesPollingTimer = null;
+  let controlMovilesRealtimeChannel = null;
+  let controlMovilesRealtimeClient = null;
+  let controlMovilesSincronizando = false;
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -143,8 +148,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_TABLE = "moviles_controles";
   const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
+  const CONTROL_MOVILES_LOCKS_TABLE = "wsp_control_moviles_locks";
+  const CONTROL_MOVILES_PRESENCE_TABLE = "wsp_control_moviles_presence";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
+  const CONTROL_MOVILES_HEARTBEAT_MS = 15000;
+  const CONTROL_MOVILES_POLLING_MS = 8000;
+  const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
+  const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -1608,22 +1619,407 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
   }
 
-  function setFueraServicioControlMovilChecked(valor) {
-    if (controlMovilFueraServicio) controlMovilFueraServicio.checked = !!valor;
+  function crearIdControlMoviles(prefix) {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return `${prefix}_${window.crypto.randomUUID()}`;
+      }
+    } catch {}
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
   }
 
-  function estaMovilControladoEnSesion(numero) {
-    return controlMovilesControladosSesion.has(String(numero || ""));
+  function obtenerOwnerIdControlMoviles() {
+    const key = "wsp_control_moviles_owner_id";
+    try {
+      const actual = window.localStorage?.getItem(key);
+      if (actual) return actual;
+      const nuevo = crearIdControlMoviles("owner");
+      window.localStorage?.setItem(key, nuevo);
+      return nuevo;
+    } catch {
+      return crearIdControlMoviles("owner");
+    }
   }
 
-  function marcarMovilControladoEnSesion(numero) {
-    const n = limpiarTextoSimple(numero || "");
-    if (n) controlMovilesControladosSesion.add(n);
+  function obtenerSessionIdControlMoviles() {
+    const key = "wsp_control_moviles_session_id";
+    try {
+      const actual = window.sessionStorage?.getItem(key);
+      if (actual) return actual;
+      const nuevo = crearIdControlMoviles("session");
+      window.sessionStorage?.setItem(key, nuevo);
+      return nuevo;
+    } catch {
+      return crearIdControlMoviles("session");
+    }
   }
 
-  function limpiarFocosControlMovilesSesion() {
-    controlMovilesControladosSesion = new Set();
+  const CONTROL_MOVILES_OWNER_ID = obtenerOwnerIdControlMoviles();
+  const CONTROL_MOVILES_SESSION_ID = obtenerSessionIdControlMoviles();
+
+  function ahoraISOControlMoviles(offsetMs = 0) {
+    return new Date(Date.now() + offsetMs).toISOString();
+  }
+
+  function querySupabase(params = {}) {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      qs.set(key, String(value));
+    });
+    return qs.toString();
+  }
+
+  async function fetchSupabaseTabla(table, { method = "GET", params = {}, body = null, extraHeaders = {} } = {}) {
+    const qs = querySupabase(params);
+    const url = `${SUPABASE_URL}/rest/v1/${table}${qs ? `?${qs}` : ""}`;
+    const r = await fetch(url, {
+      method,
+      headers: headersSupabase({
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...extraHeaders,
+      }),
+      body: body ? JSON.stringify(body) : null,
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`Supabase ${table} ${method} ${r.status}: ${txt}`);
+    }
+
+    if (method === "DELETE" || extraHeaders.Prefer === "return=minimal") return null;
+    return r.json().catch(() => null);
+  }
+
+  function normalizarNumeroMovilControl(numero) {
+    return limpiarTextoSimple(numero || "").replace(/\D+/g, "");
+  }
+
+  function normalizarLockControlMovil(row) {
+    const numero = normalizarNumeroMovilControl(row?.numero_movil);
+    if (!numero) return null;
+    return {
+      numero,
+      guardia_fecha: limpiarTextoSimple(row?.guardia_fecha || ""),
+      owner_id: limpiarTextoSimple(row?.owner_id || ""),
+      session_id: limpiarTextoSimple(row?.session_id || ""),
+      locked_at: limpiarTextoSimple(row?.locked_at || ""),
+      updated_at: limpiarTextoSimple(row?.updated_at || ""),
+      expires_at: limpiarTextoSimple(row?.expires_at || ""),
+    };
+  }
+
+  function lockControlMovilEsPropio(lock) {
+    return !!lock && lock.owner_id === CONTROL_MOVILES_OWNER_ID;
+  }
+
+  function obtenerLockControlMovil(numero) {
+    return controlMovilesLocks.get(normalizarNumeroMovilControl(numero));
+  }
+
+  function movilControlVisiblePorEstadoOLock(movil) {
+    if (!movil?.numero) return false;
+    return !!movil.condicion || !!obtenerLockControlMovil(movil.numero);
+  }
+
+  function movilesControlVisibles() {
+    return (Array.isArray(controlMovilesCache) ? controlMovilesCache : []).filter(movilControlVisiblePorEstadoOLock);
+  }
+
+  async function cargarBloqueosControlMoviles() {
+    const guardia = obtenerGuardiaControlMovil();
+    try {
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_LOCKS_TABLE, {
+        params: {
+          select: "numero_movil,guardia_fecha,owner_id,session_id,locked_at,updated_at,expires_at",
+          guardia_fecha: `eq.${guardia.guardia_fecha}`,
+          expires_at: `gt.${ahoraISOControlMoviles()}`,
+        },
+        extraHeaders: { Accept: "application/json" },
+      });
+
+      controlMovilesLocks = new Map();
+      (Array.isArray(data) ? data : []).forEach((row) => {
+        const lock = normalizarLockControlMovil(row);
+        if (lock) controlMovilesLocks.set(lock.numero, lock);
+      });
+
+      verificarSeleccionBloqueadaPorOtroControlMovil();
+      renderControlMovilesChips();
+      return controlMovilesLocks;
+    } catch (e) {
+      console.warn("[WSP] No se pudieron leer bloqueos de control de móviles.", e);
+      return controlMovilesLocks;
+    }
+  }
+
+  async function borrarBloqueosVencidosControlMoviles() {
+    try {
+      await fetchSupabaseTabla(CONTROL_MOVILES_LOCKS_TABLE, {
+        method: "DELETE",
+        params: { expires_at: `lt.${ahoraISOControlMoviles()}` },
+        extraHeaders: { Prefer: "return=minimal" },
+      });
+    } catch (e) {
+      console.warn("[WSP] No se pudieron borrar bloqueos vencidos.", e);
+    }
+  }
+
+  async function borrarPresenciasVencidasControlMoviles() {
+    try {
+      await fetchSupabaseTabla(CONTROL_MOVILES_PRESENCE_TABLE, {
+        method: "DELETE",
+        params: { expires_at: `lt.${ahoraISOControlMoviles()}` },
+        extraHeaders: { Prefer: "return=minimal" },
+      });
+    } catch (e) {
+      console.warn("[WSP] No se pudieron borrar presencias vencidas.", e);
+    }
+  }
+
+  async function contarPresenciasActivasControlMoviles() {
+    const guardia = obtenerGuardiaControlMovil();
+    try {
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_PRESENCE_TABLE, {
+        params: {
+          select: "session_id",
+          guardia_fecha: `eq.${guardia.guardia_fecha}`,
+          expires_at: `gt.${ahoraISOControlMoviles()}`,
+        },
+        extraHeaders: { Accept: "application/json" },
+      });
+      return Array.isArray(data) ? data.length : 0;
+    } catch (e) {
+      console.warn("[WSP] No se pudieron contar presencias activas.", e);
+      return 1;
+    }
+  }
+
+  async function borrarTodosLosBloqueosGuardiaControlMoviles() {
+    const guardia = obtenerGuardiaControlMovil();
+    try {
+      await fetchSupabaseTabla(CONTROL_MOVILES_LOCKS_TABLE, {
+        method: "DELETE",
+        params: { guardia_fecha: `eq.${guardia.guardia_fecha}` },
+        extraHeaders: { Prefer: "return=minimal" },
+      });
+      controlMovilesLocks = new Map();
+      renderControlMovilesChips();
+    } catch (e) {
+      console.warn("[WSP] No se pudieron limpiar los bloqueos de la guardia.", e);
+    }
+  }
+
+  async function limpiarSesionVencidaControlMoviles() {
+    await borrarPresenciasVencidasControlMoviles();
+    await borrarBloqueosVencidosControlMoviles();
+    const activas = await contarPresenciasActivasControlMoviles();
+    if (activas <= 0) await borrarTodosLosBloqueosGuardiaControlMoviles();
+  }
+
+  async function registrarPresenciaControlMoviles() {
+    const guardia = obtenerGuardiaControlMovil();
+    const now = ahoraISOControlMoviles();
+    const payload = {
+      owner_id: CONTROL_MOVILES_OWNER_ID,
+      session_id: CONTROL_MOVILES_SESSION_ID,
+      guardia_fecha: guardia.guardia_fecha,
+      entered_at: now,
+      heartbeat_at: now,
+      expires_at: ahoraISOControlMoviles(CONTROL_MOVILES_PRESENCE_TTL_MS),
+    };
+
+    await fetchSupabaseTabla(CONTROL_MOVILES_PRESENCE_TABLE, {
+      method: "POST",
+      params: { on_conflict: "session_id" },
+      body: payload,
+      extraHeaders: {
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+    });
+  }
+
+  async function guardarBloqueoControlMovil(numero) {
+    const numeroNormalizado = normalizarNumeroMovilControl(numero);
+    if (!numeroNormalizado) return;
+
+    const guardia = obtenerGuardiaControlMovil();
+    const now = ahoraISOControlMoviles();
+    const payload = {
+      numero_movil: numeroNormalizado,
+      guardia_fecha: guardia.guardia_fecha,
+      owner_id: CONTROL_MOVILES_OWNER_ID,
+      session_id: CONTROL_MOVILES_SESSION_ID,
+      locked_at: now,
+      updated_at: now,
+      expires_at: ahoraISOControlMoviles(CONTROL_MOVILES_LOCK_TTL_MS),
+    };
+
+    await fetchSupabaseTabla(CONTROL_MOVILES_LOCKS_TABLE, {
+      method: "POST",
+      params: { on_conflict: "guardia_fecha,numero_movil" },
+      body: payload,
+      extraHeaders: {
+        Prefer: "resolution=merge-duplicates,return=representation",
+        Accept: "application/json",
+      },
+    });
+
+    const lock = normalizarLockControlMovil(payload);
+    if (lock) controlMovilesLocks.set(lock.numero, lock);
     renderControlMovilesChips();
+  }
+
+  async function borrarPresenciaPropiaControlMoviles() {
+    try {
+      await fetchSupabaseTabla(CONTROL_MOVILES_PRESENCE_TABLE, {
+        method: "DELETE",
+        params: { session_id: `eq.${CONTROL_MOVILES_SESSION_ID}` },
+        extraHeaders: { Prefer: "return=minimal" },
+      });
+    } catch (e) {
+      console.warn("[WSP] No se pudo quitar la presencia propia de control de móviles.", e);
+    }
+  }
+
+  function borrarPresenciaPropiaControlMovilesKeepAlive() {
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_PRESENCE_TABLE}?session_id=eq.${encodeURIComponent(CONTROL_MOVILES_SESSION_ID)}`;
+      fetch(url, {
+        method: "DELETE",
+        headers: headersSupabase({ Prefer: "return=minimal" }),
+        keepalive: true,
+      });
+    } catch {}
+  }
+
+  function obtenerClienteRealtimeControlMoviles() {
+    if (controlMovilesRealtimeClient) return controlMovilesRealtimeClient;
+    try {
+      if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+      controlMovilesRealtimeClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      return controlMovilesRealtimeClient;
+    } catch (e) {
+      console.warn("[WSP] Supabase Realtime no disponible. Se usa polling como respaldo.", e);
+      return null;
+    }
+  }
+
+  function iniciarRealtimeControlMoviles() {
+    const client = obtenerClienteRealtimeControlMoviles();
+    if (!client || typeof client.channel !== "function") return false;
+
+    detenerRealtimeControlMoviles();
+
+    const guardia = obtenerGuardiaControlMovil();
+    controlMovilesRealtimeChannel = client
+      .channel(`wsp-control-moviles-${guardia.guardia_fecha}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: CONTROL_MOVILES_LOCKS_TABLE,
+          filter: `guardia_fecha=eq.${guardia.guardia_fecha}`,
+        },
+        async () => {
+          await cargarBloqueosControlMoviles();
+          await cargarMovilesControlDesdeSupabase({ forzar: true });
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
+      });
+
+    return true;
+  }
+
+  function detenerRealtimeControlMoviles() {
+    if (!controlMovilesRealtimeChannel || !controlMovilesRealtimeClient) return;
+    try {
+      controlMovilesRealtimeClient.removeChannel(controlMovilesRealtimeChannel);
+    } catch (e) {
+      console.warn("[WSP] No se pudo detener canal Realtime de control de móviles.", e);
+    }
+    controlMovilesRealtimeChannel = null;
+  }
+
+  function iniciarTimersControlMoviles() {
+    detenerTimersControlMoviles();
+
+    controlMovilesHeartbeatTimer = setInterval(async () => {
+      if (!esControlMovilesActivo()) return;
+      try {
+        await registrarPresenciaControlMoviles();
+        await limpiarSesionVencidaControlMoviles();
+        await cargarBloqueosControlMoviles();
+      } catch (e) {
+        console.warn("[WSP] Heartbeat de control de móviles falló.", e);
+      }
+    }, CONTROL_MOVILES_HEARTBEAT_MS);
+
+    controlMovilesPollingTimer = setInterval(async () => {
+      if (!esControlMovilesActivo()) return;
+      await cargarBloqueosControlMoviles();
+    }, CONTROL_MOVILES_POLLING_MS);
+  }
+
+  function detenerTimersControlMoviles() {
+    if (controlMovilesHeartbeatTimer) {
+      clearInterval(controlMovilesHeartbeatTimer);
+      controlMovilesHeartbeatTimer = null;
+    }
+    if (controlMovilesPollingTimer) {
+      clearInterval(controlMovilesPollingTimer);
+      controlMovilesPollingTimer = null;
+    }
+  }
+
+  async function iniciarModoControlMovilesCompartido() {
+    if (controlMovilesSincronizando) return;
+    controlMovilesSincronizando = true;
+
+    try {
+      await limpiarSesionVencidaControlMoviles();
+      await registrarPresenciaControlMoviles();
+      await cargarBloqueosControlMoviles();
+      iniciarRealtimeControlMoviles();
+      iniciarTimersControlMoviles();
+      await cargarMovilesControlDesdeSupabase({ forzar: true });
+    } catch (e) {
+      console.warn("[WSP] No se pudo iniciar sincronización compartida de control de móviles.", e);
+      iniciarTimersControlMoviles();
+      await cargarMovilesControlDesdeSupabase({ forzar: true });
+    } finally {
+      controlMovilesSincronizando = false;
+    }
+  }
+
+  async function detenerModoControlMovilesCompartido({ limpiarRemoto = true } = {}) {
+    detenerTimersControlMoviles();
+    detenerRealtimeControlMoviles();
+
+    if (limpiarRemoto) {
+      await borrarPresenciaPropiaControlMoviles();
+      await borrarPresenciasVencidasControlMoviles();
+      const activas = await contarPresenciasActivasControlMoviles();
+      if (activas <= 0) await borrarTodosLosBloqueosGuardiaControlMoviles();
+    }
+
+    controlMovilesLocks = new Map();
+    renderControlMovilesChips();
+  }
+
+  function verificarSeleccionBloqueadaPorOtroControlMovil() {
+    if (!controlMovilSeleccionado?.numero) return;
+    const lock = obtenerLockControlMovil(controlMovilSeleccionado.numero);
+    if (lock && !lockControlMovilEsPropio(lock)) {
+      alert(`El móvil ${controlMovilSeleccionado.numero} ya fue controlado desde otra app y quedó bloqueado.`);
+      volverASeleccionMovilControl();
+      setTextoEstadoControlMoviles("Móvil bloqueado por otra app. Seleccione otro móvil o presione Salir.");
+    }
   }
 
   function actualizarBotonSalirControlMoviles() {
@@ -1777,7 +2173,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     const params = new URLSearchParams({
       select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,observaciones_novedades,condicion,activo",
-      condicion: "eq.true",
       activo: "eq.true",
       order: "numero.asc",
     });
@@ -1793,20 +2188,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       }
 
       const data = await r.json();
-      const movilesEnServicio = (Array.isArray(data) ? data : [])
+      controlMovilesCache = (Array.isArray(data) ? data : [])
         .map(normalizarMovilControl)
-        .filter((m) => m.numero && m.condicion);
-
-      const controladosPrevios = Array.isArray(controlMovilesCache)
-        ? controlMovilesCache.filter((m) => m?.numero && estaMovilControladoEnSesion(m.numero))
-        : [];
-
-      const mapa = new Map();
-      [...movilesEnServicio, ...controladosPrevios].forEach((m) => {
-        if (m?.numero) mapa.set(String(m.numero), m);
-      });
-
-      controlMovilesCache = Array.from(mapa.values()).sort(ordenarMovilesControl);
+        .filter((m) => m.numero)
+        .sort(ordenarMovilesControl);
 
       controlMovilesCargados = true;
       renderControlMovilesChips();
@@ -1825,7 +2210,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     controlMovilesChips.innerHTML = "";
 
-    if (!controlMovilesCache.length) {
+    const visibles = movilesControlVisibles();
+
+    if (!visibles.length) {
       setTextoEstadoControlMoviles("No hay móviles en servicio para controlar.");
       return;
     }
@@ -1833,12 +2220,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setTextoEstadoControlMoviles("Seleccione un móvil en servicio.");
 
     // Cuadro superior: SOLO 12428, 10139 y 12502.
-    const movilesBase = controlMovilesCache
+    const movilesBase = visibles
       .filter((movil) => CONTROL_MOVILES_BASE_NUMEROS.includes(limpiarTextoSimple(movil?.numero)))
       .sort((a, b) => CONTROL_MOVILES_BASE_NUMEROS.indexOf(limpiarTextoSimple(a?.numero)) - CONTROL_MOVILES_BASE_NUMEROS.indexOf(limpiarTextoSimple(b?.numero)));
 
     // Cuadro inferior: SOLO motos.
-    const motos = controlMovilesCache
+    const motos = visibles
       .filter((movil) => normalizarTipoMovilControl(movil?.tipo) === "MOTO")
       .sort(ordenarMovilesControl);
 
@@ -1857,26 +2244,41 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       grid.className = "control-moviles-grupo-grid";
 
       rows.forEach((movil) => {
+        const lock = obtenerLockControlMovil(movil.numero);
+        const bloqueadoPorOtro = !!lock && !lockControlMovilEsPropio(lock);
+        const controlado = !!lock;
+
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "control-movil-chip";
         btn.dataset.numero = movil.numero;
-        if (estaMovilControladoEnSesion(movil.numero)) {
-          btn.classList.add("control-movil-chip-controlado");
-        }
-        if (movil.condicion === false) {
-          btn.classList.add("control-movil-chip-fuera-servicio");
-        }
+        btn.disabled = bloqueadoPorOtro;
+
+        if (controlado) btn.classList.add("control-movil-chip-controlado");
+        if (bloqueadoPorOtro) btn.classList.add("control-movil-chip-bloqueado");
+        if (!movil.condicion) btn.classList.add("control-movil-chip-fuera-servicio");
+
+        const candado = bloqueadoPorOtro ? ' <span class="control-movil-candado" aria-hidden="true">🔒</span>' : "";
 
         if (tipoGrupo === "motos") {
           const cilindrada = cilindradaMotoControl(movil);
-          btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}${cilindrada ? ` <small>${escapeHtmlControlMovil(cilindrada)}</small>` : ""}`;
+          btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}${cilindrada ? ` <small>${escapeHtmlControlMovil(cilindrada)}</small>` : ""}${candado}`;
         } else {
-          // En móviles base NO se muestra Toro / Amarok / Kangoo.
-          btn.textContent = movil.numero;
+          btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}${candado}`;
         }
 
-        btn.addEventListener("click", () => seleccionarMovilControl(movil.numero));
+        if (bloqueadoPorOtro) {
+          btn.title = "Ya fue controlado desde otra app. Queda bloqueado hasta que todas las apps salgan del modo control de móviles.";
+        } else if (controlado) {
+          btn.title = "Ya controlado desde esta app. Puede volver a editarlo.";
+        } else {
+          btn.title = "Seleccionar móvil";
+        }
+
+        btn.addEventListener("click", () => {
+          if (bloqueadoPorOtro) return;
+          seleccionarMovilControl(movil.numero);
+        });
         grid.appendChild(btn);
       });
 
@@ -1907,6 +2309,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function seleccionarMovilControl(numero) {
+    const lockInicial = obtenerLockControlMovil(numero);
+    if (lockInicial && !lockControlMovilEsPropio(lockInicial)) {
+      setTextoEstadoControlMoviles(`El móvil ${normalizarNumeroMovilControl(numero)} ya fue controlado desde otra app y está bloqueado.`);
+      return;
+    }
+
     let movil = controlMovilesCache.find((m) => String(m.numero) === String(numero));
     if (!movil) return;
 
@@ -1928,7 +2336,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
     if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
-    setFueraServicioControlMovilChecked(movil.condicion === false);
+    if (controlMovilFueraServicio) {
+      controlMovilFueraServicio.disabled = false;
+      controlMovilFueraServicio.checked = !movil.condicion;
+    }
 
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles("Leyendo último estado del móvil desde Supabase...");
@@ -1944,7 +2355,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
         if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
         if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
-        setFueraServicioControlMovilChecked(movil.condicion === false);
+        if (controlMovilFueraServicio) {
+          controlMovilFueraServicio.disabled = false;
+          controlMovilFueraServicio.checked = !movil.condicion;
+        }
       }
 
       setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
@@ -1972,9 +2386,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilKilometraje) controlMovilKilometraje.value = "";
     if (controlMovilCombustible) controlMovilCombustible.value = "";
     if (controlMovilObservaciones) controlMovilObservaciones.value = "";
-    setFueraServicioControlMovilChecked(false);
+    if (controlMovilFueraServicio) {
+      controlMovilFueraServicio.checked = false;
+      controlMovilFueraServicio.disabled = true;
+    }
     limpiarFotosControlMovil();
-    setTextoEstadoControlMoviles(controlMovilesCache.length ? "Seleccione un móvil en servicio." : "No hay móviles en servicio para controlar.");
+    setTextoEstadoControlMoviles(movilesControlVisibles().length ? "Seleccione un móvil en servicio." : "No hay móviles en servicio para controlar.");
     actualizarBotonSalirControlMoviles();
   }
 
@@ -2193,7 +2610,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return true;
   }
 
-  async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones, condicion) {
+  async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones, fueraServicio = false) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?numero=eq.${encodeURIComponent(Number(numero))}`, {
       method: "PATCH",
       headers: headersSupabase({
@@ -2204,7 +2621,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         kilometraje: Number(kilometraje),
         combustible,
         observaciones_novedades: observaciones,
-        condicion: condicion !== false,
+        condicion: !fueraServicio,
       }),
     });
 
@@ -2224,7 +2641,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const combustible = normalizarCombustibleControlMovil(controlMovilCombustible?.value || "");
     const observaciones = limpiarTextoSimple(controlMovilObservaciones?.value || "");
     const fueraServicio = !!controlMovilFueraServicio?.checked;
-    const condicionActualizada = !fueraServicio;
 
     if (!kilometraje) {
       alert("Complete el kilometraje. Solo se aceptan números.");
@@ -2271,23 +2687,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         guardia: guardiaControl,
       });
 
-      await actualizarEstadoActualMovilControl(
-        controlMovilSeleccionado.numero,
-        kilometraje,
-        combustible,
-        observaciones,
-        condicionActualizada
-      );
+      await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
 
-      marcarMovilControladoEnSesion(controlMovilSeleccionado.numero);
-      actualizarMovilControlEnCache({
-        ...controlMovilSeleccionado,
-        kilometraje: String(kilometraje),
-        combustible,
-        observaciones_novedades: observaciones,
-        observaciones,
-        condicion: condicionActualizada,
-      });
+      try {
+        await guardarBloqueoControlMovil(controlMovilSeleccionado.numero);
+      } catch (e) {
+        console.warn("[WSP] Control guardado, pero no se pudo activar el bloqueo compartido del móvil.", e);
+        alert("El control se guardó, pero no se pudo marcar/bloquear este móvil en las otras apps. Revisá la tabla realtime de Supabase.");
+      }
 
       controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
@@ -2335,10 +2742,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         controlMovilesChips.style.display = "grid";
       }
 
-      cargarMovilesControlDesdeSupabase({ forzar: true });
+      iniciarModoControlMovilesCompartido();
       actualizarBotonSalirControlMoviles();
     } else {
-      controlMovilesControladosSesion = new Set();
+      detenerModoControlMovilesCompartido({ limpiarRemoto: true });
       document.body.classList.remove("modo-control-moviles", "control-movil-seleccionado-activo");
       if (btnEnviar) {
         btnEnviar.classList.remove("hidden");
@@ -2349,8 +2756,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
-  function salirControlMoviles() {
-    limpiarFocosControlMovilesSesion();
+  async function salirControlMoviles() {
+    try {
+      if (btnEnviar) {
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = "Saliendo...";
+      }
+      await detenerModoControlMovilesCompartido({ limpiarRemoto: true });
+    } catch (e) {
+      console.warn("[WSP] No se pudo cerrar limpiamente el modo control de móviles.", e);
+    } finally {
+      if (btnEnviar) btnEnviar.disabled = false;
+    }
 
     try {
       window.close();
@@ -3527,7 +3944,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (esControlMovilesActivo()) {
-      salirControlMoviles();
+      await salirControlMoviles();
       return;
     }
 
@@ -3771,6 +4188,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   bindControlMovilesEventos();
+
+  window.addEventListener("beforeunload", () => {
+    if (esControlMovilesActivo()) borrarPresenciaPropiaControlMovilesKeepAlive();
+  });
 
   btnEnviar.addEventListener("click", enviar);
 
