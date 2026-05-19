@@ -37,6 +37,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const controlMovilCombustible = document.getElementById("controlMovilCombustible");
   const controlMovilObservaciones = document.getElementById("controlMovilObservaciones");
   const controlMovilFueraServicio = document.getElementById("controlMovilFueraServicio");
+  const controlMovilesAyudaWrap = document.getElementById("controlMovilesAyudaWrap");
+  const controlMovilesAyudaBtn = document.getElementById("controlMovilesAyudaBtn");
+  const controlMovilesAyudaPopup = document.getElementById("controlMovilesAyudaPopup");
   const controlMovilFoto1 = document.getElementById("controlMovilFoto1");
   const controlMovilFoto2 = document.getElementById("controlMovilFoto2");
   const controlMovilPreview1 = document.getElementById("controlMovilPreview1");
@@ -156,6 +159,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_POLLING_MS = 8000;
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
+
+  function cerrarAyudaControlMoviles() {
+    if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
+    controlMovilesAyudaPopup.classList.add("hidden");
+    controlMovilesAyudaBtn.classList.remove("ayuda-activa");
+    controlMovilesAyudaBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function abrirAyudaControlMoviles() {
+    if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
+    controlMovilesAyudaPopup.classList.remove("hidden");
+    controlMovilesAyudaBtn.classList.add("ayuda-activa");
+    controlMovilesAyudaBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function alternarAyudaControlMoviles(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!controlMovilesAyudaPopup) return;
+    const estaAbierta = !controlMovilesAyudaPopup.classList.contains("hidden");
+    if (estaAbierta) cerrarAyudaControlMoviles();
+    else abrirAyudaControlMoviles();
+  }
 
   function limpiarErrorCampo(el) {
     if (!el) return;
@@ -2715,6 +2743,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function setUIControlMovilesActiva(activa) {
     if (bloqueControlMoviles) bloqueControlMoviles.classList.toggle("hidden", !activa);
     document.body.classList.toggle("modo-control-moviles", !!activa);
+    if (!activa) cerrarAyudaControlMoviles();
 
     if (activa) {
       setUIControlSuperiorActiva(false);
@@ -4186,6 +4215,26 @@ ${bold(`Moviles ${organismo}:`)}`)
       aplicarAutocompletadoDetalles(detallesInput, { forzar: true });
     });
   }
+
+  if (controlMovilesAyudaBtn) {
+    controlMovilesAyudaBtn.addEventListener("click", alternarAyudaControlMoviles);
+  }
+
+  if (controlMovilesAyudaPopup) {
+    controlMovilesAyudaPopup.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!controlMovilesAyudaWrap) return;
+    if (controlMovilesAyudaWrap.contains(event.target)) return;
+    cerrarAyudaControlMoviles();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") cerrarAyudaControlMoviles();
+  });
 
   bindControlMovilesEventos();
 
