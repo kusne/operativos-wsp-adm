@@ -1651,6 +1651,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function normalizarMovilControl(row) {
     const condicion = row?.condicion === true || String(row?.condicion).toLowerCase() === "true";
+    const observaciones = limpiarTextoSimple(
+      row?.observaciones_novedades ??
+      row?.observaciones ??
+      row?.novedad ??
+      ""
+    );
+
     return {
       id: row?.id || null,
       numero: limpiarTextoSimple(row?.numero || ""),
@@ -1659,6 +1666,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       dominio: limpiarTextoSimple(row?.dominio || "").toUpperCase(),
       kilometraje: String(row?.kilometraje ?? "").replace(/\D+/g, ""),
       combustible: normalizarCombustibleControlMovil(row?.combustible),
+      observaciones_novedades: observaciones,
+      observaciones,
       condicion,
     };
   }
@@ -1708,13 +1717,46 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return String(a?.numero || "").localeCompare(String(b?.numero || ""), "es", { numeric: true });
   }
 
+  async function cargarEstadoActualMovilControlDesdeSupabase(numero) {
+    const numeroNormalizado = limpiarTextoSimple(numero || "").replace(/\D+/g, "");
+    if (!numeroNormalizado) return null;
+
+    const params = new URLSearchParams({
+      select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,observaciones_novedades,condicion,activo",
+      numero: `eq.${numeroNormalizado}`,
+      limit: "1",
+    });
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?${params.toString()}`, {
+      headers: headersSupabase({ Accept: "application/json" }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`Supabase ${r.status}: ${txt}`);
+    }
+
+    const data = await r.json();
+    const row = Array.isArray(data) ? data[0] : null;
+    return row ? normalizarMovilControl(row) : null;
+  }
+
+  function actualizarMovilControlEnCache(movilActualizado) {
+    if (!movilActualizado?.numero) return;
+
+    const idx = controlMovilesCache.findIndex((m) => String(m.numero) === String(movilActualizado.numero));
+    if (idx >= 0) {
+      controlMovilesCache[idx] = { ...controlMovilesCache[idx], ...movilActualizado };
+    }
+  }
+
   async function cargarMovilesControlDesdeSupabase({ forzar = false } = {}) {
     if (controlMovilesCargados && !forzar) return controlMovilesCache;
 
     setTextoEstadoControlMoviles("Cargando móviles en servicio...");
 
     const params = new URLSearchParams({
-      select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,condicion,activo",
+      select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,observaciones_novedades,condicion,activo",
       condicion: "eq.true",
       activo: "eq.true",
       order: "numero.asc",
@@ -1828,8 +1870,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .replaceAll("'", "&#39;");
   }
 
-  function seleccionarMovilControl(numero) {
-    const movil = controlMovilesCache.find((m) => String(m.numero) === String(numero));
+  async function seleccionarMovilControl(numero) {
+    let movil = controlMovilesCache.find((m) => String(m.numero) === String(numero));
     if (!movil) return;
 
     controlMovilSeleccionado = movil;
@@ -1849,10 +1891,29 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero;
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
-    if (controlMovilObservaciones) controlMovilObservaciones.value = "";
+    if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
+
     limpiarFotosControlMovil();
-    setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
+    setTextoEstadoControlMoviles("Leyendo último estado del móvil desde Supabase...");
     actualizarBotonSalirControlMoviles();
+
+    try {
+      const movilActualizado = await cargarEstadoActualMovilControlDesdeSupabase(movil.numero);
+      if (movilActualizado) {
+        actualizarMovilControlEnCache(movilActualizado);
+        movil = { ...movil, ...movilActualizado };
+        controlMovilSeleccionado = movil;
+
+        if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
+        if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
+        if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
+      }
+
+      setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
+    } catch (e) {
+      console.warn("[WSP] No se pudo leer el último estado del móvil seleccionado. Se usan los datos cargados al entrar al modo.", e);
+      setTextoEstadoControlMoviles("No se pudo refrescar el último estado. Se usan los datos cargados al entrar al modo.");
+    }
   }
 
   function volverASeleccionMovilControl() {
