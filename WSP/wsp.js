@@ -36,6 +36,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const controlMovilKilometraje = document.getElementById("controlMovilKilometraje");
   const controlMovilCombustible = document.getElementById("controlMovilCombustible");
   const controlMovilObservaciones = document.getElementById("controlMovilObservaciones");
+  const controlMovilFueraServicio = document.getElementById("controlMovilFueraServicio");
   const controlMovilFoto1 = document.getElementById("controlMovilFoto1");
   const controlMovilFoto2 = document.getElementById("controlMovilFoto2");
   const controlMovilPreview1 = document.getElementById("controlMovilPreview1");
@@ -73,6 +74,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
   let controlMovilesCargados = false;
+  let controlMovilesControladosSesion = new Set();
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -1606,6 +1608,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
   }
 
+  function setFueraServicioControlMovilChecked(valor) {
+    if (controlMovilFueraServicio) controlMovilFueraServicio.checked = !!valor;
+  }
+
+  function estaMovilControladoEnSesion(numero) {
+    return controlMovilesControladosSesion.has(String(numero || ""));
+  }
+
+  function marcarMovilControladoEnSesion(numero) {
+    const n = limpiarTextoSimple(numero || "");
+    if (n) controlMovilesControladosSesion.add(n);
+  }
+
+  function limpiarFocosControlMovilesSesion() {
+    controlMovilesControladosSesion = new Set();
+    renderControlMovilesChips();
+  }
+
   function actualizarBotonSalirControlMoviles() {
     if (!btnEnviar) return;
 
@@ -1773,10 +1793,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       }
 
       const data = await r.json();
-      controlMovilesCache = (Array.isArray(data) ? data : [])
+      const movilesEnServicio = (Array.isArray(data) ? data : [])
         .map(normalizarMovilControl)
-        .filter((m) => m.numero && m.condicion)
-        .sort(ordenarMovilesControl);
+        .filter((m) => m.numero && m.condicion);
+
+      const controladosPrevios = Array.isArray(controlMovilesCache)
+        ? controlMovilesCache.filter((m) => m?.numero && estaMovilControladoEnSesion(m.numero))
+        : [];
+
+      const mapa = new Map();
+      [...movilesEnServicio, ...controladosPrevios].forEach((m) => {
+        if (m?.numero) mapa.set(String(m.numero), m);
+      });
+
+      controlMovilesCache = Array.from(mapa.values()).sort(ordenarMovilesControl);
 
       controlMovilesCargados = true;
       renderControlMovilesChips();
@@ -1831,6 +1861,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         btn.type = "button";
         btn.className = "control-movil-chip";
         btn.dataset.numero = movil.numero;
+        if (estaMovilControladoEnSesion(movil.numero)) {
+          btn.classList.add("control-movil-chip-controlado");
+        }
+        if (movil.condicion === false) {
+          btn.classList.add("control-movil-chip-fuera-servicio");
+        }
 
         if (tipoGrupo === "motos") {
           const cilindrada = cilindradaMotoControl(movil);
@@ -1892,6 +1928,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
     if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
+    setFueraServicioControlMovilChecked(movil.condicion === false);
 
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles("Leyendo último estado del móvil desde Supabase...");
@@ -1907,6 +1944,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
         if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
         if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
+        setFueraServicioControlMovilChecked(movil.condicion === false);
       }
 
       setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
@@ -1934,6 +1972,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (controlMovilKilometraje) controlMovilKilometraje.value = "";
     if (controlMovilCombustible) controlMovilCombustible.value = "";
     if (controlMovilObservaciones) controlMovilObservaciones.value = "";
+    setFueraServicioControlMovilChecked(false);
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles(controlMovilesCache.length ? "Seleccione un móvil en servicio." : "No hay móviles en servicio para controlar.");
     actualizarBotonSalirControlMoviles();
@@ -2154,7 +2193,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return true;
   }
 
-  async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones) {
+  async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones, condicion) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?numero=eq.${encodeURIComponent(Number(numero))}`, {
       method: "PATCH",
       headers: headersSupabase({
@@ -2165,6 +2204,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         kilometraje: Number(kilometraje),
         combustible,
         observaciones_novedades: observaciones,
+        condicion: condicion !== false,
       }),
     });
 
@@ -2183,6 +2223,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const kilometraje = normalizarKilometrajeControlMovil(controlMovilKilometraje?.value || "");
     const combustible = normalizarCombustibleControlMovil(controlMovilCombustible?.value || "");
     const observaciones = limpiarTextoSimple(controlMovilObservaciones?.value || "");
+    const fueraServicio = !!controlMovilFueraServicio?.checked;
+    const condicionActualizada = !fueraServicio;
 
     if (!kilometraje) {
       alert("Complete el kilometraje. Solo se aceptan números.");
@@ -2229,7 +2271,23 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         guardia: guardiaControl,
       });
 
-      await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones);
+      await actualizarEstadoActualMovilControl(
+        controlMovilSeleccionado.numero,
+        kilometraje,
+        combustible,
+        observaciones,
+        condicionActualizada
+      );
+
+      marcarMovilControladoEnSesion(controlMovilSeleccionado.numero);
+      actualizarMovilControlEnCache({
+        ...controlMovilSeleccionado,
+        kilometraje: String(kilometraje),
+        combustible,
+        observaciones_novedades: observaciones,
+        observaciones,
+        condicion: condicionActualizada,
+      });
 
       controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
@@ -2280,6 +2338,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       cargarMovilesControlDesdeSupabase({ forzar: true });
       actualizarBotonSalirControlMoviles();
     } else {
+      controlMovilesControladosSesion = new Set();
       document.body.classList.remove("modo-control-moviles", "control-movil-seleccionado-activo");
       if (btnEnviar) {
         btnEnviar.classList.remove("hidden");
@@ -2291,6 +2350,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function salirControlMoviles() {
+    limpiarFocosControlMovilesSesion();
+
     try {
       window.close();
     } catch (e) {}
