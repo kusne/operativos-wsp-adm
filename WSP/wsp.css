@@ -2201,3 +2201,64 @@ body.modo-control-moviles.control-movil-seleccionado-activo #btnEnviar{
   }
 }
 
+/* =========================================================
+   CONTROL DE MÓVILES - Fuera de Servicio + foco controlado
+   ========================================================= */
+#bloqueControlMoviles .control-moviles-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+}
+
+#bloqueControlMoviles .control-moviles-header > label:first-child{
+  color: #072E6D !important;
+  font-weight: 900 !important;
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.45);
+  margin: 0;
+}
+
+.control-moviles-fuera-servicio{
+  margin-left: auto;
+  display: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+  color: #072E6D;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 2px 2px 2px 14px;
+}
+
+body.control-movil-seleccionado-activo .control-moviles-fuera-servicio{
+  display: inline-flex;
+}
+
+.control-moviles-fuera-servicio input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: scale(1.25) !important;
+  margin: 0 2px 0 0 !important;
+  flex: 0 0 auto;
+}
+
+.control-moviles-fuera-servicio span{
+  display: inline-block;
+}
+
+.control-movil-chip.control-movil-chip-controlado{
+  background: #FFD966 !important;
+  border-color: #B8890A !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.35), 0 6px 14px rgba(0,0,0,0.14) !important;
+}
+
+.control-movil-chip.control-movil-chip-fuera-servicio{
+  opacity: 0.92;
+}
