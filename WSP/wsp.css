@@ -2208,46 +2208,66 @@ body.modo-control-moviles.control-movil-seleccionado-activo #btnEnviar{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 34px;
+  gap: 42px;
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.control-moviles-header > label:first-child,
+.control-moviles-fuera-servicio-check{
+  color: #072E6D !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
 }
 
 .control-moviles-header > label:first-child{
-  color: #072E6D !important;
-  font-weight: 900 !important;
-  display: inline-block;
+  display: inline-flex !important;
+  align-items: center !important;
   padding: 2px 6px;
   border-radius: 6px;
   background: rgba(255,255,255,0.45);
-  margin-bottom: 0 !important;
+  margin: 0 !important;
+  min-height: 30px;
 }
 
 .control-moviles-fuera-servicio-check{
   display: inline-flex !important;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  margin: 0 4px 0 auto !important;
-  padding: 4px 2px 4px 12px !important;
-  color: #072E6D;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-direction: row !important;
+  gap: 7px;
+  margin: 0 2px 0 auto !important;
+  padding: 2px 0 2px 18px !important;
   white-space: nowrap;
-  min-height: 26px;
+  min-height: 30px;
 }
 
 .control-moviles-fuera-servicio-check input[type="checkbox"]{
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
   margin: 0 !important;
-  transform: scale(1.2) !important;
+  transform: scale(1.45) !important;
   cursor: pointer;
 }
 
-.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled,
-.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled + span{
-  opacity: 0.55;
+.control-moviles-fuera-servicio-check span{
+  display: inline-block !important;
+  color: #072E6D !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+}
+
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled{
+  opacity: 0.65;
   cursor: not-allowed;
+}
+
+.control-moviles-fuera-servicio-check input[type="checkbox"]:disabled + span{
+  opacity: 1;
+  cursor: default;
 }
 
 .control-movil-chip.control-movil-chip-controlado{
