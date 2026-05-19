@@ -84,7 +84,13 @@
 
     <!-- CONTROL DE MÓVILES -->
     <div id="bloqueControlMoviles" class="section hidden destacado control-moviles-section">
-      <label>Control de móviles</label>
+      <div class="control-moviles-header">
+        <label>Control de móviles</label>
+        <label class="control-moviles-fuera-servicio" for="controlMovilFueraServicio">
+          <input type="checkbox" id="controlMovilFueraServicio">
+          <span>Fuera de Servicio</span>
+        </label>
+      </div>
 
       <div id="controlMovilesEstado" class="control-moviles-estado">Cargando móviles en servicio...</div>
 
@@ -436,7 +442,6 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
-
 
 
 
