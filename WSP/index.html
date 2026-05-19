@@ -86,8 +86,9 @@
     <div id="bloqueControlMoviles" class="section hidden destacado control-moviles-section">
       <div class="control-moviles-header">
         <label>Control de móviles</label>
-        <label class="control-moviles-fuera-servicio" for="controlMovilFueraServicio">
-          <input type="checkbox" id="controlMovilFueraServicio">
+
+        <label class="control-moviles-fuera-servicio-check" id="wrapControlMovilFueraServicio">
+          <input type="checkbox" id="controlMovilFueraServicio" disabled>
           <span>Fuera de Servicio</span>
         </label>
       </div>
@@ -439,6 +440,7 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <!-- wsp -->
   <script src="./nomenclador.js" defer></script>
   <script src="./controlsuperior.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="./wsp.js" defer></script>
 </body>
 </html>
