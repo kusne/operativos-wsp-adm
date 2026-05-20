@@ -76,7 +76,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
-  let controlMovilSnapshotFormulario = null;
   let controlMovilesCargados = false;
   let controlMovilesLocks = new Map();
   let controlMovilesHeartbeatTimer = null;
@@ -84,9 +83,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesRealtimeChannel = null;
   let controlMovilesRealtimeClient = null;
   let controlMovilesRealtimeRefreshTimer = null;
-  let controlMovilesBroadcastChannel = null;
-  let controlMovilesBroadcastReady = false;
-  let controlMovilesBroadcastWaiters = [];
   let controlMovilesSincronizando = false;
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
@@ -158,15 +154,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
   const CONTROL_MOVILES_LOCKS_TABLE = "wsp_control_moviles_locks";
-  const CONTROL_MOVILES_BROADCAST_CHANNEL = "bmzcn-control-moviles-estado";
+  const CONTROL_MOVILES_ESTADO_RECURSOS_TABLE = "recursos_controles_wsp_estado";
+  const CONTROL_MOVILES_DISPOSITIVOS_TABLE = "wsp_dispositivos";
   const CONTROL_MOVILES_PRESENCE_TABLE = "wsp_control_moviles_presence";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
   const CONTROL_MOVILES_HEARTBEAT_MS = 15000;
-  // Sin polling de datos: los móviles se actualizan al abrir/seleccionar/guardar y por Realtime.
+  const CONTROL_MOVILES_POLLING_MS = 8000;
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
-  const CONTROL_MOVILES_MARKERS_STORAGE_KEY = 'bmzcn_wsp_control_markers_v1';
 
   function cerrarAyudaControlMoviles() {
     if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
@@ -1876,67 +1872,210 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
 
-  function registrarMarcaLocalControlWsp(numero) {
-    const numeroNormalizado = normalizarNumeroMovilControl(numero);
-    if (!numeroNormalizado) return;
+  function obtenerDeviceIdControlMoviles() {
+    const key = "wsp_control_moviles_device_id";
+    try {
+      const actual = window.localStorage?.getItem(key);
+      if (actual) return actual;
+      const nuevo = crearIdControlMoviles("device");
+      window.localStorage?.setItem(key, nuevo);
+      return nuevo;
+    } catch {
+      return crearIdControlMoviles("device");
+    }
+  }
 
-    const ahora = Date.now();
-    const marker = {
-      numero: numeroNormalizado,
-      at: ahora,
-      expiresAt: ahora + CONTROL_MOVILES_LOCK_TTL_MS,
-      guardia_fecha: obtenerGuardiaControlMovil().guardia_fecha,
-      fuente: 'WSP'
+  const CONTROL_MOVILES_DEVICE_ID = obtenerDeviceIdControlMoviles();
+
+  function detectarSistemaOperativoControlMoviles(userAgent, platform) {
+    const ua = String(userAgent || "").toLowerCase();
+    const pf = String(platform || "").toLowerCase();
+    if (/android/.test(ua)) return "Android";
+    if (/iphone|ipad|ipod/.test(ua) || /ios/.test(pf)) return "iOS";
+    if (/windows nt/.test(ua) || /win/.test(pf)) return "Windows";
+    if (/mac os x|macintosh/.test(ua) || /mac/.test(pf)) return "macOS";
+    if (/linux/.test(ua) || /linux/.test(pf)) return "Linux";
+    return "Desconocido";
+  }
+
+  function detectarNavegadorControlMoviles(userAgent) {
+    const ua = String(userAgent || "");
+    if (/Edg\//.test(ua)) return "Edge";
+    if (/OPR\//.test(ua) || /Opera/.test(ua)) return "Opera";
+    if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) return "Chrome/WebView";
+    if (/Firefox\//.test(ua)) return "Firefox";
+    if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "Safari";
+    return "Desconocido";
+  }
+
+  function detectarModeloDispositivoControlMoviles(userAgent) {
+    const ua = String(userAgent || "");
+    const android = ua.match(/Android[^;)]*;\s*([^;)]+)\s+Build\//i);
+    if (android?.[1]) return limpiarTextoSimple(android[1]);
+    const iphone = ua.match(/\b(iPhone|iPad|iPod)\b/i);
+    if (iphone?.[1]) return iphone[1];
+    return "";
+  }
+
+  function construirInfoDispositivoControlMoviles() {
+    const nav = window.navigator || {};
+    const screenObj = window.screen || {};
+    const userAgent = String(nav.userAgent || "");
+    const platform = String(nav.platform || "");
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection || null;
+    let timezone = "";
+    try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
+
+    return {
+      device_id: CONTROL_MOVILES_DEVICE_ID,
+      owner_id: CONTROL_MOVILES_OWNER_ID,
+      session_id: CONTROL_MOVILES_SESSION_ID,
+      user_agent: userAgent,
+      platform,
+      os_detectado: detectarSistemaOperativoControlMoviles(userAgent, platform),
+      browser_detectado: detectarNavegadorControlMoviles(userAgent),
+      device_model_detectado: detectarModeloDispositivoControlMoviles(userAgent),
+      screen_width: Number(screenObj.width || 0) || null,
+      screen_height: Number(screenObj.height || 0) || null,
+      pixel_ratio: Number(window.devicePixelRatio || 1) || null,
+      language: String(nav.language || ""),
+      timezone,
+      hardware_concurrency: Number(nav.hardwareConcurrency || 0) || null,
+      device_memory: Number(nav.deviceMemory || 0) || null,
+      connection_type: connection ? limpiarTextoSimple(connection.effectiveType || connection.type || "") : "",
+    };
+  }
+
+  async function registrarDispositivoControlMoviles() {
+    const info = construirInfoDispositivoControlMoviles();
+    const now = ahoraISOControlMoviles();
+    const payload = {
+      device_id: info.device_id,
+      owner_id: info.owner_id,
+      ultimo_session_id: info.session_id,
+      user_agent: info.user_agent,
+      platform: info.platform,
+      os_detectado: info.os_detectado,
+      browser_detectado: info.browser_detectado,
+      device_model_detectado: info.device_model_detectado,
+      screen_width: info.screen_width,
+      screen_height: info.screen_height,
+      pixel_ratio: info.pixel_ratio,
+      language: info.language,
+      timezone: info.timezone,
+      hardware_concurrency: info.hardware_concurrency,
+      device_memory: info.device_memory,
+      connection_type: info.connection_type,
+      last_seen_at: now,
+      activo: true,
     };
 
-    let data = [];
     try {
-      data = JSON.parse(localStorage.getItem(CONTROL_MOVILES_MARKERS_STORAGE_KEY) || '[]');
-    } catch {
-      data = [];
-    }
-
-    if (!Array.isArray(data)) data = [];
-    data = data
-      .filter((item) => Number(item?.expiresAt || 0) > ahora)
-      .filter((item) => normalizarNumeroMovilControl(item?.numero || item?.numero_movil || '') !== numeroNormalizado);
-    data.push(marker);
-
-    try {
-      localStorage.setItem(CONTROL_MOVILES_MARKERS_STORAGE_KEY, JSON.stringify(data));
+      await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
+        method: "POST",
+        params: { on_conflict: "device_id" },
+        body: payload,
+        extraHeaders: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      });
     } catch (e) {
-      console.warn('[WSP] No se pudo guardar marca local de control WSP.', e);
+      console.warn("[WSP] No se pudo registrar el dispositivo de control. El control continúa igual.", e);
     }
 
+    return info;
+  }
+
+  function colorMarcaRecursosDesdeCantidad(cantidad) {
+    const n = Math.max(1, parseInt(cantidad, 10) || 1);
+    if (n >= 3) return "NEGRA";
+    if (n === 2) return "AZUL";
+    return "DORADA";
+  }
+
+  async function leerEstadoControlRecursosVigente(numero, guardiaFecha) {
+    const numeroNormalizado = normalizarNumeroMovilControl(numero);
+    if (!numeroNormalizado || !guardiaFecha) return null;
+
     try {
-      if ('BroadcastChannel' in window) {
-        const channel = new BroadcastChannel('bmzcn_wsp_control_moviles');
-        channel.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker });
-        channel.close();
-      }
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_ESTADO_RECURSOS_TABLE, {
+        params: {
+          select: "id,numero_movil,guardia_fecha,controlado,controlado_at,expires_at,cantidad_controles_ventana,color_marca,ultimo_device_id,ultimo_session_id,ultimo_device_label,fuente,updated_at,created_at",
+          guardia_fecha: `eq.${guardiaFecha}`,
+          numero_movil: `eq.${numeroNormalizado}`,
+          limit: "1",
+        },
+        extraHeaders: { Accept: "application/json" },
+      });
+      const row = Array.isArray(data) ? data[0] : null;
+      if (!row) return null;
+      const expires = row.expires_at ? new Date(row.expires_at) : null;
+      if (expires && !Number.isNaN(expires.getTime()) && expires.getTime() <= Date.now()) return null;
+      return row;
     } catch (e) {
-      console.warn('[WSP] No se pudo emitir BroadcastChannel de control WSP.', e);
+      console.warn("[WSP] No se pudo leer estado vigente para Recursos.", e);
+      return null;
     }
+  }
+
+  async function registrarControlWspParaRecursos({ numero, guardia, controladoAt } = {}) {
+    const numeroNormalizado = normalizarNumeroMovilControl(numero);
+    if (!numeroNormalizado || !guardia?.guardia_fecha) return false;
+
+    const dispositivo = await registrarDispositivoControlMoviles();
+    const ahora = controladoAt ? new Date(controladoAt) : new Date();
+    const controladoAtIso = Number.isNaN(ahora.getTime()) ? ahoraISOControlMoviles() : ahora.toISOString();
+    const expiresAtIso = new Date(Date.now() + CONTROL_MOVILES_LOCK_TTL_MS).toISOString();
+    const existente = await leerEstadoControlRecursosVigente(numeroNormalizado, guardia.guardia_fecha);
+    const cantidadAnterior = existente ? (parseInt(existente.cantidad_controles_ventana, 10) || 1) : 0;
+    const cantidad = cantidadAnterior > 0 ? cantidadAnterior + 1 : 1;
+    const colorMarca = colorMarcaRecursosDesdeCantidad(cantidad);
+
+    const deviceResumen = {
+      device_id: dispositivo.device_id,
+      owner_id: dispositivo.owner_id,
+      session_id: dispositivo.session_id,
+      os_detectado: dispositivo.os_detectado,
+      browser_detectado: dispositivo.browser_detectado,
+      device_model_detectado: dispositivo.device_model_detectado,
+      screen_width: dispositivo.screen_width,
+      screen_height: dispositivo.screen_height,
+      pixel_ratio: dispositivo.pixel_ratio,
+      language: dispositivo.language,
+      timezone: dispositivo.timezone,
+    };
+
+    const payload = {
+      guardia_fecha: guardia.guardia_fecha,
+      numero_movil: Number(numeroNormalizado),
+      controlado: true,
+      controlado_at: controladoAtIso,
+      expires_at: expiresAtIso,
+      cantidad_controles_ventana: cantidad,
+      color_marca: colorMarca,
+      ultimo_device_id: dispositivo.device_id,
+      ultimo_session_id: CONTROL_MOVILES_SESSION_ID,
+      ultimo_owner_id: CONTROL_MOVILES_OWNER_ID,
+      ultimo_device_info: deviceResumen,
+      fuente: "WSP",
+      updated_at: controladoAtIso,
+    };
 
     try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker }, '*');
-      }
+      await fetchSupabaseTabla(CONTROL_MOVILES_ESTADO_RECURSOS_TABLE, {
+        method: "POST",
+        params: { on_conflict: "guardia_fecha,numero_movil" },
+        body: payload,
+        extraHeaders: {
+          Prefer: "resolution=merge-duplicates,return=representation",
+          Accept: "application/json",
+        },
+      });
+      console.log("[WSP] Estado Recursos actualizado para ©:", numeroNormalizado, colorMarca, cantidad);
+      return true;
     } catch (e) {
-      console.warn('[WSP] No se pudo emitir postMessage al opener.', e);
+      console.error("[WSP] No se pudo actualizar la marca de Recursos para el control WSP.", e);
+      alert("El control se guardó, pero no se pudo actualizar la marca © en Recursos. Revisá la tabla recursos_controles_wsp_estado y sus permisos/realtime.");
+      return false;
     }
-
-    try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker }, '*');
-      }
-    } catch (e) {
-      console.warn('[WSP] No se pudo emitir postMessage al parent.', e);
-    }
-
-    try {
-      window.dispatchEvent(new CustomEvent('bmzcn-control-wsp-guardado', { detail: { numero: numeroNormalizado, marker } }));
-    } catch {}
   }
 
   async function guardarBloqueoControlMovil(numero) {
@@ -1968,10 +2107,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const lock = normalizarLockControlMovil(payload);
     if (lock) controlMovilesLocks.set(lock.numero, lock);
     renderControlMovilesChips();
-
-    // Señal realtime directa para Recursos. Esta es la fuente inmediata de la © dorada,
-    // sin polling y sin depender de que Postgres Changes entregue el evento de la tabla.
-    await emitirControlWspRealtimeBroadcast(numeroNormalizado, payload);
   }
 
   async function borrarPresenciaPropiaControlMoviles() {
@@ -2006,102 +2141,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
       return controlMovilesRealtimeClient;
     } catch (e) {
-      console.warn("[WSP] Supabase Realtime no disponible. Se sincronizará al abrir/seleccionar/guardar.", e);
+      console.warn("[WSP] Supabase Realtime no disponible. Se usa polling como respaldo.", e);
       return null;
     }
-  }
-
-
-  function iniciarBroadcastControlMoviles() {
-    const client = obtenerClienteRealtimeControlMoviles();
-    if (!client || typeof client.channel !== "function") return false;
-    if (controlMovilesBroadcastChannel) return true;
-
-    controlMovilesBroadcastReady = false;
-    controlMovilesBroadcastChannel = client
-      .channel(CONTROL_MOVILES_BROADCAST_CHANNEL, {
-        config: { broadcast: { self: false } }
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          controlMovilesBroadcastReady = true;
-          const waiters = controlMovilesBroadcastWaiters.splice(0);
-          waiters.forEach((resolve) => resolve(true));
-          console.log("[WSP] Broadcast realtime control móvil activo.");
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          controlMovilesBroadcastReady = false;
-          const waiters = controlMovilesBroadcastWaiters.splice(0);
-          waiters.forEach((resolve) => resolve(false));
-          console.warn("[WSP] Broadcast realtime control móvil no activo:", status);
-        }
-      });
-    return true;
-  }
-
-  function esperarBroadcastControlMovilesListo(timeoutMs = 1800) {
-    if (controlMovilesBroadcastReady && controlMovilesBroadcastChannel) return Promise.resolve(true);
-    iniciarBroadcastControlMoviles();
-    if (controlMovilesBroadcastReady && controlMovilesBroadcastChannel) return Promise.resolve(true);
-
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        controlMovilesBroadcastWaiters = controlMovilesBroadcastWaiters.filter((fn) => fn !== resolver);
-        resolve(false);
-      }, timeoutMs);
-      const resolver = (ok) => {
-        clearTimeout(timer);
-        resolve(Boolean(ok));
-      };
-      controlMovilesBroadcastWaiters.push(resolver);
-    });
-  }
-
-  async function emitirControlWspRealtimeBroadcast(numero, lockPayload = {}) {
-    const numeroNormalizado = normalizarNumeroMovilControl(numero);
-    if (!numeroNormalizado) return false;
-
-    const listo = await esperarBroadcastControlMovilesListo();
-    if (!listo || !controlMovilesBroadcastChannel) {
-      console.warn("[WSP] No se pudo emitir broadcast de control: canal no suscripto.");
-      return false;
-    }
-
-    const guardia = obtenerGuardiaControlMovil();
-    const payload = {
-      tipo: "control-wsp-guardado",
-      numero: numeroNormalizado,
-      numero_movil: numeroNormalizado,
-      guardia_fecha: guardia.guardia_fecha,
-      guardia_inicio: guardia.guardia_inicio,
-      guardia_fin: guardia.guardia_fin,
-      controlado: true,
-      controlado_at: lockPayload.locked_at || lockPayload.updated_at || ahoraISOControlMoviles(),
-      expires_at: lockPayload.expires_at || ahoraISOControlMoviles(CONTROL_MOVILES_LOCK_TTL_MS),
-      fuente: "WSP"
-    };
-
-    try {
-      const res = await controlMovilesBroadcastChannel.send({
-        type: "broadcast",
-        event: "control-wsp-guardado",
-        payload
-      });
-      console.log("[WSP] Broadcast realtime enviado para móvil controlado:", numeroNormalizado, res);
-      return res === "ok" || res === "timed out" || Boolean(res);
-    } catch (e) {
-      console.warn("[WSP] Falló el broadcast realtime de control WSP.", e);
-      return false;
-    }
-  }
-
-  function detenerBroadcastControlMoviles() {
-    if (!controlMovilesBroadcastChannel || !controlMovilesRealtimeClient) return;
-    try { controlMovilesRealtimeClient.removeChannel(controlMovilesBroadcastChannel); } catch {}
-    controlMovilesBroadcastChannel = null;
-    controlMovilesBroadcastReady = false;
-    const waiters = controlMovilesBroadcastWaiters.splice(0);
-    waiters.forEach((resolve) => resolve(false));
   }
 
   function iniciarRealtimeControlMoviles() {
@@ -2161,7 +2203,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Se sincronizará al abrir/seleccionar/guardar:", status);
+          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Queda activo el polling corto:", status);
         }
       });
 
@@ -2196,9 +2238,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       }
     }, CONTROL_MOVILES_HEARTBEAT_MS);
 
-    // No se refrescan datos por intervalo para evitar reinyectar kilometrajes viejos.
-    // La lectura fresca se fuerza al abrir Control de móviles, al seleccionar móvil,
-    // al guardar y por eventos Realtime de Supabase.
+    controlMovilesPollingTimer = setInterval(async () => {
+      if (!esControlMovilesActivo()) return;
+      await cargarBloqueosControlMoviles();
+      await cargarMovilesControlDesdeSupabase({ forzar: true });
+      await refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion: true });
+    }, CONTROL_MOVILES_POLLING_MS);
   }
 
   function detenerTimersControlMoviles() {
@@ -2221,7 +2266,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       await registrarPresenciaControlMoviles();
       await cargarBloqueosControlMoviles();
       iniciarRealtimeControlMoviles();
-      iniciarBroadcastControlMoviles();
       iniciarTimersControlMoviles();
       controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
@@ -2238,7 +2282,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function detenerModoControlMovilesCompartido({ limpiarRemoto = true } = {}) {
     detenerTimersControlMoviles();
     detenerRealtimeControlMoviles();
-    detenerBroadcastControlMoviles();
 
     if (limpiarRemoto) {
       await borrarPresenciaPropiaControlMoviles();
@@ -2420,13 +2463,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function aplicarMovilControlAlFormulario(movil) {
     if (!movil) return;
     controlMovilSeleccionado = movil;
-    controlMovilSnapshotFormulario = {
-      numero: limpiarTextoSimple(movil.numero || ''),
-      kilometraje: normalizarKilometrajeControlMovil(movil.kilometraje || ''),
-      combustible: normalizarCombustibleControlMovil(movil.combustible || ''),
-      observaciones: limpiarTextoSimple(movil.observaciones_novedades || movil.observaciones || ''),
-      fueraServicio: !movil.condicion
-    };
     if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero || "---";
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
@@ -2654,7 +2690,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function volverASeleccionMovilControl() {
     controlMovilSeleccionado = null;
-    controlMovilSnapshotFormulario = null;
     document.body.classList.remove("control-movil-seleccionado-activo");
 
     if (controlMovilesFormulario) {
@@ -2945,30 +2980,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         btnCambiarMovilControl.textContent = "Guardando...";
       }
 
-      const estadoActualAntesDeGuardar = await cargarEstadoActualMovilControlDesdeSupabase(controlMovilSeleccionado.numero);
-      if (estadoActualAntesDeGuardar && controlMovilSnapshotFormulario) {
-        const actualKm = normalizarKilometrajeControlMovil(estadoActualAntesDeGuardar.kilometraje || '');
-        const actualComb = normalizarCombustibleControlMovil(estadoActualAntesDeGuardar.combustible || '');
-        const actualFueraServicio = !estadoActualAntesDeGuardar.condicion;
-        const snapKm = normalizarKilometrajeControlMovil(controlMovilSnapshotFormulario.kilometraje || '');
-        const snapComb = normalizarCombustibleControlMovil(controlMovilSnapshotFormulario.combustible || '');
-        const snapFueraServicio = !!controlMovilSnapshotFormulario.fueraServicio;
-        const formKm = normalizarKilometrajeControlMovil(kilometraje || '');
-        const formComb = normalizarCombustibleControlMovil(combustible || '');
-        const formFueraServicio = !!fueraServicio;
-
-        const huboCambioExterno = actualKm !== snapKm || actualComb !== snapComb || actualFueraServicio !== snapFueraServicio;
-        const formularioSigueConDatoViejo = formKm === snapKm && formComb === snapComb && formFueraServicio === snapFueraServicio;
-
-        if (huboCambioExterno && formularioSigueConDatoViejo) {
-          actualizarMovilControlEnCache(estadoActualAntesDeGuardar);
-          aplicarMovilControlAlFormulario(estadoActualAntesDeGuardar);
-          setTextoEstadoControlMoviles('El móvil tenía datos nuevos cargados desde Recursos. Se actualizó el formulario; verificá y presioná Guardar nuevamente.');
-          alert('El móvil fue actualizado desde Recursos mientras WSP tenía datos viejos. Actualicé el formulario para no pisar kilometraje/combustible con información anterior. Verificá y presioná Guardar nuevamente.');
-          return;
-        }
-      }
-
       const guardiaControl = obtenerGuardiaControlMovil();
       const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
       const foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, controlMovilSeleccionado.numero, "foto2");
@@ -2997,7 +3008,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
-      registrarMarcaLocalControlWsp(controlMovilSeleccionado.numero);
+      await registrarControlWspParaRecursos({
+        numero: controlMovilSeleccionado.numero,
+        guardia: guardiaControl,
+        controladoAt: new Date().toISOString(),
+      });
 
       actualizarMovilControlEnCache({
         ...controlMovilSeleccionado,
