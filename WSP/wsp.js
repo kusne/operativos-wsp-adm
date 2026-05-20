@@ -84,6 +84,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesRealtimeChannel = null;
   let controlMovilesRealtimeClient = null;
   let controlMovilesRealtimeRefreshTimer = null;
+  let controlMovilesBroadcastChannel = null;
+  let controlMovilesBroadcastReady = false;
+  let controlMovilesBroadcastWaiters = [];
   let controlMovilesSincronizando = false;
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
@@ -155,6 +158,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
   const CONTROL_MOVILES_LOCKS_TABLE = "wsp_control_moviles_locks";
+  const CONTROL_MOVILES_BROADCAST_CHANNEL = "bmzcn-control-moviles-estado";
   const CONTROL_MOVILES_PRESENCE_TABLE = "wsp_control_moviles_presence";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
@@ -1964,6 +1968,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const lock = normalizarLockControlMovil(payload);
     if (lock) controlMovilesLocks.set(lock.numero, lock);
     renderControlMovilesChips();
+
+    // Señal realtime directa para Recursos. Esta es la fuente inmediata de la © dorada,
+    // sin polling y sin depender de que Postgres Changes entregue el evento de la tabla.
+    await emitirControlWspRealtimeBroadcast(numeroNormalizado, payload);
   }
 
   async function borrarPresenciaPropiaControlMoviles() {
@@ -2001,6 +2009,99 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.warn("[WSP] Supabase Realtime no disponible. Se sincronizará al abrir/seleccionar/guardar.", e);
       return null;
     }
+  }
+
+
+  function iniciarBroadcastControlMoviles() {
+    const client = obtenerClienteRealtimeControlMoviles();
+    if (!client || typeof client.channel !== "function") return false;
+    if (controlMovilesBroadcastChannel) return true;
+
+    controlMovilesBroadcastReady = false;
+    controlMovilesBroadcastChannel = client
+      .channel(CONTROL_MOVILES_BROADCAST_CHANNEL, {
+        config: { broadcast: { self: false } }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          controlMovilesBroadcastReady = true;
+          const waiters = controlMovilesBroadcastWaiters.splice(0);
+          waiters.forEach((resolve) => resolve(true));
+          console.log("[WSP] Broadcast realtime control móvil activo.");
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          controlMovilesBroadcastReady = false;
+          const waiters = controlMovilesBroadcastWaiters.splice(0);
+          waiters.forEach((resolve) => resolve(false));
+          console.warn("[WSP] Broadcast realtime control móvil no activo:", status);
+        }
+      });
+    return true;
+  }
+
+  function esperarBroadcastControlMovilesListo(timeoutMs = 1800) {
+    if (controlMovilesBroadcastReady && controlMovilesBroadcastChannel) return Promise.resolve(true);
+    iniciarBroadcastControlMoviles();
+    if (controlMovilesBroadcastReady && controlMovilesBroadcastChannel) return Promise.resolve(true);
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        controlMovilesBroadcastWaiters = controlMovilesBroadcastWaiters.filter((fn) => fn !== resolver);
+        resolve(false);
+      }, timeoutMs);
+      const resolver = (ok) => {
+        clearTimeout(timer);
+        resolve(Boolean(ok));
+      };
+      controlMovilesBroadcastWaiters.push(resolver);
+    });
+  }
+
+  async function emitirControlWspRealtimeBroadcast(numero, lockPayload = {}) {
+    const numeroNormalizado = normalizarNumeroMovilControl(numero);
+    if (!numeroNormalizado) return false;
+
+    const listo = await esperarBroadcastControlMovilesListo();
+    if (!listo || !controlMovilesBroadcastChannel) {
+      console.warn("[WSP] No se pudo emitir broadcast de control: canal no suscripto.");
+      return false;
+    }
+
+    const guardia = obtenerGuardiaControlMovil();
+    const payload = {
+      tipo: "control-wsp-guardado",
+      numero: numeroNormalizado,
+      numero_movil: numeroNormalizado,
+      guardia_fecha: guardia.guardia_fecha,
+      guardia_inicio: guardia.guardia_inicio,
+      guardia_fin: guardia.guardia_fin,
+      controlado: true,
+      controlado_at: lockPayload.locked_at || lockPayload.updated_at || ahoraISOControlMoviles(),
+      expires_at: lockPayload.expires_at || ahoraISOControlMoviles(CONTROL_MOVILES_LOCK_TTL_MS),
+      fuente: "WSP"
+    };
+
+    try {
+      const res = await controlMovilesBroadcastChannel.send({
+        type: "broadcast",
+        event: "control-wsp-guardado",
+        payload
+      });
+      console.log("[WSP] Broadcast realtime enviado para móvil controlado:", numeroNormalizado, res);
+      return res === "ok" || res === "timed out" || Boolean(res);
+    } catch (e) {
+      console.warn("[WSP] Falló el broadcast realtime de control WSP.", e);
+      return false;
+    }
+  }
+
+  function detenerBroadcastControlMoviles() {
+    if (!controlMovilesBroadcastChannel || !controlMovilesRealtimeClient) return;
+    try { controlMovilesRealtimeClient.removeChannel(controlMovilesBroadcastChannel); } catch {}
+    controlMovilesBroadcastChannel = null;
+    controlMovilesBroadcastReady = false;
+    const waiters = controlMovilesBroadcastWaiters.splice(0);
+    waiters.forEach((resolve) => resolve(false));
   }
 
   function iniciarRealtimeControlMoviles() {
@@ -2120,6 +2221,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       await registrarPresenciaControlMoviles();
       await cargarBloqueosControlMoviles();
       iniciarRealtimeControlMoviles();
+      iniciarBroadcastControlMoviles();
       iniciarTimersControlMoviles();
       controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
@@ -2136,6 +2238,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function detenerModoControlMovilesCompartido({ limpiarRemoto = true } = {}) {
     detenerTimersControlMoviles();
     detenerRealtimeControlMoviles();
+    detenerBroadcastControlMoviles();
 
     if (limpiarRemoto) {
       await borrarPresenciaPropiaControlMoviles();
