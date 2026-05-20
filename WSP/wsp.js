@@ -1913,6 +1913,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } catch (e) {
       console.warn('[WSP] No se pudo emitir BroadcastChannel de control WSP.', e);
     }
+
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker }, '*');
+      }
+    } catch (e) {
+      console.warn('[WSP] No se pudo emitir postMessage al opener.', e);
+    }
+
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker }, '*');
+      }
+    } catch (e) {
+      console.warn('[WSP] No se pudo emitir postMessage al parent.', e);
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('bmzcn-control-wsp-guardado', { detail: { numero: numeroNormalizado, marker } }));
+    } catch {}
   }
 
   async function guardarBloqueoControlMovil(numero) {
