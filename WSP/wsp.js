@@ -82,6 +82,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesPollingTimer = null;
   let controlMovilesRealtimeChannel = null;
   let controlMovilesRealtimeClient = null;
+  let controlMovilesRealtimeRefreshTimer = null;
   let controlMovilesSincronizando = false;
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
@@ -149,6 +150,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
 
   const CONTROL_MOVILES_TABLE = "moviles_controles";
+  const CONTROL_MOVILES_MOVILES_TABLE = "moviles_bmzcn";
   const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
   const CONTROL_MOVILES_LOCKS_TABLE = "wsp_control_moviles_locks";
@@ -1942,6 +1944,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     detenerRealtimeControlMoviles();
 
     const guardia = obtenerGuardiaControlMovil();
+
+    const refrescarPorRealtime = (origen) => {
+      if (controlMovilesRealtimeRefreshTimer) clearTimeout(controlMovilesRealtimeRefreshTimer);
+      controlMovilesRealtimeRefreshTimer = setTimeout(async () => {
+        if (!esControlMovilesActivo()) return;
+        try {
+          await cargarBloqueosControlMoviles();
+          await cargarMovilesControlDesdeSupabase({ forzar: true });
+          await refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion: true });
+          console.log(`[WSP] Control móviles sincronizado por realtime: ${origen}`);
+        } catch (e) {
+          console.warn(`[WSP] No se pudo sincronizar por realtime: ${origen}`, e);
+        }
+      }, 350);
+    };
+
     controlMovilesRealtimeChannel = client
       .channel(`wsp-control-moviles-${guardia.guardia_fecha}`)
       .on(
@@ -1952,19 +1970,42 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           table: CONTROL_MOVILES_LOCKS_TABLE,
           filter: `guardia_fecha=eq.${guardia.guardia_fecha}`,
         },
-        async () => {
-          await cargarBloqueosControlMoviles();
-          await cargarMovilesControlDesdeSupabase({ forzar: true });
-        }
+        () => refrescarPorRealtime(CONTROL_MOVILES_LOCKS_TABLE)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: CONTROL_MOVILES_MOVILES_TABLE,
+        },
+        () => refrescarPorRealtime(CONTROL_MOVILES_MOVILES_TABLE)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: CONTROL_MOVILES_TABLE,
+          filter: `guardia_fecha=eq.${guardia.guardia_fecha}`,
+        },
+        () => refrescarPorRealtime(CONTROL_MOVILES_TABLE)
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Queda activo el polling corto:", status);
+        }
       });
 
     return true;
   }
 
   function detenerRealtimeControlMoviles() {
+    if (controlMovilesRealtimeRefreshTimer) {
+      clearTimeout(controlMovilesRealtimeRefreshTimer);
+      controlMovilesRealtimeRefreshTimer = null;
+    }
     if (!controlMovilesRealtimeChannel || !controlMovilesRealtimeClient) return;
     try {
       controlMovilesRealtimeClient.removeChannel(controlMovilesRealtimeChannel);
@@ -1991,6 +2032,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     controlMovilesPollingTimer = setInterval(async () => {
       if (!esControlMovilesActivo()) return;
       await cargarBloqueosControlMoviles();
+      await cargarMovilesControlDesdeSupabase({ forzar: true });
+      await refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion: true });
     }, CONTROL_MOVILES_POLLING_MS);
   }
 
@@ -2015,10 +2058,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       await cargarBloqueosControlMoviles();
       iniciarRealtimeControlMoviles();
       iniciarTimersControlMoviles();
+      controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
     } catch (e) {
       console.warn("[WSP] No se pudo iniciar sincronización compartida de control de móviles.", e);
       iniciarTimersControlMoviles();
+      controlMovilesCargados = false;
       await cargarMovilesControlDesdeSupabase({ forzar: true });
     } finally {
       controlMovilesSincronizando = false;
@@ -2171,7 +2216,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       limit: "1",
     });
 
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?${params.toString()}`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_MOVILES_TABLE}?${params.toString()}`, {
       headers: headersSupabase({ Accept: "application/json" }),
     });
 
@@ -2194,6 +2239,48 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  function camposControlMovilEnEdicion() {
+    const active = document.activeElement;
+    return !!active && [
+      controlMovilKilometraje,
+      controlMovilCombustible,
+      controlMovilObservaciones,
+      controlMovilFueraServicio,
+      controlMovilFoto1,
+      controlMovilFoto2
+    ].includes(active);
+  }
+
+  function aplicarMovilControlAlFormulario(movil) {
+    if (!movil) return;
+    controlMovilSeleccionado = movil;
+    if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero || "---";
+    if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
+    if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
+    if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
+    if (controlMovilFueraServicio) {
+      controlMovilFueraServicio.disabled = false;
+      controlMovilFueraServicio.checked = !movil.condicion;
+    }
+  }
+
+  async function refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion = true } = {}) {
+    if (!controlMovilSeleccionado?.numero) return null;
+    if (respetarEdicion && camposControlMovilEnEdicion()) return controlMovilSeleccionado;
+
+    try {
+      const movilActualizado = await cargarEstadoActualMovilControlDesdeSupabase(controlMovilSeleccionado.numero);
+      if (!movilActualizado) return null;
+      actualizarMovilControlEnCache(movilActualizado);
+      const merged = { ...controlMovilSeleccionado, ...movilActualizado };
+      aplicarMovilControlAlFormulario(merged);
+      return merged;
+    } catch (e) {
+      console.warn("[WSP] No se pudo refrescar el móvil seleccionado desde Supabase.", e);
+      return null;
+    }
+  }
+
   async function cargarMovilesControlDesdeSupabase({ forzar = false } = {}) {
     if (controlMovilesCargados && !forzar) return controlMovilesCache;
 
@@ -2206,7 +2293,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     });
 
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?${params.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_MOVILES_TABLE}?${params.toString()}`, {
         headers: headersSupabase({ Accept: "application/json" }),
       });
 
@@ -2222,6 +2309,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         .sort(ordenarMovilesControl);
 
       controlMovilesCargados = true;
+
+      if (controlMovilSeleccionado?.numero) {
+        const actualizado = controlMovilesCache.find((m) => String(m.numero) === String(controlMovilSeleccionado.numero));
+        if (actualizado) {
+          controlMovilSeleccionado = { ...controlMovilSeleccionado, ...actualizado };
+          if (!camposControlMovilEnEdicion()) aplicarMovilControlAlFormulario(controlMovilSeleccionado);
+        }
+      }
+
       renderControlMovilesChips();
       return controlMovilesCache;
     } catch (e) {
@@ -2360,14 +2456,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       controlMovilesFormulario.style.display = "grid";
     }
 
-    if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero;
-    if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
-    if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
-    if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
-    if (controlMovilFueraServicio) {
-      controlMovilFueraServicio.disabled = false;
-      controlMovilFueraServicio.checked = !movil.condicion;
-    }
+    aplicarMovilControlAlFormulario(movil);
 
     limpiarFotosControlMovil();
     setTextoEstadoControlMoviles("Leyendo último estado del móvil desde Supabase...");
@@ -2380,13 +2469,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         movil = { ...movil, ...movilActualizado };
         controlMovilSeleccionado = movil;
 
-        if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
-        if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
-        if (controlMovilObservaciones) controlMovilObservaciones.value = movil.observaciones_novedades || movil.observaciones || "";
-        if (controlMovilFueraServicio) {
-          controlMovilFueraServicio.disabled = false;
-          controlMovilFueraServicio.checked = !movil.condicion;
-        }
+        aplicarMovilControlAlFormulario(movil);
       }
 
       setTextoEstadoControlMoviles("Complete kilometraje, combustible, observaciones y fotos si corresponde.");
@@ -2639,7 +2722,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function actualizarEstadoActualMovilControl(numero, kilometraje, combustible, observaciones, fueraServicio = false) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/moviles_bmzcn?numero=eq.${encodeURIComponent(Number(numero))}`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_MOVILES_TABLE}?numero=eq.${encodeURIComponent(Number(numero))}`, {
       method: "PATCH",
       headers: headersSupabase({
         "Content-Type": "application/json",
@@ -2716,6 +2799,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
+
+      actualizarMovilControlEnCache({
+        ...controlMovilSeleccionado,
+        kilometraje: String(kilometraje),
+        combustible,
+        observaciones_novedades: observaciones,
+        observaciones,
+        condicion: !fueraServicio,
+      });
 
       try {
         await guardarBloqueoControlMovil(controlMovilSeleccionado.numero);
