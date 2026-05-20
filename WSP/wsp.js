@@ -76,6 +76,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
+  let controlMovilSnapshotFormulario = null;
   let controlMovilesCargados = false;
   let controlMovilesLocks = new Map();
   let controlMovilesHeartbeatTimer = null;
@@ -161,6 +162,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_POLLING_MS = 8000;
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
+  const CONTROL_MOVILES_MARKERS_STORAGE_KEY = 'bmzcn_wsp_control_markers_v1';
 
   function cerrarAyudaControlMoviles() {
     if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
@@ -1869,6 +1871,50 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     });
   }
 
+
+  function registrarMarcaLocalControlWsp(numero) {
+    const numeroNormalizado = normalizarNumeroMovilControl(numero);
+    if (!numeroNormalizado) return;
+
+    const ahora = Date.now();
+    const marker = {
+      numero: numeroNormalizado,
+      at: ahora,
+      expiresAt: ahora + CONTROL_MOVILES_LOCK_TTL_MS,
+      guardia_fecha: obtenerGuardiaControlMovil().guardia_fecha,
+      fuente: 'WSP'
+    };
+
+    let data = [];
+    try {
+      data = JSON.parse(localStorage.getItem(CONTROL_MOVILES_MARKERS_STORAGE_KEY) || '[]');
+    } catch {
+      data = [];
+    }
+
+    if (!Array.isArray(data)) data = [];
+    data = data
+      .filter((item) => Number(item?.expiresAt || 0) > ahora)
+      .filter((item) => normalizarNumeroMovilControl(item?.numero || item?.numero_movil || '') !== numeroNormalizado);
+    data.push(marker);
+
+    try {
+      localStorage.setItem(CONTROL_MOVILES_MARKERS_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn('[WSP] No se pudo guardar marca local de control WSP.', e);
+    }
+
+    try {
+      if ('BroadcastChannel' in window) {
+        const channel = new BroadcastChannel('bmzcn_wsp_control_moviles');
+        channel.postMessage({ tipo: 'control-wsp-guardado', numero: numeroNormalizado, marker });
+        channel.close();
+      }
+    } catch (e) {
+      console.warn('[WSP] No se pudo emitir BroadcastChannel de control WSP.', e);
+    }
+  }
+
   async function guardarBloqueoControlMovil(numero) {
     const numeroNormalizado = normalizarNumeroMovilControl(numero);
     if (!numeroNormalizado) return;
@@ -2254,6 +2300,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function aplicarMovilControlAlFormulario(movil) {
     if (!movil) return;
     controlMovilSeleccionado = movil;
+    controlMovilSnapshotFormulario = {
+      numero: limpiarTextoSimple(movil.numero || ''),
+      kilometraje: normalizarKilometrajeControlMovil(movil.kilometraje || ''),
+      combustible: normalizarCombustibleControlMovil(movil.combustible || ''),
+      observaciones: limpiarTextoSimple(movil.observaciones_novedades || movil.observaciones || ''),
+      fueraServicio: !movil.condicion
+    };
     if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero || "---";
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
@@ -2481,6 +2534,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function volverASeleccionMovilControl() {
     controlMovilSeleccionado = null;
+    controlMovilSnapshotFormulario = null;
     document.body.classList.remove("control-movil-seleccionado-activo");
 
     if (controlMovilesFormulario) {
@@ -2771,6 +2825,30 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         btnCambiarMovilControl.textContent = "Guardando...";
       }
 
+      const estadoActualAntesDeGuardar = await cargarEstadoActualMovilControlDesdeSupabase(controlMovilSeleccionado.numero);
+      if (estadoActualAntesDeGuardar && controlMovilSnapshotFormulario) {
+        const actualKm = normalizarKilometrajeControlMovil(estadoActualAntesDeGuardar.kilometraje || '');
+        const actualComb = normalizarCombustibleControlMovil(estadoActualAntesDeGuardar.combustible || '');
+        const actualFueraServicio = !estadoActualAntesDeGuardar.condicion;
+        const snapKm = normalizarKilometrajeControlMovil(controlMovilSnapshotFormulario.kilometraje || '');
+        const snapComb = normalizarCombustibleControlMovil(controlMovilSnapshotFormulario.combustible || '');
+        const snapFueraServicio = !!controlMovilSnapshotFormulario.fueraServicio;
+        const formKm = normalizarKilometrajeControlMovil(kilometraje || '');
+        const formComb = normalizarCombustibleControlMovil(combustible || '');
+        const formFueraServicio = !!fueraServicio;
+
+        const huboCambioExterno = actualKm !== snapKm || actualComb !== snapComb || actualFueraServicio !== snapFueraServicio;
+        const formularioSigueConDatoViejo = formKm === snapKm && formComb === snapComb && formFueraServicio === snapFueraServicio;
+
+        if (huboCambioExterno && formularioSigueConDatoViejo) {
+          actualizarMovilControlEnCache(estadoActualAntesDeGuardar);
+          aplicarMovilControlAlFormulario(estadoActualAntesDeGuardar);
+          setTextoEstadoControlMoviles('El móvil tenía datos nuevos cargados desde Recursos. Se actualizó el formulario; verificá y presioná Guardar nuevamente.');
+          alert('El móvil fue actualizado desde Recursos mientras WSP tenía datos viejos. Actualicé el formulario para no pisar kilometraje/combustible con información anterior. Verificá y presioná Guardar nuevamente.');
+          return;
+        }
+      }
+
       const guardiaControl = obtenerGuardiaControlMovil();
       const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
       const foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, controlMovilSeleccionado.numero, "foto2");
@@ -2799,6 +2877,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
+      registrarMarcaLocalControlWsp(controlMovilSeleccionado.numero);
 
       actualizarMovilControlEnCache({
         ...controlMovilSeleccionado,
