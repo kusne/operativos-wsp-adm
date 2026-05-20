@@ -155,7 +155,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_FOTOS_TABLE = "moviles_fotos_guardia";
   const CONTROL_MOVILES_BUCKET = "moviles-control-fotos";
   const CONTROL_MOVILES_LOCKS_TABLE = "wsp_control_moviles_locks";
-  const CONTROL_MOVILES_CONTROLADOS_TABLE = "moviles_controlados_guardia";
   const CONTROL_MOVILES_PRESENCE_TABLE = "wsp_control_moviles_presence";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
@@ -1936,36 +1935,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } catch {}
   }
 
-
-  async function guardarEstadoControladoGuardiaMovil(numero, guardia = obtenerGuardiaControlMovil()) {
-    const numeroNormalizado = normalizarNumeroMovilControl(numero);
-    if (!numeroNormalizado) return false;
-
-    const now = ahoraISOControlMoviles();
-    const payload = {
-      numero_movil: Number(numeroNormalizado),
-      movil_id: controlMovilSeleccionado?.id == null ? null : String(controlMovilSeleccionado.id),
-      guardia_fecha: guardia.guardia_fecha,
-      controlado: true,
-      controlado_at: now,
-      expires_at: ahoraISOControlMoviles(CONTROL_MOVILES_LOCK_TTL_MS),
-      fuente: "WSP",
-      session_id: CONTROL_MOVILES_SESSION_ID,
-      updated_at: now,
-    };
-
-    await fetchSupabaseTabla(CONTROL_MOVILES_CONTROLADOS_TABLE, {
-      method: "POST",
-      params: { on_conflict: "guardia_fecha,numero_movil" },
-      body: payload,
-      extraHeaders: {
-        Prefer: "resolution=merge-duplicates,return=minimal",
-      },
-    });
-
-    return true;
-  }
-
   async function guardarBloqueoControlMovil(numero) {
     const numeroNormalizado = normalizarNumeroMovilControl(numero);
     if (!numeroNormalizado) return;
@@ -2087,16 +2056,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           filter: `guardia_fecha=eq.${guardia.guardia_fecha}`,
         },
         () => refrescarPorRealtime(CONTROL_MOVILES_TABLE)
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: CONTROL_MOVILES_CONTROLADOS_TABLE,
-          filter: `guardia_fecha=eq.${guardia.guardia_fecha}`,
-        },
-        () => refrescarPorRealtime(CONTROL_MOVILES_CONTROLADOS_TABLE)
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
@@ -2935,12 +2894,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
-      try {
-        await guardarEstadoControladoGuardiaMovil(controlMovilSeleccionado.numero, guardiaControl);
-      } catch (e) {
-        console.error("[WSP] Control guardado, pero no se pudo registrar moviles_controlados_guardia para la © dorada.", e);
-        alert("El control se guardó, pero no se pudo registrar la marca © en Supabase. Ejecutá/validá la tabla moviles_controlados_guardia y Realtime.");
-      }
       registrarMarcaLocalControlWsp(controlMovilSeleccionado.numero);
 
       actualizarMovilControlEnCache({
