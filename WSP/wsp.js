@@ -159,7 +159,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
   const CONTROL_MOVILES_HEARTBEAT_MS = 15000;
-  const CONTROL_MOVILES_POLLING_MS = 8000;
+  // Sin polling de datos: los móviles se actualizan al abrir/seleccionar/guardar y por Realtime.
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
   const CONTROL_MOVILES_MARKERS_STORAGE_KEY = 'bmzcn_wsp_control_markers_v1';
@@ -1978,7 +1978,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
       return controlMovilesRealtimeClient;
     } catch (e) {
-      console.warn("[WSP] Supabase Realtime no disponible. Se usa polling como respaldo.", e);
+      console.warn("[WSP] Supabase Realtime no disponible. Se sincronizará al abrir/seleccionar/guardar.", e);
       return null;
     }
   }
@@ -2040,7 +2040,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Queda activo el polling corto:", status);
+          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Se sincronizará al abrir/seleccionar/guardar:", status);
         }
       });
 
@@ -2075,12 +2075,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       }
     }, CONTROL_MOVILES_HEARTBEAT_MS);
 
-    controlMovilesPollingTimer = setInterval(async () => {
-      if (!esControlMovilesActivo()) return;
-      await cargarBloqueosControlMoviles();
-      await cargarMovilesControlDesdeSupabase({ forzar: true });
-      await refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion: true });
-    }, CONTROL_MOVILES_POLLING_MS);
+    // No se refrescan datos por intervalo para evitar reinyectar kilometrajes viejos.
+    // La lectura fresca se fuerza al abrir Control de móviles, al seleccionar móvil,
+    // al guardar y por eventos Realtime de Supabase.
   }
 
   function detenerTimersControlMoviles() {
