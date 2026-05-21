@@ -1887,6 +1887,62 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const CONTROL_MOVILES_DEVICE_ID = obtenerDeviceIdControlMoviles();
 
+  function normalizarValorFingerprintControlMoviles(value) {
+    return String(value ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function hashTextoControlMoviles(texto) {
+    const str = String(texto || '');
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i += 1) {
+      const ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    const n = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+    return `fp_${n.toString(36)}`;
+  }
+
+  function construirFingerprintBaseControlMoviles(info) {
+    const base = {
+      grupo_guardia: CONTROL_MOVILES_GRUPO_GUARDIA,
+      user_agent: normalizarValorFingerprintControlMoviles(info.user_agent),
+      platform: normalizarValorFingerprintControlMoviles(info.platform),
+      os_detectado: normalizarValorFingerprintControlMoviles(info.os_detectado),
+      browser_detectado: normalizarValorFingerprintControlMoviles(info.browser_detectado),
+      device_model_detectado: normalizarValorFingerprintControlMoviles(info.device_model_detectado),
+      screen_width: Number(info.screen_width || 0) || 0,
+      screen_height: Number(info.screen_height || 0) || 0,
+      pixel_ratio: Number(info.pixel_ratio || 0) || 0,
+      language: normalizarValorFingerprintControlMoviles(info.language),
+      timezone: normalizarValorFingerprintControlMoviles(info.timezone),
+      hardware_concurrency: Number(info.hardware_concurrency || 0) || 0,
+      device_memory: Number(info.device_memory || 0) || 0,
+      max_touch_points: Number(info.max_touch_points || 0) || 0,
+    };
+
+    // Evita que rotar el teléfono cambie la huella principal por invertir ancho/alto.
+    const lados = [base.screen_width, base.screen_height].sort((a, b) => a - b);
+    base.screen_min = lados[0] || 0;
+    base.screen_max = lados[1] || 0;
+    delete base.screen_width;
+    delete base.screen_height;
+    return base;
+  }
+
+  function fingerprintHashControlMoviles(info) {
+    const base = construirFingerprintBaseControlMoviles(info || {});
+    return hashTextoControlMoviles(JSON.stringify(base));
+  }
+
   function detectarSistemaOperativoControlMoviles(userAgent, platform) {
     const ua = String(userAgent || "").toLowerCase();
     const pf = String(platform || "").toLowerCase();
@@ -1942,13 +1998,71 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       timezone,
       hardware_concurrency: Number(nav.hardwareConcurrency || 0) || null,
       device_memory: Number(nav.deviceMemory || 0) || null,
+      max_touch_points: Number(nav.maxTouchPoints || 0) || null,
       connection_type: connection ? limpiarTextoSimple(connection.effectiveType || connection.type || "") : "",
     };
+    info.fingerprint_base = construirFingerprintBaseControlMoviles(info);
+    info.fingerprint_hash = fingerprintHashControlMoviles(info);
+    info.grupo_guardia = CONTROL_MOVILES_GRUPO_GUARDIA;
+    return info;
+  }
+
+  async function leerDispositivoControlMovilesPorId(deviceId) {
+    const id = limpiarTextoSimple(deviceId || '');
+    if (!id) return null;
+    try {
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
+        params: {
+          select: 'device_id,device_label,alias_origen,alias_confirmado,fingerprint_hash,device_id_anterior_vinculado,grupo_guardia,last_seen_at',
+          device_id: `eq.${id}`,
+          limit: '1',
+        },
+        extraHeaders: { Accept: 'application/json' },
+      });
+      return Array.isArray(data) ? (data[0] || null) : null;
+    } catch (e) {
+      console.warn('[WSP] No se pudo leer dispositivo por device_id.', e);
+      return null;
+    }
+  }
+
+  async function buscarDispositivoProbablePorFingerprintControlMoviles(info) {
+    const fp = limpiarTextoSimple(info?.fingerprint_hash || '');
+    if (!fp) return null;
+    try {
+      const params = {
+        select: 'device_id,device_label,alias_origen,alias_confirmado,fingerprint_hash,grupo_guardia,last_seen_at',
+        fingerprint_hash: `eq.${fp}`,
+        order: 'last_seen_at.desc',
+        limit: '5',
+      };
+      if (CONTROL_MOVILES_GRUPO_GUARDIA) params.grupo_guardia = `eq.${CONTROL_MOVILES_GRUPO_GUARDIA}`;
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
+        params,
+        extraHeaders: { Accept: 'application/json' },
+      });
+      const rows = Array.isArray(data) ? data : [];
+      return rows.find((row) =>
+        limpiarTextoSimple(row?.device_id || '') !== limpiarTextoSimple(info.device_id || '') &&
+        limpiarTextoSimple(row?.device_label || '')
+      ) || null;
+    } catch (e) {
+      console.warn('[WSP] No se pudo buscar alias probable por huella técnica.', e);
+      return null;
+    }
   }
 
   async function registrarDispositivoControlMoviles() {
     const info = construirInfoDispositivoControlMoviles();
     const now = ahoraISOControlMoviles();
+
+    const directo = await leerDispositivoControlMovilesPorId(info.device_id);
+    const aliasDirecto = limpiarTextoSimple(directo?.device_label || '');
+    const probable = aliasDirecto ? null : await buscarDispositivoProbablePorFingerprintControlMoviles(info);
+    const aliasProbable = limpiarTextoSimple(probable?.device_label || '');
+    const aliasFinal = aliasDirecto || aliasProbable || '';
+    const aliasOrigen = aliasDirecto ? 'directo' : (aliasProbable ? 'probable' : 'sin_alias');
+
     const payload = {
       device_id: info.device_id,
       owner_id: info.owner_id,
@@ -1965,10 +2079,34 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       timezone: info.timezone,
       hardware_concurrency: info.hardware_concurrency,
       device_memory: info.device_memory,
+      max_touch_points: info.max_touch_points,
       connection_type: info.connection_type,
+      fingerprint_hash: info.fingerprint_hash,
+      fingerprint_base: info.fingerprint_base,
+      grupo_guardia: info.grupo_guardia,
       last_seen_at: now,
       activo: true,
     };
+
+    // Si el device_id actual ya tenía alias manual/directo, se conserva.
+    // Si no tenía alias y la huella técnica coincide con un equipo conocido, se asigna alias probable.
+    if (aliasProbable && !aliasDirecto) {
+      payload.device_label = aliasProbable;
+      payload.alias_origen = 'probable';
+      payload.alias_confirmado = false;
+      payload.device_id_anterior_vinculado = limpiarTextoSimple(probable.device_id || '');
+      payload.alias_confidence = 80;
+    } else if (aliasDirecto) {
+      payload.device_label = aliasDirecto;
+      payload.alias_origen = directo?.alias_origen || 'directo';
+      payload.alias_confirmado = directo?.alias_confirmado === true;
+      payload.device_id_anterior_vinculado = directo?.device_id_anterior_vinculado || null;
+      payload.alias_confidence = 100;
+    } else {
+      payload.alias_origen = 'sin_alias';
+      payload.alias_confirmado = false;
+      payload.alias_confidence = 0;
+    }
 
     try {
       await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
@@ -1981,7 +2119,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.warn("[WSP] No se pudo registrar el dispositivo de control. El control continúa igual.", e);
     }
 
-    return info;
+    return {
+      ...info,
+      device_label: aliasFinal,
+      alias_origen: aliasOrigen,
+      alias_confirmado: aliasDirecto ? (directo?.alias_confirmado === true) : false,
+      device_id_anterior_vinculado: aliasProbable ? limpiarTextoSimple(probable?.device_id || '') : limpiarTextoSimple(directo?.device_id_anterior_vinculado || ''),
+      alias_confidence: aliasDirecto ? 100 : (aliasProbable ? 80 : 0),
+    };
   }
 
   function colorMarcaRecursosDesdeCantidad(cantidad) {
@@ -1998,7 +2143,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     try {
       const data = await fetchSupabaseTabla(CONTROL_MOVILES_ESTADO_RECURSOS_TABLE, {
         params: {
-          select: "id,numero_movil,guardia_fecha,controlado,controlado_at,expires_at,cantidad_controles_ventana,color_marca,ultimo_device_id,ultimo_session_id,ultimo_device_label,fuente,updated_at,created_at",
+          select: "id,numero_movil,guardia_fecha,controlado,controlado_at,expires_at,cantidad_controles_ventana,color_marca,ultimo_device_id,ultimo_session_id,ultimo_device_label,ultimo_alias_origen,ultimo_alias_confirmado,ultimo_device_id_anterior_vinculado,fuente,updated_at,created_at",
           guardia_fecha: `eq.${guardiaFecha}`,
           numero_movil: `eq.${numeroNormalizado}`,
           limit: "1",
@@ -2041,6 +2186,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       pixel_ratio: dispositivo.pixel_ratio,
       language: dispositivo.language,
       timezone: dispositivo.timezone,
+      fingerprint_hash: dispositivo.fingerprint_hash,
+      grupo_guardia: dispositivo.grupo_guardia,
+      alias_origen: dispositivo.alias_origen,
+      alias_confirmado: dispositivo.alias_confirmado,
+      device_id_anterior_vinculado: dispositivo.device_id_anterior_vinculado,
     };
 
     const payload = {
@@ -2054,6 +2204,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       ultimo_device_id: dispositivo.device_id,
       ultimo_session_id: CONTROL_MOVILES_SESSION_ID,
       ultimo_owner_id: CONTROL_MOVILES_OWNER_ID,
+      ultimo_device_label: dispositivo.device_label || '',
+      ultimo_alias_origen: dispositivo.alias_origen || 'sin_alias',
+      ultimo_alias_confirmado: dispositivo.alias_confirmado === true,
+      ultimo_device_id_anterior_vinculado: dispositivo.device_id_anterior_vinculado || null,
+      ultimo_alias_confidence: Number(dispositivo.alias_confidence || 0) || 0,
+      ultimo_fingerprint_hash: dispositivo.fingerprint_hash || '',
+      ultimo_grupo_guardia: dispositivo.grupo_guardia || CONTROL_MOVILES_GRUPO_GUARDIA,
       ultimo_device_info: deviceResumen,
       fuente: "WSP",
       updated_at: controladoAtIso,
@@ -2072,7 +2229,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.log("[WSP] Estado Recursos actualizado para ©:", numeroNormalizado, colorMarca, cantidad);
       return true;
     } catch (e) {
-      console.warn("[WSP] Control guardado; no se pudo actualizar la marca © de Recursos. No se interrumpe el guardado.", e);
+      console.error("[WSP] No se pudo actualizar la marca de Recursos para el control WSP.", e);
+      alert("El control se guardó, pero no se pudo actualizar la marca © en Recursos. Revisá la tabla recursos_controles_wsp_estado y sus permisos/realtime.");
       return false;
     }
   }
@@ -3035,7 +3193,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       setTextoEstadoControlMoviles("Control guardado. Seleccione otro móvil o presione Salir.");
     } catch (e) {
       console.error("[WSP] Error guardando control de móvil", e);
-      alert("No se pudo guardar el control de móvil. Error: " + (e && e.message ? e.message : "revisá Supabase."));
+      alert("No se pudo guardar el control de móvil. Revisá tabla, bucket Storage y permisos de Supabase.");
     } finally {
       if (btnCambiarMovilControl) {
         btnCambiarMovilControl.disabled = false;
