@@ -2072,9 +2072,39 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       console.log("[WSP] Estado Recursos actualizado para ©:", numeroNormalizado, colorMarca, cantidad);
       return true;
     } catch (e) {
-      console.error("[WSP] No se pudo actualizar la marca de Recursos para el control WSP.", e);
-      alert("El control se guardó, pero no se pudo actualizar la marca © en Recursos. Revisá la tabla recursos_controles_wsp_estado y sus permisos/realtime.");
-      return false;
+      console.warn("[WSP] No se pudo actualizar la marca completa de Recursos. Se intenta marca mínima.", e);
+
+      // Respaldo: nunca bloquear el control de móviles por campos nuevos/auxiliares.
+      // Se intenta guardar solo lo indispensable para que Recursos pueda marcar ©.
+      const payloadMinimo = {
+        guardia_fecha: guardia.guardia_fecha,
+        numero_movil: Number(numeroNormalizado),
+        controlado: true,
+        controlado_at: controladoAtIso,
+        expires_at: expiresAtIso,
+        cantidad_controles_ventana: cantidad,
+        color_marca: colorMarca,
+        ultimo_device_id: dispositivo.device_id,
+        ultimo_session_id: CONTROL_MOVILES_SESSION_ID,
+        fuente: "WSP",
+        updated_at: controladoAtIso,
+      };
+
+      try {
+        await fetchSupabaseTabla(CONTROL_MOVILES_ESTADO_RECURSOS_TABLE, {
+          method: "POST",
+          params: { on_conflict: "guardia_fecha,numero_movil" },
+          body: payloadMinimo,
+          extraHeaders: {
+            Prefer: "resolution=merge-duplicates,return=minimal",
+          },
+        });
+        console.log("[WSP] Estado Recursos mínimo actualizado para ©:", numeroNormalizado, colorMarca, cantidad);
+        return true;
+      } catch (e2) {
+        console.warn("[WSP] No se pudo actualizar la marca © de Recursos. El control principal continúa guardado.", e2);
+        return false;
+      }
     }
   }
 
@@ -2871,22 +2901,38 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   
   async function insertarRegistroControlMovil(payload) {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_TABLE}`, {
-      method: "POST",
-      headers: headersSupabase({
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-        Accept: "application/json",
-      }),
-      body: JSON.stringify(payload),
-    });
+    const intentos = [payload];
 
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`No se pudo insertar control: ${r.status} ${txt}`);
+    // Respaldo defensivo: si alguna instalación vieja no tuviera la columna fuente,
+    // se reintenta sin ese campo para no romper el control de móviles.
+    if (payload && Object.prototype.hasOwnProperty.call(payload, "fuente")) {
+      const sinFuente = { ...payload };
+      delete sinFuente.fuente;
+      intentos.push(sinFuente);
     }
 
-    return r.json().catch(() => null);
+    let ultimoError = "";
+
+    for (const cuerpo of intentos) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${CONTROL_MOVILES_TABLE}`, {
+        method: "POST",
+        headers: headersSupabase({
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+          Accept: "application/json",
+        }),
+        body: JSON.stringify(cuerpo),
+      });
+
+      if (r.ok) return r.json().catch(() => null);
+
+      ultimoError = await r.text().catch(() => "");
+      const textoError = String(ultimoError || "").toLowerCase();
+      const puedeReintentarSinFuente = cuerpo === payload && textoError.includes("fuente");
+      if (!puedeReintentarSinFuente) break;
+    }
+
+    throw new Error(`No se pudo insertar control: ${ultimoError}`);
   }
 
   function normalizarControlMovilInsertado(resp) {
@@ -2974,19 +3020,36 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return;
     }
 
+    const numeroMovilControlado = controlMovilSeleccionado.numero;
+    const movilIdControlado = controlMovilSeleccionado.id;
+    const guardiaControl = obtenerGuardiaControlMovil();
+    let controlInsertado = null;
+    let foto1 = null;
+    let foto2 = null;
+
     try {
       if (btnCambiarMovilControl) {
         btnCambiarMovilControl.disabled = true;
         btnCambiarMovilControl.textContent = "Guardando...";
       }
 
-      const guardiaControl = obtenerGuardiaControlMovil();
-      const foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, controlMovilSeleccionado.numero, "foto1");
-      const foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, controlMovilSeleccionado.numero, "foto2");
+      // Las fotos son respaldo visual. Si una foto falla, NO debe impedir controlar el móvil.
+      try {
+        foto1 = await subirFotoControlMovil(controlMovilFoto1?.files?.[0] || null, numeroMovilControlado, "foto1");
+      } catch (e) {
+        console.warn("[WSP] No se pudo subir foto 1. El control continúa igual.", e);
+      }
 
+      try {
+        foto2 = await subirFotoControlMovil(controlMovilFoto2?.files?.[0] || null, numeroMovilControlado, "foto2");
+      } catch (e) {
+        console.warn("[WSP] No se pudo subir foto 2. El control continúa igual.", e);
+      }
+
+      // Núcleo obligatorio: registrar el control histórico.
       const controlInsertadoResp = await insertarRegistroControlMovil({
-        movil_id: controlMovilSeleccionado.id,
-        numero_movil: Number(controlMovilSeleccionado.numero),
+        movil_id: movilIdControlado,
+        numero_movil: Number(numeroMovilControlado),
         kilometraje: Number(kilometraje),
         combustible,
         observaciones,
@@ -2996,23 +3059,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         fuente: "WSP",
       });
 
-      const controlInsertado = normalizarControlMovilInsertado(controlInsertadoResp);
+      controlInsertado = normalizarControlMovilInsertado(controlInsertadoResp);
 
-      await insertarFotosGuardiaControlMovil({
-        control: controlInsertado,
-        fotos: [foto1, foto2],
-        numero: controlMovilSeleccionado.numero,
-        movilId: controlMovilSeleccionado.id,
-        observaciones,
-        guardia: guardiaControl,
-      });
+      // Núcleo obligatorio: actualizar el estado actual del móvil.
+      await actualizarEstadoActualMovilControl(numeroMovilControlado, kilometraje, combustible, observaciones, fueraServicio);
 
-      await actualizarEstadoActualMovilControl(controlMovilSeleccionado.numero, kilometraje, combustible, observaciones, fueraServicio);
-      await registrarControlWspParaRecursos({
-        numero: controlMovilSeleccionado.numero,
-        guardia: guardiaControl,
-        controladoAt: new Date().toISOString(),
-      });
+      // Fotos vinculadas al control: no deben romper el guardado si falla storage/tabla fotos.
+      try {
+        await insertarFotosGuardiaControlMovil({
+          control: controlInsertado,
+          fotos: [foto1, foto2],
+          numero: numeroMovilControlado,
+          movilId: movilIdControlado,
+          observaciones,
+          guardia: guardiaControl,
+        });
+      } catch (e) {
+        console.warn("[WSP] Control guardado, pero no se pudieron registrar fotos de guardia.", e);
+      }
+
+      // Marca de auditoría para Recursos: debe intentarse, pero jamás bloquear WSP.
+      try {
+        await registrarControlWspParaRecursos({
+          numero: numeroMovilControlado,
+          guardia: guardiaControl,
+          controladoAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Control guardado, pero falló la marca © para Recursos.", e);
+      }
 
       actualizarMovilControlEnCache({
         ...controlMovilSeleccionado,
@@ -3023,20 +3098,25 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         condicion: !fueraServicio,
       });
 
+      // Lock amarillo de WSP: coordinación visual. No debe bloquear el guardado principal.
       try {
-        await guardarBloqueoControlMovil(controlMovilSeleccionado.numero);
+        await guardarBloqueoControlMovil(numeroMovilControlado);
       } catch (e) {
-        console.warn("[WSP] Control guardado, pero no se pudo activar el bloqueo compartido del móvil.", e);
-        alert("El control se guardó, pero no se pudo marcar/bloquear este móvil en las otras apps. Revisá la tabla realtime de Supabase.");
+        console.warn("[WSP] Control guardado, pero no se pudo activar el bloqueo amarillo compartido.", e);
       }
 
-      controlMovilesCargados = false;
-      await cargarMovilesControlDesdeSupabase({ forzar: true });
+      try {
+        controlMovilesCargados = false;
+        await cargarMovilesControlDesdeSupabase({ forzar: true });
+      } catch (e) {
+        console.warn("[WSP] Control guardado, pero no se pudo refrescar la lista desde Supabase.", e);
+      }
+
       volverASeleccionMovilControl();
       setTextoEstadoControlMoviles("Control guardado. Seleccione otro móvil o presione Salir.");
     } catch (e) {
       console.error("[WSP] Error guardando control de móvil", e);
-      alert("No se pudo guardar el control de móvil. Revisá tabla, bucket Storage y permisos de Supabase.");
+      alert("No se pudo guardar el control de móvil. Revisá la consola para ver el detalle exacto del error.");
     } finally {
       if (btnCambiarMovilControl) {
         btnCambiarMovilControl.disabled = false;
