@@ -84,6 +84,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesRealtimeClient = null;
   let controlMovilesRealtimeRefreshTimer = null;
   let controlMovilesSincronizando = false;
+  let controlMovilesUltimaFirmaRender = "";
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -160,7 +161,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
   const CONTROL_MOVILES_HEARTBEAT_MS = 15000;
-  const CONTROL_MOVILES_POLLING_MS = 8000;
+  const CONTROL_MOVILES_POLLING_MS = 45000; // respaldo suave; Realtime hace la actualización inmediata
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -2720,6 +2721,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  function formularioControlMovilActivo() {
+    return !!controlMovilSeleccionado?.numero
+      && !!controlMovilesFormulario
+      && !controlMovilesFormulario.classList.contains("hidden");
+  }
+
   function camposControlMovilEnEdicion() {
     const active = document.activeElement;
     return !!active && [
@@ -2747,7 +2754,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   async function refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion = true } = {}) {
     if (!controlMovilSeleccionado?.numero) return null;
-    if (respetarEdicion && camposControlMovilEnEdicion()) return controlMovilSeleccionado;
+    if (respetarEdicion && (formularioControlMovilActivo() || camposControlMovilEnEdicion())) return controlMovilSeleccionado;
 
     try {
       const movilActualizado = await cargarEstadoActualMovilControlDesdeSupabase(controlMovilSeleccionado.numero);
@@ -2765,7 +2772,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function cargarMovilesControlDesdeSupabase({ forzar = false } = {}) {
     if (controlMovilesCargados && !forzar) return controlMovilesCache;
 
-    setTextoEstadoControlMoviles("Cargando móviles en servicio...");
+    if (!controlMovilesCargados) setTextoEstadoControlMoviles("Cargando móviles en servicio...");
 
     const params = new URLSearchParams({
       select: "id,numero,tipo,modelo,dominio,kilometraje,combustible,observaciones_novedades,condicion,activo",
@@ -2795,7 +2802,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         const actualizado = controlMovilesCache.find((m) => String(m.numero) === String(controlMovilSeleccionado.numero));
         if (actualizado) {
           controlMovilSeleccionado = { ...controlMovilSeleccionado, ...actualizado };
-          if (!camposControlMovilEnEdicion()) aplicarMovilControlAlFormulario(controlMovilSeleccionado);
+          if (!formularioControlMovilActivo() && !camposControlMovilEnEdicion()) aplicarMovilControlAlFormulario(controlMovilSeleccionado);
         }
       }
 
@@ -2810,12 +2817,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  function construirFirmaRenderControlMoviles(visibles) {
+    return (Array.isArray(visibles) ? visibles : [])
+      .map((movil) => {
+        const numero = limpiarTextoSimple(movil?.numero || "");
+        const lock = obtenerLockControlMovil(numero);
+        const lockEstado = lock ? (lockControlMovilEsPropio(lock) ? "propio" : "otro") : "sin-lock";
+        return [
+          numero,
+          normalizarTipoMovilControl(movil?.tipo),
+          limpiarTextoSimple(movil?.modelo || ""),
+          movil?.condicion ? "1" : "0",
+          lockEstado,
+        ].join(":");
+      })
+      .join("|");
+  }
+
   function renderControlMovilesChips() {
     if (!controlMovilesChips) return;
 
-    controlMovilesChips.innerHTML = "";
-
     const visibles = movilesControlVisibles();
+    const firmaRender = construirFirmaRenderControlMoviles(visibles);
+    if (firmaRender === controlMovilesUltimaFirmaRender && controlMovilesChips.dataset.renderListo === "1") {
+      return;
+    }
+
+    controlMovilesUltimaFirmaRender = firmaRender;
+    controlMovilesChips.dataset.renderListo = "1";
+    controlMovilesChips.innerHTML = "";
 
     if (!visibles.length) {
       setTextoEstadoControlMoviles("No hay móviles en servicio para controlar.");
