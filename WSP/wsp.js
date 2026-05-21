@@ -1917,7 +1917,63 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return "";
   }
 
-  function construirInfoDispositivoControlMoviles() {
+  function normalizarFingerprintValorControlMoviles(value) {
+    return limpiarTextoSimple(value ?? '').toLowerCase();
+  }
+
+  function redondearPixelRatioControlMoviles(value) {
+    const n = Number(value || 0);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    return String(Math.round(n * 1000) / 1000);
+  }
+
+  function construirFingerprintBaseControlMoviles(info = {}) {
+    const partes = [
+      normalizarFingerprintValorControlMoviles(info.os_detectado),
+      normalizarFingerprintValorControlMoviles(info.browser_detectado),
+      normalizarFingerprintValorControlMoviles(info.platform),
+      String(Number(info.screen_width || 0) || ''),
+      String(Number(info.screen_height || 0) || ''),
+      redondearPixelRatioControlMoviles(info.pixel_ratio),
+      normalizarFingerprintValorControlMoviles(info.language),
+      normalizarFingerprintValorControlMoviles(info.timezone),
+      String(Number(info.hardware_concurrency || 0) || ''),
+      String(Number(info.device_memory || 0) || ''),
+      String(Number(info.max_touch_points || 0) || ''),
+    ];
+    return partes.join('|');
+  }
+
+  function hashFallbackControlMoviles(str) {
+    // Fallback liviano y determinístico si crypto.subtle no está disponible.
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    const s = String(str || '');
+    for (let i = 0; i < s.length; i += 1) {
+      const ch = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return `${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0).toString(16).padStart(8, '0')}`;
+  }
+
+  async function hashTextoControlMoviles(texto) {
+    const raw = String(texto || '');
+    try {
+      if (window.crypto?.subtle && window.TextEncoder) {
+        const data = new TextEncoder().encode(raw);
+        const buffer = await window.crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (e) {
+      console.warn('[WSP] No se pudo usar crypto.subtle para fingerprint. Se usa fallback.', e);
+    }
+    return hashFallbackControlMoviles(raw);
+  }
+
+  async function construirInfoDispositivoControlMoviles() {
     const nav = window.navigator || {};
     const screenObj = window.screen || {};
     const userAgent = String(nav.userAgent || "");
@@ -1926,7 +1982,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     let timezone = "";
     try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
 
-    return {
+    const info = {
       device_id: CONTROL_MOVILES_DEVICE_ID,
       owner_id: CONTROL_MOVILES_OWNER_ID,
       session_id: CONTROL_MOVILES_SESSION_ID,
@@ -1943,11 +1999,178 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       hardware_concurrency: Number(nav.hardwareConcurrency || 0) || null,
       device_memory: Number(nav.deviceMemory || 0) || null,
       connection_type: connection ? limpiarTextoSimple(connection.effectiveType || connection.type || "") : "",
+      max_touch_points: Number(nav.maxTouchPoints || 0) || null,
+    };
+
+    info.fingerprint_base = construirFingerprintBaseControlMoviles(info);
+    info.fingerprint_hash = await hashTextoControlMoviles(info.fingerprint_base);
+    return info;
+  }
+
+  function normalizarDispositivoAliasControlMoviles(row) {
+    const deviceId = limpiarTextoSimple(row?.device_id || '');
+    if (!deviceId) return null;
+    return {
+      device_id: deviceId,
+      device_label: limpiarTextoSimple(row?.device_label || ''),
+      alias_origen: limpiarTextoSimple(row?.alias_origen || ''),
+      alias_confirmado: row?.alias_confirmado === true,
+      alias_confidence: Number(row?.alias_confidence || 0) || 0,
+      device_id_anterior_vinculado: limpiarTextoSimple(row?.device_id_anterior_vinculado || ''),
+      fingerprint_hash: limpiarTextoSimple(row?.fingerprint_hash || ''),
+      fingerprint_base: limpiarTextoSimple(row?.fingerprint_base || ''),
+      grupo_guardia: limpiarTextoSimple(row?.grupo_guardia || ''),
+      user_agent: limpiarTextoSimple(row?.user_agent || ''),
+      platform: limpiarTextoSimple(row?.platform || ''),
+      os_detectado: limpiarTextoSimple(row?.os_detectado || ''),
+      browser_detectado: limpiarTextoSimple(row?.browser_detectado || ''),
+      device_model_detectado: limpiarTextoSimple(row?.device_model_detectado || ''),
+      screen_width: Number(row?.screen_width || 0) || null,
+      screen_height: Number(row?.screen_height || 0) || null,
+      pixel_ratio: Number(row?.pixel_ratio || 0) || null,
+      language: limpiarTextoSimple(row?.language || ''),
+      timezone: limpiarTextoSimple(row?.timezone || ''),
+      hardware_concurrency: Number(row?.hardware_concurrency || 0) || null,
+      device_memory: Number(row?.device_memory || 0) || null,
+      connection_type: limpiarTextoSimple(row?.connection_type || ''),
+      max_touch_points: Number(row?.max_touch_points || 0) || null,
+      last_seen_at: limpiarTextoSimple(row?.last_seen_at || ''),
     };
   }
 
+  function fingerprintHardwareScoreControlMoviles(actual, candidato) {
+    if (!actual || !candidato) return 0;
+
+    const actualHash = limpiarTextoSimple(actual.fingerprint_hash || '');
+    const candidatoHash = limpiarTextoSimple(candidato.fingerprint_hash || '');
+    if (actualHash && candidatoHash && actualHash === candidatoHash) return 100;
+
+    let score = 0;
+    let total = 0;
+    const sumar = (peso, ok) => {
+      total += peso;
+      if (ok) score += peso;
+    };
+    const eqTxt = (a, b) => {
+      const aa = normalizarFingerprintValorControlMoviles(a);
+      const bb = normalizarFingerprintValorControlMoviles(b);
+      return !!aa && !!bb && aa === bb;
+    };
+    const eqNum = (a, b, tolerancia = 0) => {
+      const aa = Number(a || 0);
+      const bb = Number(b || 0);
+      if (!Number.isFinite(aa) || !Number.isFinite(bb) || aa <= 0 || bb <= 0) return false;
+      return Math.abs(aa - bb) <= tolerancia;
+    };
+
+    sumar(14, eqTxt(actual.os_detectado, candidato.os_detectado));
+    sumar(10, eqTxt(actual.browser_detectado, candidato.browser_detectado));
+    sumar(8, eqTxt(actual.platform, candidato.platform));
+    sumar(12, eqNum(actual.screen_width, candidato.screen_width));
+    sumar(12, eqNum(actual.screen_height, candidato.screen_height));
+    sumar(12, eqNum(actual.pixel_ratio, candidato.pixel_ratio, 0.01));
+    sumar(8, eqTxt(actual.language, candidato.language));
+    sumar(8, eqTxt(actual.timezone, candidato.timezone));
+    sumar(6, eqNum(actual.hardware_concurrency, candidato.hardware_concurrency));
+    sumar(5, eqNum(actual.device_memory, candidato.device_memory));
+    sumar(5, eqNum(actual.max_touch_points, candidato.max_touch_points));
+
+    if (!total) return 0;
+    return Math.round((score / total) * 100);
+  }
+
+  async function leerDispositivosAliasControlMoviles() {
+    const select = [
+      'device_id', 'device_label', 'alias_origen', 'alias_confirmado', 'alias_confidence',
+      'device_id_anterior_vinculado', 'fingerprint_hash', 'fingerprint_base', 'grupo_guardia',
+      'user_agent', 'platform', 'os_detectado', 'browser_detectado', 'device_model_detectado',
+      'screen_width', 'screen_height', 'pixel_ratio', 'language', 'timezone',
+      'hardware_concurrency', 'device_memory', 'connection_type', 'max_touch_points', 'last_seen_at'
+    ].join(',');
+
+    try {
+      const data = await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
+        params: {
+          select,
+          activo: 'eq.true',
+          order: 'last_seen_at.desc',
+          limit: '200',
+        },
+        extraHeaders: { Accept: 'application/json' },
+      });
+      return (Array.isArray(data) ? data : []).map(normalizarDispositivoAliasControlMoviles).filter(Boolean);
+    } catch (e) {
+      console.warn('[WSP] No se pudo leer dispositivos para alias probable. Se continúa sin bloquear el control.', e);
+      return [];
+    }
+  }
+
+  async function resolverAliasProbableDispositivoControlMoviles(info) {
+    try {
+      const actual = normalizarDispositivoAliasControlMoviles(info);
+      if (!actual?.device_id) return null;
+
+      const dispositivos = await leerDispositivosAliasControlMoviles();
+      const filaActual = dispositivos.find((d) => d.device_id === actual.device_id);
+      if (filaActual?.device_label) {
+        return {
+          device_label: filaActual.device_label,
+          alias_origen: filaActual.alias_origen || 'directo',
+          alias_confirmado: filaActual.alias_confirmado === true,
+          alias_confidence: Math.max(100, Number(filaActual.alias_confidence || 0) || 0),
+          device_id_anterior_vinculado: filaActual.device_id_anterior_vinculado || '',
+        };
+      }
+
+      const candidatos = dispositivos
+        .filter((d) => d.device_id !== actual.device_id)
+        .filter((d) => limpiarTextoSimple(d.device_label || ''))
+        .map((d) => ({ ...d, __score: fingerprintHardwareScoreControlMoviles(actual, d) }))
+        .sort((a, b) => b.__score - a.__score);
+
+      const mejor = candidatos[0];
+      if (!mejor || mejor.__score < 85) return null;
+
+      const payload = {
+        device_id: actual.device_id,
+        device_label: mejor.device_label,
+        alias_origen: 'probable',
+        alias_confirmado: false,
+        alias_confidence: mejor.__score,
+        device_id_anterior_vinculado: mejor.device_id,
+        grupo_guardia: actual.grupo_guardia || mejor.grupo_guardia || 'BMZCN',
+        fingerprint_hash: actual.fingerprint_hash || null,
+        fingerprint_base: actual.fingerprint_base || null,
+        last_seen_at: ahoraISOControlMoviles(),
+        activo: true,
+      };
+
+      try {
+        await fetchSupabaseTabla(CONTROL_MOVILES_DISPOSITIVOS_TABLE, {
+          method: 'POST',
+          params: { on_conflict: 'device_id' },
+          body: payload,
+          extraHeaders: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        });
+      } catch (e) {
+        console.warn('[WSP] Se detectó alias probable, pero no se pudo grabar en wsp_dispositivos.', e);
+      }
+
+      return {
+        device_label: mejor.device_label,
+        alias_origen: 'probable',
+        alias_confirmado: false,
+        alias_confidence: mejor.__score,
+        device_id_anterior_vinculado: mejor.device_id,
+      };
+    } catch (e) {
+      console.warn('[WSP] Error resolviendo alias probable. El control continúa igual.', e);
+      return null;
+    }
+  }
+
   async function registrarDispositivoControlMoviles() {
-    const info = construirInfoDispositivoControlMoviles();
+    const info = await construirInfoDispositivoControlMoviles();
     const now = ahoraISOControlMoviles();
     const payload = {
       device_id: info.device_id,
@@ -1966,6 +2189,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       hardware_concurrency: info.hardware_concurrency,
       device_memory: info.device_memory,
       connection_type: info.connection_type,
+      max_touch_points: info.max_touch_points,
+      fingerprint_hash: info.fingerprint_hash,
+      fingerprint_base: info.fingerprint_base,
+      grupo_guardia: 'BMZCN',
       last_seen_at: now,
       activo: true,
     };
@@ -1979,6 +2206,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
     } catch (e) {
       console.warn("[WSP] No se pudo registrar el dispositivo de control. El control continúa igual.", e);
+    }
+
+    const aliasProbable = await resolverAliasProbableDispositivoControlMoviles(info);
+    if (aliasProbable?.device_label) {
+      info.device_label = aliasProbable.device_label;
+      info.alias_origen = aliasProbable.alias_origen || 'probable';
+      info.alias_confirmado = aliasProbable.alias_confirmado === true;
+      info.alias_confidence = Number(aliasProbable.alias_confidence || 0) || 0;
+      info.device_id_anterior_vinculado = aliasProbable.device_id_anterior_vinculado || '';
     }
 
     return info;
@@ -2041,6 +2277,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       pixel_ratio: dispositivo.pixel_ratio,
       language: dispositivo.language,
       timezone: dispositivo.timezone,
+      max_touch_points: dispositivo.max_touch_points,
+      fingerprint_hash: dispositivo.fingerprint_hash,
     };
 
     const payload = {
@@ -2055,6 +2293,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       ultimo_session_id: CONTROL_MOVILES_SESSION_ID,
       ultimo_owner_id: CONTROL_MOVILES_OWNER_ID,
       ultimo_device_info: deviceResumen,
+      ultimo_device_label: dispositivo.device_label || null,
+      ultimo_alias_origen: dispositivo.alias_origen || null,
+      ultimo_alias_confirmado: dispositivo.alias_confirmado === true,
+      ultimo_device_id_anterior_vinculado: dispositivo.device_id_anterior_vinculado || null,
       fuente: "WSP",
       updated_at: controladoAtIso,
     };
