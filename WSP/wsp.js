@@ -1651,10 +1651,42 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return limpiarTextoSimple(franja?.__ordenNum || "");
   }
 
+  function detectarTiposCombinadosVisualesWsp(fuente = "") {
+    const t = normalizarBasicoSinAcentos(fuente);
+    const tipos = [];
+
+    function add(label) {
+      if (label && !tipos.includes(label)) tipos.push(label);
+    }
+
+    const tieneOCV = /\bocv\b|\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(t);
+    const tieneAlcoholemia = /\balcoholemia\b|\balcoholimetr/.test(t);
+    const tieneDICEP = /\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(t);
+    const tieneCinemometro = /\bcinemometro\b|\bcinemómetro\b/.test(t);
+    const tieneBalanza = /\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(t);
+    const tieneOrdenamiento = /\bordenamiento\b/.test(t);
+
+    /*
+      Mantiene el texto visual de fusiones sin tocar lugar, horario ni formato del selector.
+      Ejemplo: "OCV Y ALCOHOLEMIA" debe verse como "OCV y Alcoholemia", no solo "Alcoholemia".
+    */
+    if (tieneOCV) add("OCV");
+    if (tieneAlcoholemia) add("Alcoholemia");
+    if (tieneDICEP) add("DICEP");
+    if (tieneCinemometro) add("Cinemómetro");
+    if (tieneBalanza) add("Balanza");
+    if (tieneOrdenamiento) add("Ordenamiento");
+
+    return tipos.length > 1 ? tipos.join(" y ") : "";
+  }
+
   function obtenerTipoCortoFranja(franja) {
     const fuente = normalizarBasicoSinAcentos(
       [franja?.titulo || "", obtenerTextoRefOrdenDeFranja(franja)].join(" ")
     );
+
+    const tipoCombinado = detectarTiposCombinadosVisualesWsp(fuente);
+    if (tipoCombinado) return tipoCombinado;
 
     if (/\balcoholemia\b|\balcoholimetr/i.test(fuente)) return "Alcoholemia";
     if (/\bordenamiento\b/.test(fuente)) return "Ordenamiento";
@@ -1808,6 +1840,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (clave.includes("operativoordenamientovehicular")) return "ORDENAMIENTO";
     if (clave.includes("operativoespecialmultiagencialdenominadodicep")) return "DICEP";
     if (clave.includes("cinemometrocondetencion")) return "CINEMÓMETRO";
+
+    const tipoCombinado = detectarTiposCombinadosVisualesWsp(fuente);
+    if (tipoCombinado) return tipoCombinado;
 
     if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
     if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
