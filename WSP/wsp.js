@@ -672,6 +672,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return "Operativo";
   }
 
+  function parseJsonObjectWsp(value) {
+    if (!value) return null;
+    if (typeof value === "object" && !Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      const raw = value.trim();
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function obtenerRegistroOriginalPublicadoWsp(row) {
+    return parseJsonObjectWsp(row?.registro_original) || {};
+  }
+
+  function obtenerMetaTemporalPublicadoWsp(row) {
+    const registroOriginal = obtenerRegistroOriginalPublicadoWsp(row);
+    return parseJsonObjectWsp(registroOriginal?.wsp_meta_temporal) || {};
+  }
+
   function convertirOperativosPublicadosAFormatoWsp(filas) {
     const rows = Array.isArray(filas) ? filas : [];
     const franjas = [];
@@ -688,6 +713,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       const inicioMs = timestampOperativoAMs(row?.inicio_operativo);
       const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
       const archivos = normalizarArrayJsonWsp(row?.archivos_origen);
+      const registroOriginal = obtenerRegistroOriginalPublicadoWsp(row);
+      const metaTemporal = obtenerMetaTemporalPublicadoWsp(row);
 
       if (!hDesde || !hHasta || !lugar || !titulo || !fechaRegistro) return;
 
@@ -702,6 +729,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         __operativoKey: limpiarTextoSimple(row?.operativo_key || ""),
         __ordenNum: ordenes.join(" / "),
         __ordenTextoRef: archivos.join(" / ") || "Operativos publicados",
+        __tipoPublicado: limpiarTextoSimple(row?.tipo || "Operativo"),
+        __ordenesOrigen: ordenes,
+        __archivosOrigen: archivos,
+        __registroOriginalPublicado: registroOriginal,
+        __wspMetaTemporal: metaTemporal,
       });
     });
 
@@ -1367,9 +1399,191 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return {
       ...franja,
       __key: `${idxOrden}-${idxFranja}`,
-      __ordenNum: limpiarTextoSimple(orden?.num || ""),
-      __ordenTextoRef: limpiarTextoSimple(orden?.textoRef || ""),
+      __ordenNum: limpiarTextoSimple(franja?.__ordenNum || orden?.num || ""),
+      __ordenTextoRef: limpiarTextoSimple(franja?.__ordenTextoRef || orden?.textoRef || ""),
     };
+  }
+
+  function booleanoMetaTemporal(value, fallback = false) {
+    if (value === true || value === false) return value;
+    if (typeof value === "string") {
+      const t = value.trim().toLowerCase();
+      if (["true", "1", "si", "sí"].includes(t)) return true;
+      if (["false", "0", "no"].includes(t)) return false;
+    }
+    return fallback;
+  }
+
+  function obtenerMetaTemporalFranja(franja = {}) {
+    return parseJsonObjectWsp(franja?.__wspMetaTemporal) || {};
+  }
+
+  function obtenerRelacionTemporalFranja(franja = {}) {
+    return limpiarTextoSimple(obtenerMetaTemporalFranja(franja).relacion_temporal || franja?.relacionTemporal || "individual");
+  }
+
+  function obtenerFinalizadoGrupoTemporalFranja(franja = {}) {
+    const meta = obtenerMetaTemporalFranja(franja);
+    return limpiarTextoSimple(meta.finalizado_grupo_id || franja?.finalizadoGrupoId || franja?.wspFinalizadoGrupoId || "");
+  }
+
+  function debeMostrarInicioWsp(franja = {}) {
+    const meta = obtenerMetaTemporalFranja(franja);
+    if (Object.prototype.hasOwnProperty.call(meta, "inicio_visible_wsp")) {
+      return booleanoMetaTemporal(meta.inicio_visible_wsp, true);
+    }
+    return true;
+  }
+
+  function debeMostrarFinalizadoWsp(franja = {}) {
+    const meta = obtenerMetaTemporalFranja(franja);
+    if (Object.prototype.hasOwnProperty.call(meta, "finalizado_visible_wsp")) {
+      return booleanoMetaTemporal(meta.finalizado_visible_wsp, true);
+    }
+    return true;
+  }
+
+  function esFinalizadoFusionadoTemporal(franja = {}) {
+    const meta = obtenerMetaTemporalFranja(franja);
+    return booleanoMetaTemporal(meta.finalizado_fusionado, false);
+  }
+
+  function extraerHorarioPartesWsp(horario = "") {
+    const m = String(horario || "").match(/(\d{1,2}:\d{2})\s*A\s*((?:\d{1,2}:\d{2})|FINALIZAR)/i);
+    if (!m) return { desde: "", hasta: "" };
+    return { desde: limpiarTextoSimple(m[1]), hasta: limpiarTextoSimple(m[2]).toUpperCase() };
+  }
+
+  function minutosDesdeHoraWsp(value = "") {
+    if (/FINALIZAR/i.test(value)) return 24 * 60;
+    const m = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return Number.MAX_SAFE_INTEGER;
+    return (Number(m[1]) * 60) + Number(m[2]);
+  }
+
+  function pushUnicoTextoWsp(out, value) {
+    const clean = limpiarTextoSimple(value);
+    if (clean && !out.includes(clean)) out.push(clean);
+  }
+
+  function obtenerCierresInternosTemporalWsp(franja = {}) {
+    const out = [];
+    const fuentes = [
+      franja?.cierresInternosTemporal,
+      franja?.__registroOriginalPublicado?.cierresInternosTemporal,
+      franja?.__registroOriginalPublicado?.cierres_internos_temporal,
+      obtenerMetaTemporalFranja(franja).cierres_internos_temporal,
+    ];
+
+    fuentes.forEach((fuente) => {
+      if (!Array.isArray(fuente)) return;
+      fuente.forEach((item) => {
+        const texto = limpiarTextoSimple(item?.texto || item?.observacion || item);
+        if (texto) pushUnicoTextoWsp(out, texto);
+      });
+    });
+
+    return out;
+  }
+
+  function obtenerObservacionesTemporalesFranja(franja = {}) {
+    const out = [];
+    const meta = obtenerMetaTemporalFranja(franja);
+    pushUnicoTextoWsp(out, meta.observacion_temporal || franja?.observacionTemporal || "");
+    obtenerCierresInternosTemporalWsp(franja).forEach((linea) => pushUnicoTextoWsp(out, linea));
+    if (Array.isArray(franja?.__franjasOrigenTemporal)) {
+      franja.__franjasOrigenTemporal.forEach((origen) => {
+        obtenerCierresInternosTemporalWsp(origen).forEach((linea) => pushUnicoTextoWsp(out, linea));
+      });
+    }
+    return out;
+  }
+
+  function construirFranjaFinalizadoFusionadoWsp(items = []) {
+    const lista = (Array.isArray(items) ? items : []).filter(Boolean);
+    if (!lista.length) return null;
+
+    const ordenadas = lista.slice().sort((a, b) => {
+      const ai = Number.isFinite(a.__inicioTs) ? a.__inicioTs : Number.MAX_SAFE_INTEGER;
+      const bi = Number.isFinite(b.__inicioTs) ? b.__inicioTs : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    });
+
+    const base = ordenadas[0];
+    const tipos = [];
+    const ordenes = [];
+    const archivos = [];
+    const observaciones = [];
+
+    ordenadas.forEach((item) => {
+      pushUnicoTextoWsp(tipos, item.__tipoPublicado || obtenerTipoCortoFranja(item));
+      normalizarArrayJsonWsp(item.__ordenesOrigen || item.__ordenNum).forEach((orden) => pushUnicoTextoWsp(ordenes, orden));
+      normalizarArrayJsonWsp(item.__archivosOrigen || item.__ordenTextoRef).forEach((archivo) => pushUnicoTextoWsp(archivos, archivo));
+      obtenerObservacionesTemporalesFranja(item).forEach((linea) => pushUnicoTextoWsp(observaciones, linea));
+    });
+
+    const horarios = ordenadas.map((item) => extraerHorarioPartesWsp(item.horario));
+    const desde = horarios
+      .map((h) => h.desde)
+      .filter(Boolean)
+      .sort((a, b) => minutosDesdeHoraWsp(a) - minutosDesdeHoraWsp(b))[0] || extraerHorarioPartesWsp(base.horario).desde;
+    const hasta = horarios
+      .map((h) => h.hasta)
+      .filter(Boolean)
+      .sort((a, b) => minutosDesdeHoraWsp(b) - minutosDesdeHoraWsp(a))[0] || extraerHorarioPartesWsp(base.horario).hasta;
+
+    const tipoTxt = tipos.length ? tipos.join(" Y ") : limpiarTextoSimple(base.titulo || "Operativo");
+    const ordenTxt = ordenes.join(" / ");
+    const titulo = limpiarTextoSimple([tipoTxt, ordenTxt].filter(Boolean).join(" ")) || base.titulo;
+    const grupoId = obtenerFinalizadoGrupoTemporalFranja(base) || `finalizado-${base.__key}`;
+
+    return {
+      ...base,
+      horario: desde && hasta ? `${desde} A ${hasta}` : base.horario,
+      titulo,
+      __ordenNum: ordenTxt || base.__ordenNum,
+      __ordenTextoRef: archivos.join(" / ") || base.__ordenTextoRef,
+      __key: `finalizado-fusionado-${grupoId}`,
+      __finalizadoFusionadoVirtual: ordenadas.length > 1,
+      __franjasOrigenTemporal: ordenadas,
+      __observacionesTemporalesWsp: observaciones,
+    };
+  }
+
+  function prepararFranjasParaModoWsp(franjas = []) {
+    const lista = Array.isArray(franjas) ? franjas : [];
+    const esFinaliza = selTipo?.value === "FINALIZA";
+
+    if (!esFinaliza) {
+      return lista.filter(debeMostrarInicioWsp);
+    }
+
+    const salida = [];
+    const gruposFinalFusionado = new Map();
+
+    lista.forEach((franja) => {
+      if (!debeMostrarFinalizadoWsp(franja)) return;
+
+      const grupoFinal = obtenerFinalizadoGrupoTemporalFranja(franja);
+      if (esFinalizadoFusionadoTemporal(franja) && grupoFinal) {
+        if (!gruposFinalFusionado.has(grupoFinal)) gruposFinalFusionado.set(grupoFinal, []);
+        gruposFinalFusionado.get(grupoFinal).push(franja);
+        return;
+      }
+
+      salida.push(franja);
+    });
+
+    gruposFinalFusionado.forEach((items) => {
+      const fusionado = construirFranjaFinalizadoFusionadoWsp(items);
+      if (fusionado) salida.push(fusionado);
+    });
+
+    return salida.sort((a, b) => {
+      const at = Number.isFinite(a.__inicioTs) ? a.__inicioTs : Number.MAX_SAFE_INTEGER;
+      const bt = Number.isFinite(b.__inicioTs) ? b.__inicioTs : Number.MAX_SAFE_INTEGER;
+      return at - bt;
+    });
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
@@ -1389,10 +1603,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
           return at - bt;
         });
 
+      const operativosOrden = [];
+
       franjasOrdenadas.forEach(({ franja, idxFranja }) => {
         if (!franjaIniciaEnGuardiaActual(franja, orden)) return;
+        operativosOrden.push(construirOperativoPlano(franja, orden, idxOrden, idxFranja));
+      });
 
-        const operativo = construirOperativoPlano(franja, orden, idxOrden, idxFranja);
+      prepararFranjasParaModoWsp(operativosOrden).forEach((operativo) => {
         operativosCache.push(operativo);
 
         if (!selHorario) return;
@@ -3517,6 +3735,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (controlMoviles) {
+      cargarOperativosDisponibles(selHorario?.value || "");
+      actualizarDatosFranja();
       setUIControlMovilesActiva(true);
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
@@ -3526,6 +3746,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setUIControlMovilesActiva(false);
 
     if (controlSuperior) {
+      cargarOperativosDisponibles(selHorario?.value || "");
+      actualizarDatosFranja();
       setUIControlSuperiorActiva(true);
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
@@ -3533,6 +3755,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     setUIControlSuperiorActiva(false);
+    cargarOperativosDisponibles(selHorario?.value || "");
+    actualizarDatosFranja();
     divFinaliza.classList.toggle("hidden", !fin);
 
     if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
@@ -4806,6 +5030,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     const observacionesExtras = [...detallesProcesados.observaciones];
     if (!esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_INICIA);
     if (esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_FINALIZA);
+    if (esFinaliza) {
+      obtenerObservacionesTemporalesFranja(franjaSeleccionada).forEach((linea) => observacionesExtras.push(linea));
+    }
 
     partes.push("");
     partes.push(bold("Observaciones:"));
