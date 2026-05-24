@@ -1931,8 +1931,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const clave = compactarClaveVisual(fuente);
 
     /*
+      Prioridad absoluta para tipos combinados.
+      Si la fuente trae OCV + Alcoholemia, DICEP + OCV, etc.,
+      el selector debe mostrar todos los tipos tanto en INICIA como en FINALIZA.
+      Esto evita que reglas específicas como "alcoholemia en conjunto con UOR3"
+      pisen el texto visual y lo reduzcan a un solo tipo.
+    */
+    const tipoCombinadoPrioritario = detectarTiposCombinadosVisualesWsp(fuente);
+    if (tipoCombinadoPrioritario) return tipoCombinadoPrioritario;
+
+    /*
       Reglas específicas de REFERENCIA para el desplegable.
-      Van antes de las reglas generales viejas.
+      Van después de la detección de tipos combinados para no perder fusiones.
     */
     if (clave.includes("operativodecontrolvehicularenconjuntoconsubbaseuor3")) return "OCV CON SUB BASE";
     if (clave.includes("operativodecontrolvehicularenconjuntoconuor3")) return "CON UOR3";
@@ -1942,9 +1952,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (clave.includes("operativoordenamientovehicular")) return "ORDENAMIENTO";
     if (clave.includes("operativoespecialmultiagencialdenominadodicep")) return "DICEP";
     if (clave.includes("cinemometrocondetencion")) return "CINEMÓMETRO";
-
-    const tipoCombinado = detectarTiposCombinadosVisualesWsp(fuente);
-    if (tipoCombinado) return tipoCombinado;
 
     if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
     if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
