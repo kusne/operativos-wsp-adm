@@ -4000,6 +4000,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const ORGANISMOS_CONJUNTO = [
     { nombre: "UOR 3", patrones: [/\buor\s*3\b/, /\buor3\b/] },
+    { nombre: "CNRT", patrones: [/\bcnrt\b/, /\bcrnt\b/, /\bc\s*n\s*r\s*t\b/] },
     { nombre: "Municipalidad", patrones: [/\bmunicipalidad\b/, /\bmunicipio\b/, /\bmunicipal\b/] },
     { nombre: "Tránsito", patrones: [/\btransito\b/, /\binspectores?\s+de\s+transito\b/] },
     { nombre: "UFIV", patrones: [/\bufiv\b/] },
