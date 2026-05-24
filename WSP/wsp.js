@@ -73,6 +73,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
+  let observacionesResultadosEspeciales = [];
 
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
@@ -4226,6 +4227,62 @@ ${bold(`Moviles ${organismo}:`)}`)
     return "Se Realizo (" + formatearCantidad(cantidad || 1) + ") Procedimiento Policial por Dcto. 460/22.";
   }
 
+  function tieneNumeralOperativoEnTexto(txt = "") {
+    const s = String(txt || "").replace(/\s+/g, " ").trim();
+    if (!s) return false;
+
+    if (/\(\s*\d{1,2}\s*\)/.test(s)) return true;
+    if (/^\s*\d{1,2}\b/.test(s)) return true;
+    if (/(?:^|[^\/\d])\d{1,2}\s*$/.test(s)) return true;
+
+    return false;
+  }
+
+  function extraerCantidadItemConReferencia460(txt = "") {
+    const s = String(txt || "").replace(/\s+/g, " ").trim();
+    if (!s) return 0;
+    if (!esReferenciaDecreto460(s)) return 0;
+    if (!tieneNumeralOperativoEnTexto(s)) return 0;
+
+    let m = s.match(/\(\s*(\d{1,2})\s*\)/);
+    if (m) return leerEnteroNoNegativo(m[1]);
+
+    m = s.match(/^\s*(\d{1,2})\b/);
+    if (m) return leerEnteroNoNegativo(m[1]);
+
+    m = s.match(/(?:^|[^\/\d])(\d{1,2})\s*$/);
+    if (m) return leerEnteroNoNegativo(m[1]);
+
+    return 0;
+  }
+
+  function leerResultadoNumericoFiltrando460(id) {
+    const el = document.getElementById(id);
+    const raw = String(el?.value || "").trim();
+    const cantidad460 = extraerCantidadItemConReferencia460(raw);
+
+    if (cantidad460 > 0) {
+      observacionesResultadosEspeciales.push({
+        tipo: "procedimiento460",
+        cantidad: cantidad460,
+      });
+      return 0;
+    }
+
+    return leerEnteroNoNegativo(raw);
+  }
+
+  function construirObservacionesResultadosEspeciales() {
+    const total460 = observacionesResultadosEspeciales.reduce((total, item) => {
+      if (!item || item.tipo !== "procedimiento460") return total;
+      return total + leerEnteroNoNegativo(item.cantidad);
+    }, 0);
+
+    const out = [];
+    if (total460 > 0) out.push(construirObservacionDecreto460(total460));
+    return out;
+  }
+
   function normalizarDetalleDecreto460(linea, { paraAutocompletar = false } = {}) {
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
@@ -4515,6 +4572,9 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       return {
         tipo: "detalle",
+        cantidad,
+        codigo: String(codigo || "").replace(/\D+/g, ""),
+        descripcion,
         texto: `(${cantidad}) ${codigo} ${descripcion}`,
       };
     }
@@ -4537,28 +4597,69 @@ ${bold(`Moviles ${organismo}:`)}`)
       };
     }
 
-    const detalles = [];
+    const detallesSinCodigo = [];
+    const detallesPorCodigo = new Map();
+    const ordenCodigos = [];
     const observaciones = [];
     const detalleItems = [];
+    let totalProcedimiento460 = 0;
 
     limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
       if (!item || !item.texto) return;
 
       if (item.tipo === "detalle") {
-        detalles.push(item.texto);
+        const codigo = String(item.codigo || "").replace(/\D+/g, "");
+        const cantidad = leerEnteroNoNegativo(item.cantidad) || 1;
+
+        if (codigo) {
+          if (!detallesPorCodigo.has(codigo)) {
+            ordenCodigos.push(codigo);
+            detallesPorCodigo.set(codigo, {
+              codigo,
+              cantidad: 0,
+              descripcion: limpiarDescripcionDetalle(item.descripcion || ""),
+            });
+          }
+
+          const actual = detallesPorCodigo.get(codigo);
+          actual.cantidad += cantidad;
+          if (!actual.descripcion && item.descripcion) {
+            actual.descripcion = limpiarDescripcionDetalle(item.descripcion);
+          }
+        } else {
+          detallesSinCodigo.push(item.texto);
+        }
+
         detalleItems.push(item.texto);
         return;
       }
 
       if (item.tipo === "procedimiento460") {
-        observaciones.push(item.observacion || construirObservacionDecreto460(item.cantidad));
+        totalProcedimiento460 += leerEnteroNoNegativo(item.cantidad) || 1;
         detalleItems.push(item.texto);
         return;
       }
 
       observaciones.push(item.texto);
     });
+
+    const detalles = [];
+
+    ordenCodigos.forEach((codigo) => {
+      const item = detallesPorCodigo.get(codigo);
+      if (!item) return;
+
+      const descripcion = obtenerReferenciaNomenclador(codigo, item.descripcion || "");
+      const linea = reconstruirLineaDetalle(item.cantidad, codigo, descripcion || item.descripcion || "");
+      if (linea) detalles.push(linea);
+    });
+
+    detallesSinCodigo.forEach((linea) => detalles.push(linea));
+
+    if (totalProcedimiento460 > 0) {
+      observaciones.push(construirObservacionDecreto460(totalProcedimiento460));
+    }
 
     return {
       detalles: detalles.join("\n"),
@@ -4601,17 +4702,19 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function construirLineasResultados() {
-    const vehiculos = leerEnteroNoNegativo(document.getElementById("vehiculos")?.value);
-    const personas = leerEnteroNoNegativo(document.getElementById("personas")?.value);
-    const testalom = leerEnteroNoNegativo(document.getElementById("testalom")?.value);
-    const actas = leerEnteroNoNegativo(document.getElementById("actas")?.value);
-    const requisa = leerEnteroNoNegativo(document.getElementById("Requisa")?.value);
-    const qrz = leerEnteroNoNegativo(document.getElementById("qrz")?.value);
-    const dominio = leerEnteroNoNegativo(document.getElementById("dominio")?.value);
-    const remision = leerEnteroNoNegativo(document.getElementById("Remision")?.value);
-    const retencion = leerEnteroNoNegativo(document.getElementById("Retencion")?.value);
-    const prohibicion = leerEnteroNoNegativo(document.getElementById("Prohibicion")?.value);
-    const cesion = leerEnteroNoNegativo(document.getElementById("Cesion")?.value);
+    observacionesResultadosEspeciales = [];
+
+    const vehiculos = leerResultadoNumericoFiltrando460("vehiculos");
+    const personas = leerResultadoNumericoFiltrando460("personas");
+    const testalom = leerResultadoNumericoFiltrando460("testalom");
+    const actas = leerResultadoNumericoFiltrando460("actas");
+    const requisa = leerResultadoNumericoFiltrando460("Requisa");
+    const qrz = leerResultadoNumericoFiltrando460("qrz");
+    const dominio = leerResultadoNumericoFiltrando460("dominio");
+    const remision = leerResultadoNumericoFiltrando460("Remision");
+    const retencion = leerResultadoNumericoFiltrando460("Retencion");
+    const prohibicion = leerResultadoNumericoFiltrando460("Prohibicion");
+    const cesion = leerResultadoNumericoFiltrando460("Cesion");
 
     const alcoholimetro = construirBloqueAlcoholimetro();
     if (!alcoholimetro.ok) {
@@ -4991,6 +5094,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
+    observacionesResultadosEspeciales = [];
+
     if (esControlMovilesActivo()) {
       await salirControlMoviles();
       return;
@@ -5164,7 +5269,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
     }
 
-    const observacionesExtras = [...detallesProcesados.observaciones];
+    const observacionesExtras = [
+      ...construirObservacionesResultadosEspeciales(),
+      ...detallesProcesados.observaciones,
+    ];
     if (!esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_INICIA);
     if (esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_FINALIZA);
     if (esFinaliza) {
