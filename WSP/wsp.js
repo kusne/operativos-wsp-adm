@@ -1828,11 +1828,67 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // Texto corto SOLO para mostrar en el desplegable de operativos.
   // No modifica la franja original, ni las claves internas, ni lo que se envía por WhatsApp/Supabase.
   function obtenerFuenteVisualFranja(franja) {
-    return normalizarBasicoSinAcentos([
-      franja?.titulo || "",
-      obtenerTextoRefOrdenDeFranja(franja),
-      franja?.lugar || "",
-    ].join(" "));
+    /*
+      Fuente visual del selector. No modifica la franja ni el informe:
+      solo junta todos los campos posibles donde puede venir el tipo real.
+      Esto evita que una fusión OCV + ALCOHOLEMIA se vea como un solo tipo
+      cuando Supabase o una franja virtual guardan el tipo combinado en otro campo.
+    */
+    const partes = [];
+    const vistos = new Set();
+
+    function addTexto(value) {
+      if (value == null) return;
+
+      if (Array.isArray(value)) {
+        value.forEach(addTexto);
+        return;
+      }
+
+      if (typeof value === "object") {
+        addTexto(value.tipo);
+        addTexto(value.titulo);
+        addTexto(value.__tipoPublicado);
+        addTexto(value.tipoPublicado);
+        addTexto(value.tipo_operativo);
+        addTexto(value.tipoFusionado);
+        addTexto(value.tiposFusionados);
+        addTexto(value.tipos);
+        addTexto(value.tipos_origen);
+        addTexto(value.__foTipoSupabasePublicado);
+        addTexto(value.orden);
+        addTexto(value.ordenes);
+        addTexto(value.ordenesOrigen);
+        addTexto(value.ordenes_origen);
+        return;
+      }
+
+      const clean = limpiarTextoSimple(String(value || ""));
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (vistos.has(key)) return;
+      vistos.add(key);
+      partes.push(clean);
+    }
+
+    addTexto(franja?.titulo);
+    addTexto(franja?.__tipoPublicado);
+    addTexto(franja?.tipo);
+    addTexto(franja?.tipoPublicado);
+    addTexto(franja?.tipo_operativo);
+    addTexto(franja?.__ordenTextoRef);
+    addTexto(franja?.__ordenNum);
+    addTexto(franja?.__ordenesOrigen);
+    addTexto(franja?.lugar);
+
+    addTexto(franja?.__registroOriginalPublicado);
+    addTexto(franja?.__wspMetaTemporal);
+
+    if (Array.isArray(franja?.__franjasOrigenTemporal)) {
+      franja.__franjasOrigenTemporal.forEach(addTexto);
+    }
+
+    return normalizarBasicoSinAcentos(partes.join(" "));
   }
 
   function compactarClaveVisual(txt) {
@@ -1931,8 +1987,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const clave = compactarClaveVisual(fuente);
 
     /*
-      Reglas específicas de REFERENCIA para el desplegable.
-      Van antes de las reglas generales viejas.
+      PRIORIDAD ABSOLUTA DEL SELECTOR:
+      si el operativo trae más de un tipo real, se muestran todos.
+      Esto aplica tanto en INICIA como en FINALIZA y no toca el informe final.
+    */
+    const tipoCombinado = detectarTiposCombinadosVisualesWsp(fuente);
+    if (tipoCombinado) return tipoCombinado;
+
+    /*
+      Reglas específicas de referencia para el desplegable.
+      Van después de detectar combinados para no perder fusiones.
     */
     if (clave.includes("operativodecontrolvehicularenconjuntoconsubbaseuor3")) return "OCV CON SUB BASE";
     if (clave.includes("operativodecontrolvehicularenconjuntoconuor3")) return "CON UOR3";
@@ -1942,9 +2006,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (clave.includes("operativoordenamientovehicular")) return "ORDENAMIENTO";
     if (clave.includes("operativoespecialmultiagencialdenominadodicep")) return "DICEP";
     if (clave.includes("cinemometrocondetencion")) return "CINEMÓMETRO";
-
-    const tipoCombinado = detectarTiposCombinadosVisualesWsp(fuente);
-    if (tipoCombinado) return tipoCombinado;
 
     if (/\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(fuente)) return "Balanza";
     if (/\bdicep\b|\bmultiagencial\b|\bmulti\s+agencial\b/.test(fuente)) return "DICEP";
