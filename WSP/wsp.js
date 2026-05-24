@@ -73,7 +73,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
-  let observacionesResultadosEspeciales = [];
 
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
@@ -4227,60 +4226,64 @@ ${bold(`Moviles ${organismo}:`)}`)
     return "Se Realizo (" + formatearCantidad(cantidad || 1) + ") Procedimiento Policial por Dcto. 460/22.";
   }
 
-  function tieneNumeralOperativoEnTexto(txt = "") {
-    const s = String(txt || "").replace(/\s+/g, " ").trim();
-    if (!s) return false;
+  function extraerNumeralResultadoFlexible(valor) {
+    const raw = String(valor ?? "").replace(/\r/g, "").trim();
+    if (!raw) return 0;
 
-    if (/\(\s*\d{1,2}\s*\)/.test(s)) return true;
-    if (/^\s*\d{1,2}\b/.test(s)) return true;
-    if (/(?:^|[^\/\d])\d{1,2}\s*$/.test(s)) return true;
-
-    return false;
-  }
-
-  function extraerCantidadItemConReferencia460(txt = "") {
-    const s = String(txt || "").replace(/\s+/g, " ").trim();
-    if (!s) return 0;
-    if (!esReferenciaDecreto460(s)) return 0;
-    if (!tieneNumeralOperativoEnTexto(s)) return 0;
-
-    let m = s.match(/\(\s*(\d{1,2})\s*\)/);
+    let m = raw.match(/\(\s*(\d{1,3})\s*\)/);
     if (m) return leerEnteroNoNegativo(m[1]);
 
-    m = s.match(/^\s*(\d{1,2})\b/);
+    if (/^\d+\s*$/.test(raw)) return leerEnteroNoNegativo(raw);
+
+    m = raw.match(/^\s*(\d{1,3})\s+(?=\S)/);
     if (m) return leerEnteroNoNegativo(m[1]);
 
-    m = s.match(/(?:^|[^\/\d])(\d{1,2})\s*$/);
+    m = raw.match(/[\s:;=\-–—](\d{1,3})\s*$/);
     if (m) return leerEnteroNoNegativo(m[1]);
 
     return 0;
   }
 
-  function leerResultadoNumericoFiltrando460(id) {
-    const el = document.getElementById(id);
-    const raw = String(el?.value || "").trim();
-    const cantidad460 = extraerCantidadItemConReferencia460(raw);
+  function extraerNumeralDto460Resultado(valor) {
+    const raw = String(valor ?? "").replace(/\r/g, "").trim();
+    if (!raw || !esReferenciaDecreto460(raw)) return 0;
 
-    if (cantidad460 > 0) {
-      observacionesResultadosEspeciales.push({
-        tipo: "procedimiento460",
-        cantidad: cantidad460,
-      });
+    const probe = normalizarBasicoSinAcentos(raw)
+      .replace(/[.\-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Evita interpretar "460/22" o "460 22" como cantidad 22 cuando no hay numeral operativo.
+    if (/^(?:dto|dcto|decreto|dec)?\s*460\s*(?:\/|\s)?\s*22$/.test(probe) || /^460$/.test(probe)) {
       return 0;
     }
 
-    return leerEnteroNoNegativo(raw);
+    let m = raw.match(/\(\s*(\d{1,3})\s*\)/);
+    if (m) return leerEnteroNoNegativo(m[1]);
+
+    m = raw.match(/^\s*(\d{1,3})\s+(?=.*\b460\b)/i);
+    if (m) return leerEnteroNoNegativo(m[1]);
+
+    m = raw.match(/(?:^|[\s:;=\-–—])(\d{1,3})\s*$/);
+    if (m) {
+      const cantidad = leerEnteroNoNegativo(m[1]);
+      if (cantidad && cantidad !== 22 && cantidad !== 460) return cantidad;
+    }
+
+    return 0;
   }
 
-  function construirObservacionesResultadosEspeciales() {
-    const total460 = observacionesResultadosEspeciales.reduce((total, item) => {
-      if (!item || item.tipo !== "procedimiento460") return total;
-      return total + leerEnteroNoNegativo(item.cantidad);
-    }, 0);
+  function leerResultadoCampo(id) {
+    const el = document.getElementById(id);
+    const raw = String(el?.value ?? "");
+    const valor = extraerNumeralResultadoFlexible(raw);
+    const cantidad460 = extraerNumeralDto460Resultado(raw);
 
-    const out = [];
-    if (total460 > 0) out.push(construirObservacionDecreto460(total460));
-    return out;
+    return {
+      valor,
+      raw,
+      observacion460: cantidad460 > 0 ? construirObservacionDecreto460(cantidad460) : "",
+    };
   }
 
   function normalizarDetalleDecreto460(linea, { paraAutocompletar = false } = {}) {
@@ -4563,8 +4566,9 @@ ${bold(`Moviles ${organismo}:`)}`)
       const m = s.match(patron.regex);
       if (!m) continue;
 
-      const cantidad = patron.conCantidad ? formatearCantidad(m[1]) : formatearCantidad(1);
-      const codigo = patron.conCantidad ? m[2] : m[1];
+      const cantidadNumero = patron.conCantidad ? leerEnteroNoNegativo(m[1]) : 1;
+      const cantidad = formatearCantidad(cantidadNumero);
+      const codigo = String(patron.conCantidad ? m[2] : m[1]).replace(/\D+/g, "");
       const descripcionIngresada = patron.conCantidad ? m[3] : m[2];
       const descripcion = obtenerReferenciaNomenclador(codigo, limpiarDescripcionDetalle(descripcionIngresada));
 
@@ -4572,8 +4576,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       return {
         tipo: "detalle",
-        cantidad,
-        codigo: String(codigo || "").replace(/\D+/g, ""),
+        codigo,
+        cantidad: cantidadNumero,
         descripcion,
         texto: `(${cantidad}) ${codigo} ${descripcion}`,
       };
@@ -4597,12 +4601,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       };
     }
 
+    const detallesAgrupados = new Map();
     const detallesSinCodigo = [];
-    const detallesPorCodigo = new Map();
-    const ordenCodigos = [];
     const observaciones = [];
     const detalleItems = [];
-    let totalProcedimiento460 = 0;
 
     limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
@@ -4610,22 +4612,22 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       if (item.tipo === "detalle") {
         const codigo = String(item.codigo || "").replace(/\D+/g, "");
-        const cantidad = leerEnteroNoNegativo(item.cantidad) || 1;
+        const cantidad = Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
 
         if (codigo) {
-          if (!detallesPorCodigo.has(codigo)) {
-            ordenCodigos.push(codigo);
-            detallesPorCodigo.set(codigo, {
+          if (!detallesAgrupados.has(codigo)) {
+            detallesAgrupados.set(codigo, {
               codigo,
               cantidad: 0,
               descripcion: limpiarDescripcionDetalle(item.descripcion || ""),
             });
           }
 
-          const actual = detallesPorCodigo.get(codigo);
-          actual.cantidad += cantidad;
-          if (!actual.descripcion && item.descripcion) {
-            actual.descripcion = limpiarDescripcionDetalle(item.descripcion);
+          const grupo = detallesAgrupados.get(codigo);
+          grupo.cantidad += cantidad;
+
+          if (!grupo.descripcion && item.descripcion) {
+            grupo.descripcion = limpiarDescripcionDetalle(item.descripcion);
           }
         } else {
           detallesSinCodigo.push(item.texto);
@@ -4636,7 +4638,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       if (item.tipo === "procedimiento460") {
-        totalProcedimiento460 += leerEnteroNoNegativo(item.cantidad) || 1;
+        observaciones.push(item.observacion || construirObservacionDecreto460(item.cantidad));
         detalleItems.push(item.texto);
         return;
       }
@@ -4644,22 +4646,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       observaciones.push(item.texto);
     });
 
-    const detalles = [];
-
-    ordenCodigos.forEach((codigo) => {
-      const item = detallesPorCodigo.get(codigo);
-      if (!item) return;
-
-      const descripcion = obtenerReferenciaNomenclador(codigo, item.descripcion || "");
-      const linea = reconstruirLineaDetalle(item.cantidad, codigo, descripcion || item.descripcion || "");
-      if (linea) detalles.push(linea);
-    });
-
-    detallesSinCodigo.forEach((linea) => detalles.push(linea));
-
-    if (totalProcedimiento460 > 0) {
-      observaciones.push(construirObservacionDecreto460(totalProcedimiento460));
-    }
+    const detalles = [
+      ...Array.from(detallesAgrupados.values()).map((grupo) => {
+        const descripcion = obtenerReferenciaNomenclador(grupo.codigo, grupo.descripcion) || grupo.descripcion;
+        return reconstruirLineaDetalle(grupo.cantidad, grupo.codigo, descripcion);
+      }).filter(Boolean),
+      ...detallesSinCodigo,
+    ];
 
     return {
       detalles: detalles.join("\n"),
@@ -4702,19 +4695,44 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function construirLineasResultados() {
-    observacionesResultadosEspeciales = [];
+    const campoVehiculos = leerResultadoCampo("vehiculos");
+    const campoPersonas = leerResultadoCampo("personas");
+    const campoTestAlom = leerResultadoCampo("testalom");
+    const campoActas = leerResultadoCampo("actas");
+    const campoRequisa = leerResultadoCampo("Requisa");
+    const campoQrz = leerResultadoCampo("qrz");
+    const campoDominio = leerResultadoCampo("dominio");
+    const campoRemision = leerResultadoCampo("Remision");
+    const campoRetencion = leerResultadoCampo("Retencion");
+    const campoProhibicion = leerResultadoCampo("Prohibicion");
+    const campoCesion = leerResultadoCampo("Cesion");
 
-    const vehiculos = leerResultadoNumericoFiltrando460("vehiculos");
-    const personas = leerResultadoNumericoFiltrando460("personas");
-    const testalom = leerResultadoNumericoFiltrando460("testalom");
-    const actas = leerResultadoNumericoFiltrando460("actas");
-    const requisa = leerResultadoNumericoFiltrando460("Requisa");
-    const qrz = leerResultadoNumericoFiltrando460("qrz");
-    const dominio = leerResultadoNumericoFiltrando460("dominio");
-    const remision = leerResultadoNumericoFiltrando460("Remision");
-    const retencion = leerResultadoNumericoFiltrando460("Retencion");
-    const prohibicion = leerResultadoNumericoFiltrando460("Prohibicion");
-    const cesion = leerResultadoNumericoFiltrando460("Cesion");
+    const vehiculos = campoVehiculos.valor;
+    const personas = campoPersonas.valor;
+    const testalom = campoTestAlom.valor;
+    const actas = campoActas.valor;
+    const requisa = campoRequisa.valor;
+    const qrz = campoQrz.valor;
+    const dominio = campoDominio.valor;
+    const remision = campoRemision.valor;
+    const retencion = campoRetencion.valor;
+    const prohibicion = campoProhibicion.valor;
+    const cesion = campoCesion.valor;
+
+    const observaciones460Resultados = [];
+    [
+      campoVehiculos,
+      campoPersonas,
+      campoTestAlom,
+      campoActas,
+      campoRequisa,
+      campoQrz,
+      campoDominio,
+      campoRemision,
+      campoRetencion,
+      campoProhibicion,
+      campoCesion,
+    ].forEach((campo) => pushUnicoTextoWsp(observaciones460Resultados, campo.observacion460));
 
     const alcoholimetro = construirBloqueAlcoholimetro();
     if (!alcoholimetro.ok) {
@@ -4774,6 +4792,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       });
     }
 
+    lineas.__observaciones460Resultados = observaciones460Resultados;
     return lineas;
   }
 
@@ -5094,8 +5113,6 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
-    observacionesResultadosEspeciales = [];
-
     if (esControlMovilesActivo()) {
       await salirControlMoviles();
       return;
@@ -5242,6 +5259,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
+    const observacionesResultadosFinaliza = [];
+
     if (esFinaliza && incluirResultadosFinaliza && !validarDetallesRequeridosPorActas(detallesProcesados)) {
       return;
     }
@@ -5249,6 +5268,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (esFinaliza && incluirResultadosFinaliza) {
       const lineasResultados = construirLineasResultados();
       if (!lineasResultados) return;
+
+      if (Array.isArray(lineasResultados.__observaciones460Resultados)) {
+        lineasResultados.__observaciones460Resultados.forEach((linea) => pushUnicoTextoWsp(observacionesResultadosFinaliza, linea));
+      }
 
       partes.push("");
       partes.push(bold("Resultados:"));
@@ -5269,10 +5292,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
     }
 
-    const observacionesExtras = [
-      ...construirObservacionesResultadosEspeciales(),
-      ...detallesProcesados.observaciones,
-    ];
+    const observacionesExtras = [...detallesProcesados.observaciones, ...observacionesResultadosFinaliza];
     if (!esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_INICIA);
     if (esFinaliza && usarPresenciaActiva) observacionesExtras.push(OBS_PRESENCIA_ACTIVA_FINALIZA);
     if (esFinaliza) {
