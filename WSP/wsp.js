@@ -1478,9 +1478,108 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     fuentes.forEach((fuente) => {
       if (!Array.isArray(fuente)) return;
       fuente.forEach((item) => {
-        const texto = limpiarTextoSimple(item?.texto || item?.observacion || item);
+        const texto = limpiarTextoSimple(item?.texto || item?.observacion || construirTextoCierreInternoTemporalWsp(item));
         if (texto) pushUnicoTextoWsp(out, texto);
       });
+    });
+
+    return out;
+  }
+
+  function normalizarListaObjetosTemporalWsp(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (typeof value === "object") return [value];
+    if (typeof value === "string") {
+      const raw = value.trim();
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (parsed && typeof parsed === "object") return [parsed];
+      } catch {}
+    }
+    return [];
+  }
+
+  function obtenerRelacionesTemporalesWsp(franja = {}) {
+    const meta = obtenerMetaTemporalFranja(franja);
+    const registro = franja?.__registroOriginalPublicado || {};
+    const fuentes = [
+      meta.relacionados,
+      meta.relaciones_temporales,
+      franja?.relacionesTemporales,
+      franja?.relaciones_temporales,
+      registro.relacionesTemporales,
+      registro.relaciones_temporales,
+    ];
+
+    const out = [];
+    fuentes.forEach((fuente) => {
+      normalizarListaObjetosTemporalWsp(fuente).forEach((item) => {
+        if (item && typeof item === "object") out.push(item);
+      });
+    });
+    return out;
+  }
+
+  function construirReferenciaOperativoTemporalWsp(info = {}) {
+    const tipo = limpiarTextoSimple(info?.tipo || info?.titulo || "operativo");
+    const orden = limpiarTextoSimple(info?.orden || info?.ordenVistaPrevia || info?.orden_vista_previa || "");
+    const base = [tipo, orden].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    return base || "operativo relacionado";
+  }
+
+  function construirTextoCierreInternoTemporalWsp(item = {}) {
+    if (!item || typeof item !== "object") return limpiarTextoSimple(item);
+    const hora = limpiarTextoSimple(item.hora || item.horaHasta || item.hora_hasta || "xx:xx");
+    const referencia = construirReferenciaOperativoTemporalWsp(item);
+    return `Siendo las ${hora} hs finalizó ${referencia} sin novedad.`.replace(/\s+/g, " ").trim();
+  }
+
+  function minutosHorarioRelativoWsp(hora = "", inicioReferencia = "") {
+    const minuto = minutosDesdeHoraWsp(hora);
+    if (!Number.isFinite(minuto) || minuto === Number.MAX_SAFE_INTEGER) return minuto;
+    const inicio = minutosDesdeHoraWsp(inicioReferencia);
+    if (!Number.isFinite(inicio) || inicio === Number.MAX_SAFE_INTEGER) return minuto;
+    return minuto <= inicio ? minuto + (24 * 60) : minuto;
+  }
+
+  function debeAgregarContinuidadConcatenacionWsp(franja = {}, relacion = {}) {
+    const tipo = limpiarTextoSimple(relacion?.tipo || relacion?.relacion_temporal || "");
+    if (tipo !== "concatenacion") return false;
+
+    const rol = limpiarTextoSimple(relacion?.rol || relacion?.rol_temporal || "");
+    if (rol === "inicia_primero") return true;
+    if (rol === "continua_despues") return false;
+
+    const actual = extraerHorarioPartesWsp(franja?.horario || "");
+    const relacionado = relacion?.con || relacion?.relacionado || relacion?.operativo || {};
+    const finActual = minutosHorarioRelativoWsp(actual.hasta, actual.desde);
+    const finRelacionado = minutosHorarioRelativoWsp(relacionado.horaHasta || relacionado.hora_hasta || "", relacionado.horaDesde || relacionado.hora_desde || "");
+    return finRelacionado > finActual;
+  }
+
+  function obtenerObservacionesDesdeRelacionesTemporalesWsp(franja = {}) {
+    const out = [];
+
+    obtenerRelacionesTemporalesWsp(franja).forEach((relacion) => {
+      const tipo = limpiarTextoSimple(relacion?.tipo || relacion?.relacion_temporal || "");
+      const rol = limpiarTextoSimple(relacion?.rol || relacion?.rol_temporal || "");
+      const relacionado = relacion?.con || relacion?.relacionado || relacion?.operativo || null;
+
+      if (tipo === "absorcion_inicio_distinto_final_distinto" && rol === "principal" && relacionado) {
+        pushUnicoTextoWsp(out, construirTextoCierreInternoTemporalWsp({
+          hora: relacionado.horaHasta || relacionado.hora_hasta || "",
+          tipo: relacionado.tipo || relacionado.titulo || "operativo",
+          orden: relacionado.orden || relacionado.ordenVistaPrevia || "",
+        }));
+      }
+
+      if (debeAgregarContinuidadConcatenacionWsp(franja, relacion) && relacionado) {
+        const referencia = construirReferenciaOperativoTemporalWsp(relacionado);
+        pushUnicoTextoWsp(out, `Continúa operativo en el lugar conforme ${referencia}.`);
+      }
     });
 
     return out;
@@ -1491,9 +1590,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const meta = obtenerMetaTemporalFranja(franja);
     pushUnicoTextoWsp(out, meta.observacion_temporal || franja?.observacionTemporal || "");
     obtenerCierresInternosTemporalWsp(franja).forEach((linea) => pushUnicoTextoWsp(out, linea));
+    obtenerObservacionesDesdeRelacionesTemporalesWsp(franja).forEach((linea) => pushUnicoTextoWsp(out, linea));
+
     if (Array.isArray(franja?.__franjasOrigenTemporal)) {
       franja.__franjasOrigenTemporal.forEach((origen) => {
         obtenerCierresInternosTemporalWsp(origen).forEach((linea) => pushUnicoTextoWsp(out, linea));
+        obtenerObservacionesDesdeRelacionesTemporalesWsp(origen).forEach((linea) => pushUnicoTextoWsp(out, linea));
       });
     }
     return out;
