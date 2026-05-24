@@ -5112,6 +5112,125 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
   }
 
+
+  // ===== HISTORIAL OPERATIVOS SUPABASE =====
+  function arrayDesdeLineaHistorialWsp(linea) {
+    const raw = limpiarTextoSimple(linea || "");
+    if (!raw || raw === "/") return [];
+    return raw.split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
+  }
+
+  function fechaFranjaHistorialWsp(franja) {
+    return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
+  }
+
+  function extraerMapasResultadosHistorialWsp(lineas = []) {
+    const resultados = {};
+    const medidas = {};
+    let enMedidas = false;
+
+    (Array.isArray(lineas) ? lineas : []).forEach((linea) => {
+      const texto = limpiarTextoSimple(linea || "");
+      if (!texto) return;
+      if (/^medidas cautelares:?$/i.test(texto)) {
+        enMedidas = true;
+        return;
+      }
+      const m = texto.match(/^(.+?):\s*\((\d{1,3})\)/);
+      if (!m) return;
+      const key = limpiarTextoSimple(m[1]);
+      const value = parseInt(m[2], 10) || 0;
+      if (enMedidas) medidas[key] = value;
+      else resultados[key] = value;
+    });
+
+    return { resultados, medidas };
+  }
+
+  function construirPayloadHistorialOperativoWsp({
+    tipoEvento,
+    textoFinal,
+    personalTexto,
+    mov,
+    mot,
+    escopetasTXT,
+    htTXT,
+    pdaTXT,
+    impTXT,
+    alomTXT,
+    alcoTXT,
+    lineasResultados,
+    detallesProcesados,
+    observacionesFinales,
+  }) {
+    const partesHorario = extraerHorarioPartesWsp(franjaSeleccionada?.horario || "");
+    const mapas = extraerMapasResultadosHistorialWsp(lineasResultados || []);
+    const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || "");
+
+    return {
+      fuente: "WSP",
+      operativo_key: limpiarTextoSimple(franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada)),
+      operativo_publicado_id: franjaSeleccionada?.__operativoPublicadoId || null,
+      guardia_fecha: getGuardiaFechaISO(),
+      fecha_operativo: fechaFranjaHistorialWsp(franjaSeleccionada),
+      fecha: new Date().toLocaleDateString("es-AR"),
+      horario: normalizarHorario(franjaSeleccionada?.horario || ""),
+      hora_desde: partesHorario.desde || "",
+      hora_hasta: partesHorario.hasta || "",
+      lugar: normalizarLugar(franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      titulo: limpiarTextoSimple(franjaSeleccionada?.titulo || ""),
+      ordenes_origen: ordenes,
+      personal: String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean),
+      moviles: arrayDesdeLineaHistorialWsp(mov),
+      motos: arrayDesdeLineaHistorialWsp(mot),
+      elementos: {
+        ESCOPETA: arrayDesdeLineaHistorialWsp(escopetasTXT),
+        HT: arrayDesdeLineaHistorialWsp(htTXT),
+        PDA: arrayDesdeLineaHistorialWsp(pdaTXT),
+        IMPRESORA: arrayDesdeLineaHistorialWsp(impTXT),
+        Alometro: arrayDesdeLineaHistorialWsp(alomTXT),
+        Alcoholimetro: arrayDesdeLineaHistorialWsp(alcoTXT),
+      },
+      resultados: mapas.resultados,
+      medidas_cautelares: mapas.medidas,
+      detalles: Array.isArray(detallesProcesados?.detalleItems) ? detallesProcesados.detalleItems : [],
+      observaciones: observacionesFinales,
+      texto_generado: textoFinal,
+      payload_completo: {
+        tipo_evento: tipoEvento,
+        franja: franjaSeleccionada,
+        registro_original: franjaSeleccionada?.__registroOriginalPublicado || null,
+      },
+      metadata: {
+        tipo_evento: tipoEvento,
+        generado_desde: "wsp.js",
+      },
+    };
+  }
+
+  async function guardarHistorialOperativoWsp(tipoEvento, payload) {
+    try {
+      if (!window.WspHistorialOperativos) return false;
+      if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
+        await window.WspHistorialOperativos.guardarInicio(payload);
+        return true;
+      }
+      if (tipoEvento === "FINALIZADO" && typeof window.WspHistorialOperativos.guardarFinalizado === "function") {
+        await window.WspHistorialOperativos.guardarFinalizado(payload);
+        return true;
+      }
+      if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
+        await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
+        return true;
+      }
+    } catch (e) {
+      console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual.", e);
+    }
+    return false;
+  }
+
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (esControlMovilesActivo()) {
@@ -5261,6 +5380,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
     const observacionesResultadosFinaliza = [];
+    let lineasResultadosGeneradas = null;
 
     if (esFinaliza && incluirResultadosFinaliza && !validarDetallesRequeridosPorActas(detallesProcesados)) {
       return;
@@ -5269,6 +5389,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (esFinaliza && incluirResultadosFinaliza) {
       const lineasResultados = construirLineasResultados();
       if (!lineasResultados) return;
+      lineasResultadosGeneradas = lineasResultados;
 
       if (Array.isArray(lineasResultados.__observaciones460Resultados)) {
         lineasResultados.__observaciones460Resultados.forEach((linea) => pushUnicoTextoWsp(observacionesResultadosFinaliza, linea));
@@ -5300,15 +5421,36 @@ ${bold(`Moviles ${organismo}:`)}`)
       obtenerObservacionesTemporalesFranja(franjaSeleccionada).forEach((linea) => observacionesExtras.push(linea));
     }
 
+    const observacionesFinalesTexto = construirObservacionesFinales(observacionesExtras);
+
     partes.push("");
     partes.push(bold("Observaciones:"));
-    partes.push(construirObservacionesFinales(observacionesExtras));
+    partes.push(observacionesFinalesTexto);
 
     const textoFinal = compactarSaltos(partes.join("\n"));
+    const tipoEventoHistorial = esFinaliza ? "FINALIZADO" : "INICIO";
+    const payloadHistorial = construirPayloadHistorialOperativoWsp({
+      tipoEvento: tipoEventoHistorial,
+      textoFinal,
+      personalTexto,
+      mov,
+      mot,
+      escopetasTXT,
+      htTXT,
+      pdaTXT,
+      impTXT,
+      alomTXT,
+      alcoTXT,
+      lineasResultados: lineasResultadosGeneradas,
+      detallesProcesados,
+      observacionesFinales: observacionesFinalesTexto,
+    });
 
     if (selTipo.value === "INICIA") {
       await guardarElementosDeInicio();
     }
+
+    await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
 
     resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal);
