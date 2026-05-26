@@ -4551,7 +4551,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     return total;
   }
 
-  function aplicarAutocompletadoDetalles(textarea, { forzar = false } = {}) {
+  function aplicarAutocompletadoDetalles(textarea, { forzar = false, saltarLinea = !forzar } = {}) {
     if (!textarea) return;
 
     const valorOriginal = String(textarea.value || "");
@@ -4566,6 +4566,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const lineasNuevas = [];
     const metasNuevas = [];
     let cursorNuevo = null;
+    let lineaParaSaltar = -1;
 
     lineasLimpias.forEach((linea, idx) => {
       const analisis = analizarLineaDetalleParaAutocompletar(linea);
@@ -4578,7 +4579,19 @@ ${bold(`Moviles ${organismo}:`)}`)
         };
 
         if (seleccionColapsada && idx === cursorOriginal.linea && (linea !== analisis.texto || forzar)) {
-          cursorNuevo = longitudHastaLinea(lineasNuevas, idx) + analisis.cursorDespuesCodigo;
+          /*
+            Regla WSP Detalles:
+            - Al escribir un código y autocompletar desde el nomenclador, no dejar el cursor
+              detrás del código porque al presionar Enter se parte la línea y se copia abajo
+              la descripción autocompletada.
+            - El cursor debe quedar directamente en el renglón siguiente, listo para otro código.
+            - En blur/forzar se conserva el comportamiento seguro de no insertar renglones nuevos.
+          */
+          if (saltarLinea && linea !== analisis.texto) {
+            lineaParaSaltar = idx;
+          } else {
+            cursorNuevo = longitudHastaLinea(lineasNuevas, idx) + analisis.cursorDespuesCodigo;
+          }
         }
         return;
       }
@@ -4587,10 +4600,26 @@ ${bold(`Moviles ${organismo}:`)}`)
       metasNuevas[idx] = null;
     });
 
+    if (lineaParaSaltar >= 0) {
+      const siguiente = lineasNuevas[lineaParaSaltar + 1];
+      if (siguiente === undefined || String(siguiente).trim() !== "") {
+        lineasNuevas.splice(lineaParaSaltar + 1, 0, "");
+        metasNuevas.splice(lineaParaSaltar + 1, 0, null);
+      }
+      cursorNuevo = longitudHastaLinea(lineasNuevas, lineaParaSaltar + 1);
+    }
+
     const valorNuevo = lineasNuevas.join("\n");
     detallesAutocompletadoState.set(textarea, metasNuevas);
 
-    if (valorNuevo === valorOriginal) return;
+    if (valorNuevo === valorOriginal) {
+      if (cursorNuevo != null) {
+        try {
+          textarea.setSelectionRange(cursorNuevo, cursorNuevo);
+        } catch {}
+      }
+      return;
+    }
 
     textarea.value = valorNuevo;
 
@@ -4606,7 +4635,6 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
     } catch {}
   }
-
   
   function normalizarLineaDetalle(linea) {
     let s = String(linea || "").replace(/\r/g, "").trim();
