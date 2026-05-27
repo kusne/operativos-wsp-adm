@@ -123,7 +123,7 @@ const NOMENCLADOR_CODIGOS = {
   "11032": { codigo: "11032", referencia: "patente con aditamentos tapada o alterada" },
   "11046": { codigo: "11046", referencia: "sin patente delantera o fuera de lugar" },
   "11059": { codigo: "11059", referencia: "sin patente trasera o fuera de lugar" },
-  "11063": { codigo: "11063", referencia: "grabados del vehículo" },
+  "11062": { codigo: "11062", referencia: "grabados del vehículo" },
   "12017": { codigo: "12017", referencia: "no respetar prioridad de paso" },
   "12020": { codigo: "12020", referencia: "no acatar controles y ordenes" },
   "12034": { codigo: "12034", referencia: "Por no respetar las indicaciones de la autoridad" },
