@@ -3131,6 +3131,30 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
 }
 .informe-alcohol-grid-4{ grid-template-columns:repeat(4, minmax(0, 1fr)); }
 .informe-alcohol-grid-3{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.informe-alcohol-grid-2{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.informe-alcohol-compact{
+  grid-auto-flow:row;
+}
+#bloqueInformeAlcoholemia .campo-tipo-vehiculo{order:1;}
+#bloqueInformeAlcoholemia .campo-otro-tipo{order:2;}
+#bloqueInformeAlcoholemia .campo-marca{order:3;}
+#bloqueInformeAlcoholemia .campo-dominio{order:4;}
+#bloqueInformeAlcoholemia .campo-modelo{order:5;}
+#bloqueInformeAlcoholemia .campo-conductor{order:6;}
+#bloqueInformeAlcoholemia .campo-graduacion{order:7;}
+#bloqueInformeAlcoholemia .campo-licencia{order:8;}
+#bloqueInformeAlcoholemia .campo-digital{order:9;}
+#bloqueInformeAlcoholemia .campo-acta{order:10;}
+#bloqueInformeAlcoholemia .campo-otros-codigos{order:11;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-marca{order:3;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-modelo{order:4;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-conductor{order:5;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-dominio{order:6;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-graduacion{order:7;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-acta{order:8;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-licencia{order:9;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-digital{order:10;}
+#bloqueInformeAlcoholemia.alco-tipo-otros .campo-otros-codigos{order:11; grid-column:1 / -1;}
 .informe-field{
   display:flex;
   flex-direction:column;
@@ -3242,8 +3266,17 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
   .informe-alcohol-head{ grid-template-columns:1fr; }
   .informe-alcohol-grid-4,
   .informe-alcohol-grid-3,
+  .informe-alcohol-grid-2,
   .informe-medidas-grid,
   .informe-fotos-grid{
     grid-template-columns:repeat(2, minmax(0, 1fr));
   }
+}
+
+.informe-remision-destino{
+  margin-top:8px;
+  padding:8px;
+  border:1px solid #d8deea;
+  border-radius:10px;
+  background:#fffdf0;
 }
