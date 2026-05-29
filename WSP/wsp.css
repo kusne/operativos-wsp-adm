@@ -3117,7 +3117,8 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
    INFORMES WSP - ALCOHOLEMIA POSITIVA
    Compacto, rápido y separado del flujo INICIA / FINALIZA
    ========================================================= */
-.informe-alcoholemia-section{
+.informe-alcoholemia-section,
+.informe-decto460-section{
   border:2px solid #0b63ce;
   background:#fbfdff;
   box-shadow:0 2px 12px rgba(11,99,206,.12);
@@ -3191,7 +3192,9 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
 .informe-field textarea,
 #bloqueInformeAlcoholemia input[type="text"],
 #bloqueInformeAlcoholemia textarea,
-#bloqueInformeAlcoholemia select{
+#bloqueInformeAlcoholemia select,
+#bloqueInformeDecto460 input[type="text"],
+#bloqueInformeDecto460 select{
   width:100%;
   margin:0;
   padding:7px 8px;
@@ -3205,7 +3208,8 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
   resize:vertical;
   min-height:54px;
 }
-#bloqueInformeAlcoholemia .upper-input{
+#bloqueInformeAlcoholemia .upper-input,
+#bloqueInformeDecto460 .upper-input{
   text-transform:uppercase;
 }
 .informe-alcohol-switch,
@@ -3276,7 +3280,9 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
   border:1px solid #b9d6ff;
 }
 #bloqueInformeAlcoholemia input:disabled + span,
-#bloqueInformeAlcoholemia input:disabled{
+#bloqueInformeAlcoholemia input:disabled,
+#bloqueInformeDecto460 input:disabled + span,
+#bloqueInformeDecto460 input:disabled{
   opacity:.65;
 }
 @media (max-width: 560px){
