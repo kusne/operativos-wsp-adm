@@ -3095,3 +3095,155 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
     line-height: 23px !important;
   }
 }
+
+/* =========================================================
+   INFORMES WSP - ALCOHOLEMIA POSITIVA
+   Compacto, rápido y separado del flujo INICIA / FINALIZA
+   ========================================================= */
+.informe-alcoholemia-section{
+  border:2px solid #0b63ce;
+  background:#fbfdff;
+  box-shadow:0 2px 12px rgba(11,99,206,.12);
+}
+.informe-alcohol-head{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:start;
+  margin-bottom:10px;
+}
+.informe-alcohol-title{
+  display:block;
+  font-weight:900;
+  color:#0b315f;
+  margin:0 0 4px 0;
+}
+.informe-alcohol-contexto{
+  font-size:12px;
+  color:#44546a;
+  font-weight:700;
+  line-height:1.25;
+}
+.informe-alcohol-grid{
+  display:grid;
+  gap:8px;
+  margin-top:8px;
+}
+.informe-alcohol-grid-4{ grid-template-columns:repeat(4, minmax(0, 1fr)); }
+.informe-alcohol-grid-3{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.informe-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.informe-field-wide{ grid-column:span 1; }
+.informe-field label,
+.informe-medidas-title{
+  font-size:12px;
+  font-weight:800;
+  color:#243044;
+}
+.informe-field input[type="text"],
+.informe-field input[type="number"],
+.informe-field select,
+.informe-field textarea,
+#bloqueInformeAlcoholemia input[type="text"],
+#bloqueInformeAlcoholemia textarea,
+#bloqueInformeAlcoholemia select{
+  width:100%;
+  margin:0;
+  padding:7px 8px;
+  min-height:34px;
+  border:1px solid #cfd8e3;
+  border-radius:8px;
+  font-size:14px;
+  background:#fff;
+}
+#bloqueInformeAlcoholemia textarea{
+  resize:vertical;
+  min-height:54px;
+}
+#bloqueInformeAlcoholemia .upper-input{
+  text-transform:uppercase;
+}
+.informe-alcohol-switch,
+.informe-check-inline{
+  position:static !important;
+  display:flex !important;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 10px !important;
+  margin:0 !important;
+  line-height:normal !important;
+  min-height:34px !important;
+  border:1px solid #cfd8e3;
+  border-radius:9px;
+  background:#fff;
+  font-size:13px;
+  font-weight:800;
+}
+.informe-alcohol-switch input[type="checkbox"],
+.informe-check-inline input[type="checkbox"]{
+  position:static !important;
+  left:auto !important;
+  top:auto !important;
+  margin:0 !important;
+  transform:scale(1.25) !important;
+}
+.informe-alcohol-switch{
+  background:#fff8d9;
+  border-color:#d7a900;
+  color:#3a2a00;
+  min-width:160px;
+}
+.informe-medidas-box{
+  margin-top:8px;
+  padding:8px;
+  border:1px solid #d8deea;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.informe-medidas-title{
+  display:block;
+  margin-bottom:6px;
+}
+.informe-medidas-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:8px;
+}
+.informe-fotos-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:8px;
+  margin-top:8px;
+}
+.informe-fotos-grid input[type="file"]{
+  width:100%;
+  font-size:12px;
+}
+.informe-alcohol-resultado{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:9px;
+  background:#eef5ff;
+  color:#0b315f;
+  font-weight:900;
+  font-size:13px;
+  border:1px solid #b9d6ff;
+}
+#bloqueInformeAlcoholemia input:disabled + span,
+#bloqueInformeAlcoholemia input:disabled{
+  opacity:.65;
+}
+@media (max-width: 560px){
+  .informe-alcohol-head{ grid-template-columns:1fr; }
+  .informe-alcohol-grid-4,
+  .informe-alcohol-grid-3,
+  .informe-medidas-grid,
+  .informe-fotos-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+}
