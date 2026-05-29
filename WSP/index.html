@@ -46,13 +46,19 @@
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
-      <optgroup label="INFORMES">
-        <option value="CONTROL SUPERIOR">Control Superior</option>
-        <option value="INFORME ALCOHOLEMIA POSITIVA">Alcoholemia</option>
-        <option value="INFORME ALCOHOLEMIA Y 460/22">Alcoholemia y 460/22</option>
-      </optgroup>
+      <option value="INFORMES">INFORMES</option>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
+
+    <div id="bloqueInformeSelector" class="section hidden bloque-informe-selector">
+      <label class="top-label" for="tipoInforme">INFORME</label>
+      <select id="tipoInforme">
+        <option value="">Seleccionar informe</option>
+        <option value="CONTROL SUPERIOR">Control Superior</option>
+        <option value="INFORME ALCOHOLEMIA">Alcoholemia</option>
+        <option value="INFORME DECTO 460/22">Decto 460/22</option>
+      </select>
+    </div>
     <div class="operativos-title-row">
       <label class="top-label operativos-title-label">OPERATIVOS</label>
       <span id="contadorOperativosWsp" class="contador-operativos-wsp" title="Cantidad de operativos disponibles">0</span>
