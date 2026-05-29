@@ -1544,6 +1544,23 @@ label#wrapMostrarResultadosFinaliza.check.check-inline-opcion > span{
 }
 
 
+
+/* Selector interno de INFORMES */
+.bloque-informe-selector{
+  margin-top:8px;
+  padding:10px;
+  border:1px solid #d8deea;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.bloque-informe-selector select{
+  width:100%;
+  margin:0;
+}
+#bloqueInformeAlcoholemia .campo-otro-tipo.hidden{
+  display:none !important;
+}
+
 /* ===== CONTROL SUPERIOR ===== */
 #bloqueControlSuperior{
   padding: 12px;
@@ -3280,3 +3297,5 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
   border-radius:10px;
   background:#fffdf0;
 }
+
+#bloqueInformeAlcoholemia .hidden{display:none !important;}
