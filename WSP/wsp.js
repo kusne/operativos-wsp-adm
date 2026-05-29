@@ -27,6 +27,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const textareaObs = document.getElementById("obs");
   const btnEnviar = document.getElementById("btnEnviar");
 
+  // ===== INFORME ALCOHOLEMIA POSITIVA =====
+  const bloqueInformeAlcoholemia = document.getElementById("bloqueInformeAlcoholemia");
+  const informeAlcoholemiaContexto = document.getElementById("informeAlcoholemiaContexto");
+  const infAlco460 = document.getElementById("infAlco460");
+  const infAlcoTipoVehiculo = document.getElementById("infAlcoTipoVehiculo");
+  const wrapInfAlcoTipoOtro = document.getElementById("wrapInfAlcoTipoOtro");
+  const infAlcoTipoOtro = document.getElementById("infAlcoTipoOtro");
+  const infAlcoMarca = document.getElementById("infAlcoMarca");
+  const infAlcoModelo = document.getElementById("infAlcoModelo");
+  const infAlcoDominio = document.getElementById("infAlcoDominio");
+  const infAlcoConductor = document.getElementById("infAlcoConductor");
+  const infAlcoGraduacion = document.getElementById("infAlcoGraduacion");
+  const infAlcoActa = document.getElementById("infAlcoActa");
+  const infAlcoLicenciaClase = document.getElementById("infAlcoLicenciaClase");
+  const infAlcoLicenciaDigital = document.getElementById("infAlcoLicenciaDigital");
+  const infAlcoOtrosCodigos = document.getElementById("infAlcoOtrosCodigos");
+  const infAlcoMedProhibicion = document.getElementById("infAlcoMedProhibicion");
+  const infAlcoMedCesion = document.getElementById("infAlcoMedCesion");
+  const infAlcoMedRemision = document.getElementById("infAlcoMedRemision");
+  const infAlcoMedRetencion = document.getElementById("infAlcoMedRetencion");
+  const infAlcoDependenciaRemite = document.getElementById("infAlcoDependenciaRemite");
+  const infAlcoCorralon = document.getElementById("infAlcoCorralon");
+  const infAlcoInventario = document.getElementById("infAlcoInventario");
+  const infAlcoObservacionExtra = document.getElementById("infAlcoObservacionExtra");
+  const infAlcoResultadoAuto = document.getElementById("infAlcoResultadoAuto");
+  const infAlcoFotos = [1,2,3,4].map((n) => document.getElementById(`infAlcoFoto${n}`)).filter(Boolean);
+
   // ===== CONTROL DE MÓVILES =====
   const bloqueControlMoviles = document.getElementById("bloqueControlMoviles");
   const controlMovilesEstado = document.getElementById("controlMovilesEstado");
@@ -85,6 +112,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesRealtimeRefreshTimer = null;
   let controlMovilesSincronizando = false;
   let controlMovilesUltimaFirmaRender = "";
+
+  const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA POSITIVA";
+  const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
+  const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -456,6 +487,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         cantidadSancionables: 0,
         cantidadNoSancionables: 0,
         totalValidos: 0,
+        valoresSan: [],
+        valoresNo: [],
       };
     }
 
@@ -503,6 +536,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         cantidadSancionables: 0,
         cantidadNoSancionables: 0,
         totalValidos: 0,
+        valoresSan: [],
+        valoresNo: [],
       };
     }
 
@@ -527,6 +562,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       cantidadSancionables: valoresSan.length,
       cantidadNoSancionables: valoresNo.length,
       totalValidos,
+      valoresSan,
+      valoresNo,
     };
   }
 
@@ -3921,11 +3958,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (selTipo.value === "FINALIZA") {
       sincronizarInicioGuardadoSegunContexto();
     }
+    if (esInformeAlcoholemiaActivo()) {
+      refrescarContextoInformeAlcoholemia();
+    }
   }
 
   function actualizarTipo() {
     const controlMoviles = esControlMovilesActivo();
     const controlSuperior = esControlSuperiorActivo();
+    const informeAlcoholemia = esInformeAlcoholemiaActivo();
     const fin = selTipo.value === "FINALIZA";
 
     if (chkPresenciaActiva) {
@@ -3943,6 +3984,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     setUIControlMovilesActiva(false);
 
+    if (informeAlcoholemia) {
+      cargarOperativosDisponibles(selHorario?.value || "");
+      actualizarDatosFranja();
+      setUIInformeAlcoholemiaActiva(true);
+      actualizarReglasInformeAlcoholemia();
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
+      return;
+    }
+
+    setUIInformeAlcoholemiaActiva(false);
+
     if (controlSuperior) {
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
@@ -3953,6 +4006,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     setUIControlSuperiorActiva(false);
+    setUIInformeAlcoholemiaActiva(false);
     cargarOperativosDisponibles(selHorario?.value || "");
     actualizarDatosFranja();
     divFinaliza.classList.toggle("hidden", !fin);
@@ -4784,7 +4838,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     return true;
   }
 
-  function construirLineasResultados() {
+  function construirLineasResultados(agregadoInformes = null) {
     const campoVehiculos = leerResultadoCampo("vehiculos");
     const campoPersonas = leerResultadoCampo("personas");
     const campoTestAlom = leerResultadoCampo("testalom");
@@ -4800,14 +4854,22 @@ ${bold(`Moviles ${organismo}:`)}`)
     const vehiculos = campoVehiculos.valor;
     const personas = campoPersonas.valor;
     const testalom = campoTestAlom.valor;
-    const actas = campoActas.valor;
+    const actasManual = campoActas.valor;
+    const actas = campoActas.valor + valorAgregadoResultado(agregadoInformes, ["Actas Labradas", "Actas labradas"]);
     const requisa = campoRequisa.valor;
     const qrz = campoQrz.valor;
     const dominio = campoDominio.valor;
-    const remision = campoRemision.valor;
-    const retencion = campoRetencion.valor;
-    const prohibicion = campoProhibicion.valor;
-    const cesion = campoCesion.valor;
+    const aggActas = valorAgregadoResultado(agregadoInformes, ["Actas Labradas", "Actas labradas"]);
+    const aggRemision = valorAgregadoMedida(agregadoInformes, ["Remisión", "Vehículos remitidos"]);
+    const aggRetencion = valorAgregadoMedida(agregadoInformes, ["Retención", "Licencias Retenidas"]);
+    const aggProhibicion = valorAgregadoMedida(agregadoInformes, ["Prohibición de Circulación", "Prohibición de circular"]);
+    const aggCesion = valorAgregadoMedida(agregadoInformes, ["Cesión de Conducción", "Cesión de la conducción"]);
+    const aggDto460 = valorAgregadoResultado(agregadoInformes, ["Decreto 460/22", "Dto. 460/22"]);
+
+    const remision = campoRemision.valor + aggRemision;
+    const retencion = campoRetencion.valor + aggRetencion;
+    const prohibicion = campoProhibicion.valor + aggProhibicion;
+    const cesion = campoCesion.valor + aggCesion;
 
     const observaciones460Resultados = [];
     [
@@ -4823,6 +4885,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       campoProhibicion,
       campoCesion,
     ].forEach((campo) => pushUnicoTextoWsp(observaciones460Resultados, campo.observacion460));
+    if (aggDto460 > 0) pushUnicoTextoWsp(observaciones460Resultados, construirObservacionDecreto460(aggDto460));
 
     const alcoholimetro = construirBloqueAlcoholimetro();
     if (!alcoholimetro.ok) {
@@ -4830,7 +4893,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return null;
     }
 
-    if ((alcoholimetro.cantidadSancionables || 0) > 0 && actas <= 0) {
+    if ((alcoholimetro.cantidadSancionables || 0) > 0 && actasManual <= 0) {
       marcarErrorCampo(
         document.getElementById("actas"),
         'Si hay al menos una alcoholemia positiva sancionable, "Actas Labradas" debe ser mayor a cero.'
@@ -4838,7 +4901,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return null;
     }
 
-    if (actas > 0 && vehiculos <= 0) {
+    if (actasManual > 0 && vehiculos <= 0) {
       marcarErrorCampo(
         document.getElementById("vehiculos"),
         'Si "Actas Labradas" es mayor a cero, "Vehículos Fiscalizados" no puede ser cero ni quedar vacío.'
@@ -4846,7 +4909,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return null;
     }
 
-    if (actas > 0 && personas <= 0) {
+    if (actasManual > 0 && personas <= 0) {
       marcarErrorCampo(
         document.getElementById("personas"),
         'Si "Actas Labradas" es mayor a cero, "Personas Identificadas" no puede ser cero ni quedar vacío.'
@@ -4868,7 +4931,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       `Vehículos Fiscalizados: (${formatearCantidad(vehiculos)})`,
       `Personas Identificadas: (${formatearCantidad(personas)})`,
       `Test de Alómetro: (${formatearCantidad(testalom)})`,
-      ...alcoholimetro.lineas,
+      ...construirLineasAlcoholimetroConAgregado(alcoholimetro, agregadoInformes),
       `Actas Labradas: (${formatearCantidad(actas)})`,
       `Requisas: (${formatearCantidad(requisa)})`,
       ...construirBloqueListaVertical("Qrz", qrz, qrzValores),
@@ -5072,6 +5135,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
     setControlSuperiorVisible(false);
+    setUIInformeAlcoholemiaActiva(false);
+    limpiarInformeAlcoholemia();
     setUIControlMovilesActiva(false);
     setObservacionesVisible(true);
 
@@ -5303,21 +5368,509 @@ ${bold(`Moviles ${organismo}:`)}`)
     try {
       if (!window.WspHistorialOperativos) return false;
       if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
-        await window.WspHistorialOperativos.guardarInicio(payload);
-        return true;
+        return await window.WspHistorialOperativos.guardarInicio(payload);
       }
       if (tipoEvento === "FINALIZADO" && typeof window.WspHistorialOperativos.guardarFinalizado === "function") {
-        await window.WspHistorialOperativos.guardarFinalizado(payload);
-        return true;
+        return await window.WspHistorialOperativos.guardarFinalizado(payload);
       }
       if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
-        await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
-        return true;
+        return await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
       }
     } catch (e) {
       console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual.", e);
     }
     return false;
+  }
+
+  // ===== INFORMES INTERMEDIOS: ALCOHOLEMIA POSITIVA =====
+  function esInformeAlcoholemiaActivo() {
+    return selTipo?.value === INFORME_ALCOHOLEMIA_TIPO;
+  }
+
+  function normalizarMayusInforme(value) {
+    return limpiarTextoSimple(value || "").toUpperCase();
+  }
+
+  function normalizarDominioInforme(value) {
+    return normalizarMayusInforme(value).replace(/\s+/g, "");
+  }
+
+  function normalizarNumeroActaInforme(value) {
+    return String(value || "").replace(/\D+/g, "");
+  }
+
+  function normalizarGraduacionInforme(value) {
+    return String(value || "").replace(/\s+/g, "").replace(",", ".").trim();
+  }
+
+  function graduacionNumeroInforme(value) {
+    const n = Number(normalizarGraduacionInforme(value));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function fmtHoraInforme(date = new Date()) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function fmtFechaInforme(date = new Date()) {
+    return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  }
+
+  function grupoVehiculoAlcoholemia(value) {
+    const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
+    if (/\bmoto\b|motovehiculo|motovehiculo/.test(v)) return "moto";
+    if (/camion|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
+    return "general";
+  }
+
+  function labelTipoVehiculoInforme() {
+    const val = infAlcoTipoVehiculo?.value || "";
+    if (val === "otros") return normalizarMayusInforme(infAlcoTipoOtro?.value || "OTROS");
+    const opt = infAlcoTipoVehiculo?.selectedOptions?.[0];
+    return normalizarMayusInforme(opt?.textContent || val);
+  }
+
+  function calcularAlcoholemiaInforme(tipoVehiculo, graduacion) {
+    const n = graduacionNumeroInforme(graduacion);
+    if (n == null || n <= 0) return null;
+    const grupo = grupoVehiculoAlcoholemia(tipoVehiculo);
+    if (grupo === "moto") return { grupo, codigo: "2020", sancionable: n > 0.20, noSancionable: n > 0 && n <= 0.20 };
+    if (grupo === "profesional") return { grupo, codigo: "2033", sancionable: n > 0, noSancionable: false };
+    return { grupo, codigo: "2016", sancionable: n > 0.50, noSancionable: n > 0 && n <= 0.50 };
+  }
+
+  function actualizarReglasInformeAlcoholemia() {
+    if (wrapInfAlcoTipoOtro && infAlcoTipoVehiculo) {
+      wrapInfAlcoTipoOtro.classList.toggle("hidden", infAlcoTipoVehiculo.value !== "otros");
+    }
+
+    if (infAlcoActa) infAlcoActa.value = normalizarNumeroActaInforme(infAlcoActa.value);
+
+    if (infAlcoLicenciaDigital?.checked) {
+      if (infAlcoMedRetencion) {
+        infAlcoMedRetencion.checked = false;
+        infAlcoMedRetencion.disabled = true;
+      }
+    } else if (infAlcoMedRetencion) {
+      infAlcoMedRetencion.disabled = false;
+    }
+
+    if (infAlco460?.checked && infAlcoMedRemision) {
+      infAlcoMedRemision.checked = true;
+      infAlcoMedRemision.disabled = true;
+    } else if (infAlcoMedRemision) {
+      infAlcoMedRemision.disabled = false;
+    }
+
+    const tipo = labelTipoVehiculoInforme();
+    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value || "");
+    const calc = calcularAlcoholemiaInforme(tipo, grad);
+    if (infAlcoResultadoAuto) {
+      if (!calc) {
+        infAlcoResultadoAuto.textContent = "Complete tipo de vehículo y graduación mayor a cero.";
+      } else {
+        infAlcoResultadoAuto.textContent = `${calc.sancionable ? "POSITIVA SANCIONABLE" : "POSITIVA NO SANCIONABLE"} - CÓDIGO ${calc.codigo} - ${grad} G/L`;
+      }
+    }
+  }
+
+  function aplicarMayusculasInputsInformeAlcoholemia() {
+    document.querySelectorAll("#bloqueInformeAlcoholemia .upper-input").forEach((el) => {
+      const pos = el.selectionStart;
+      const end = el.selectionEnd;
+      el.value = normalizarMayusInforme(el.value);
+      try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
+    });
+  }
+
+  function limpiarInformeAlcoholemia() {
+    const campos = [infAlcoTipoVehiculo, infAlcoTipoOtro, infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoGraduacion, infAlcoActa, infAlcoLicenciaClase, infAlcoOtrosCodigos, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra];
+    campos.forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
+    [infAlco460, infAlcoLicenciaDigital, infAlcoMedProhibicion, infAlcoMedCesion, infAlcoMedRemision, infAlcoMedRetencion, infAlcoInventario].forEach((el) => { if (el) { el.checked = false; el.disabled = false; } });
+    infAlcoFotos.forEach((el) => { if (el) el.value = ""; });
+    actualizarReglasInformeAlcoholemia();
+  }
+
+  async function obtenerInicioParaInformeAlcoholemia() {
+    if (!franjaSeleccionada) return null;
+    return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+  }
+
+  async function refrescarContextoInformeAlcoholemia() {
+    if (!informeAlcoholemiaContexto || !esInformeAlcoholemiaActivo()) return;
+    if (!franjaSeleccionada) {
+      informeAlcoholemiaContexto.textContent = "Seleccione un operativo.";
+      return;
+    }
+    const inicio = await obtenerInicioParaInformeAlcoholemia();
+    if (!inicio) {
+      informeAlcoholemiaContexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
+      return;
+    }
+    const moviles = lineaDesdeArray(inicio.moviles, "/");
+    const motos = lineaDesdeArray(inicio.motos, "/");
+    const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
+    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+  }
+
+  function setUIInformeAlcoholemiaActiva(activa) {
+    if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.toggle("hidden", !activa);
+    document.body.classList.toggle("modo-informe-alcoholemia", !!activa);
+    setControlSuperiorVisible(false);
+    setPersonalVisible(!activa);
+    setMovilidadVisible(!activa);
+    setElementosVisibles(!activa);
+    setObservacionesVisible(!activa);
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divDetalles) divDetalles.classList.add("hidden");
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    if (activa) refrescarContextoInformeAlcoholemia();
+  }
+
+  function codigosInformeAlcoholemia(codigoPrincipal) {
+    const codigos = [codigoPrincipal];
+    String(infAlcoOtrosCodigos?.value || "")
+      .split(/[\s,;/]+/)
+      .map((v) => v.replace(/\D+/g, ""))
+      .filter(Boolean)
+      .forEach((codigo) => { if (!codigos.includes(codigo)) codigos.push(codigo); });
+    return codigos;
+  }
+
+  function descripcionCodigoInforme(codigo) {
+    return obtenerReferenciaNomenclador(codigo, "") || "INFRACCIÓN";
+  }
+
+  function detalleLineaInforme(codigo) {
+    return reconstruirLineaDetalle(1, codigo, descripcionCodigoInforme(codigo)) || `(01) ${codigo}`;
+  }
+
+  function medidasSeleccionadasInformeAlcoholemia() {
+    return {
+      prohibicion: !!infAlcoMedProhibicion?.checked,
+      cesion: !!infAlcoMedCesion?.checked,
+      remision: !!infAlcoMedRemision?.checked,
+      retencion: !!infAlcoMedRetencion?.checked,
+    };
+  }
+
+  function textoMedidasInforme(medidas) {
+    const out = [];
+    if (medidas.prohibicion) out.push("PROHIBICIÓN DE CIRCULAR");
+    if (medidas.cesion) out.push("CESIÓN DE CONDUCCIÓN");
+    if (medidas.remision) out.push("REMISIÓN");
+    if (medidas.retencion) out.push("RETENCIÓN DE LICENCIA DE CONDUCIR");
+    return out;
+  }
+
+  function fotosSeleccionadasInformeAlcoholemia() {
+    return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
+  }
+
+  function validarInformeAlcoholemia() {
+    if (!franjaSeleccionada) return marcarErrorCampo(selHorario, "Debe seleccionar un operativo.");
+    const tipo = labelTipoVehiculoInforme();
+    if (!infAlcoTipoVehiculo?.value) return marcarErrorCampo(infAlcoTipoVehiculo, "Debe seleccionar tipo de vehículo.");
+    if (infAlcoTipoVehiculo.value === "otros" && !normalizarMayusInforme(infAlcoTipoOtro?.value)) return marcarErrorCampo(infAlcoTipoOtro, "Debe escribir el tipo de vehículo.");
+    if (!normalizarMayusInforme(infAlcoMarca?.value)) return marcarErrorCampo(infAlcoMarca, "Debe completar marca.");
+    if (!normalizarDominioInforme(infAlcoDominio?.value)) return marcarErrorCampo(infAlcoDominio, "Debe completar dominio.");
+    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
+    const calc = calcularAlcoholemiaInforme(tipo, grad);
+    if (!/^\d+(?:\.\d+)?$/.test(grad) || !calc) return marcarErrorCampo(infAlcoGraduacion, "Graduación inválida. Use 0.51 o 0,51 y debe ser mayor a cero.");
+    if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Debe completar N° de acta. Solo números.");
+    if (infAlco460?.checked || infAlcoMedRemision?.checked) {
+      if (!normalizarMayusInforme(infAlcoDependenciaRemite?.value)) return marcarErrorCampo(infAlcoDependenciaRemite, "Debe completar dependencia o personal que remite.");
+      if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón/destino.");
+    }
+    return true;
+  }
+
+  function construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
+    const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
+    const detalles = codigos.map(detalleLineaInforme);
+    if (infAlco460?.checked) detalles.push("(01) 460/22 Decreto 460/22");
+    if (infAlcoInventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
+
+    const resultados = {
+      "Test de Alcoholímetro": 1,
+      "Actas Labradas": 1,
+      "Positiva Sancionable": calc.sancionable ? 1 : 0,
+      "Positiva no Sancionable": calc.noSancionable ? 1 : 0,
+    };
+    if (infAlco460?.checked) resultados["Decreto 460/22"] = 1;
+
+    const medidasPayload = {
+      "Prohibición de Circulación": medidas.prohibicion ? 1 : 0,
+      "Cesión de Conducción": medidas.cesion ? 1 : 0,
+      "Remisión": medidas.remision ? 1 : 0,
+      "Retención": medidas.retencion ? 1 : 0,
+    };
+
+    return {
+      fuente: "WSP",
+      operativo_key: limpiarTextoSimple(franjaSeleccionada?.__operativoKey || inicio?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada)),
+      operativo_publicado_id: franjaSeleccionada?.__operativoPublicadoId || null,
+      guardia_fecha: getGuardiaFechaISO(),
+      fecha_operativo: fechaFranjaHistorialWsp(franjaSeleccionada),
+      fecha,
+      horario: hora,
+      hora_desde: hora,
+      hora_hasta: hora,
+      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      titulo: "ALCOHOLEMIA POSITIVA",
+      ordenes_origen: ordenes,
+      personal: normalizarArrayTexto(inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio),
+      resultados,
+      medidas_cautelares: medidasPayload,
+      detalles,
+      observaciones: normalizarMayusInforme(infAlcoObservacionExtra?.value || ""),
+      texto_generado: textoFinal,
+      payload_completo: {
+        tipo_evento: "ALCOHOLEMIA_POSITIVA",
+        tipo_informe: infAlco460?.checked ? "ALCOHOLEMIA_460" : "ALCOHOLEMIA_POSITIVA",
+        franja: franjaSeleccionada,
+        datos_formulario: {
+          tipo_vehiculo: tipoVehiculo,
+          marca: normalizarMayusInforme(infAlcoMarca?.value),
+          modelo: normalizarMayusInforme(infAlcoModelo?.value),
+          dominio: normalizarDominioInforme(infAlcoDominio?.value),
+          conductor: normalizarMayusInforme(infAlcoConductor?.value),
+          graduacion: grad,
+          nro_acta: normalizarNumeroActaInforme(infAlcoActa?.value),
+          licencia_clase: normalizarMayusInforme(infAlcoLicenciaClase?.value),
+          licencia_digital: !!infAlcoLicenciaDigital?.checked,
+          alcoholemia_460: !!infAlco460?.checked,
+          codigos,
+          medidas,
+          dependencia_remite: normalizarMayusInforme(infAlcoDependenciaRemite?.value),
+          corralon: normalizarMayusInforme(infAlcoCorralon?.value),
+          acta_inventario: !!infAlcoInventario?.checked,
+        },
+        graduaciones_sancionables: calc.sancionable ? [grad] : [],
+        graduaciones_no_sancionables: calc.noSancionable ? [grad] : [],
+      },
+      metadata: {
+        tipo_evento: "ALCOHOLEMIA_POSITIVA",
+        generado_desde: "wsp.js",
+        alimenta_finalizado: true,
+      },
+    };
+  }
+
+  function construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
+    const motivo = infAlco460?.checked
+      ? "ALCOHOLEMIA POSITIVA CON REMISIÓN POR DECRETO 460/22"
+      : (calc.sancionable ? "ALCOHOLEMIA POSITIVA SANCIONABLE" : "ALCOHOLEMIA POSITIVA NO SANCIONABLE");
+
+    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
+    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
+    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const marca = normalizarMayusInforme(infAlcoMarca?.value);
+    const modelo = normalizarMayusInforme(infAlcoModelo?.value);
+    const dominio = normalizarDominioInforme(infAlcoDominio?.value);
+    const conductor = normalizarMayusInforme(infAlcoConductor?.value);
+    const nroActa = normalizarNumeroActaInforme(infAlcoActa?.value);
+    const licenciaClase = normalizarMayusInforme(infAlcoLicenciaClase?.value);
+    const licenciaTxt = licenciaClase ? ` LICENCIA CLASE ${licenciaClase}${infAlcoLicenciaDigital?.checked ? " DIGITAL" : ""}.` : "";
+    const codigosTxt = codigos.join("/");
+    const medidasTxt = textoMedidasInforme(medidas);
+    const medidaFrase = medidasTxt.length ? ` Como medida cautelar se realiza ${medidasTxt.join(", ")}.` : "";
+    const remisionFrase = (infAlco460?.checked || medidas.remision)
+      ? ` Remitiendo el vehículo ${normalizarMayusInforme(infAlcoDependenciaRemite?.value)} al ${normalizarMayusInforme(infAlcoCorralon?.value)}.`
+      : "";
+    const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
+    const obsExtra = normalizarMayusInforme(infAlcoObservacionExtra?.value);
+
+    const obs = [
+      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por el código ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}` ,
+      obsExtra,
+    ].filter(Boolean).join(" ");
+
+    return compactarSaltos([
+      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
+      bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE SANTA FE"),
+      bold("TERCIO CHARLIE"),
+      "",
+      bold(`MOTIVO: ${motivo}`),
+      "",
+      `${bold("LUGAR:")} ${lugar}`,
+      "",
+      `${bold("HORA:")} ${hora}HS`,
+      "",
+      `${bold("FECHA:")} ${fecha}`,
+      "",
+      `${bold("MÓVIL:")} ${moviles}`,
+      "",
+      bold("PERSONAL"),
+      personal,
+      "",
+      `${bold("OBSERVACIÓN:")} ${obs}`,
+      fotosSeleccionadasInformeAlcoholemia().length ? bold("Se adjunta vista fotográfica") : "",
+    ].filter((v) => v !== null && v !== undefined).join("\n"));
+  }
+
+  async function subirFotoInformeAlcoholemia(file, resultadoHistorial, numero) {
+    if (!file || !resultadoHistorial?.evento?.id) return null;
+    const archivo = await normalizarImagenControlMovil(file);
+    const eventoId = String(resultadoHistorial.evento.id);
+    const estadoId = String(resultadoHistorial.estado?.id || "");
+    const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
+    const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
+    const path = `${getGuardiaFechaISO()}/${safeKey}/${eventoId}/${Date.now()}_${numero}.jpg`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: headersSupabase({
+        "Content-Type": archivo.type || "image/jpeg",
+        "x-upsert": "false",
+      }),
+      body: archivo,
+    });
+    if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const row = {
+      evento_id: eventoId,
+      operativo_estado_id: estadoId || null,
+      operativo_key: operativoKey,
+      tipo_evento: "ALCOHOLEMIA_POSITIVA",
+      foto_numero: numero,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_path: path,
+      public_url: publicUrl,
+    };
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+      method: "POST",
+      headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
+      body: JSON.stringify(row),
+    });
+    if (!ins.ok) throw new Error(`No se pudo registrar foto ${numero}: ${ins.status} ${await ins.text().catch(() => "")}`);
+    return row;
+  }
+
+  async function subirFotosInformeAlcoholemia(resultadoHistorial, files) {
+    const fotos = (Array.isArray(files) ? files : []).slice(0, 4);
+    for (let i = 0; i < fotos.length; i += 1) {
+      await subirFotoInformeAlcoholemia(fotos[i], resultadoHistorial, i + 1);
+    }
+  }
+
+  async function enviarInformeAlcoholemia() {
+    aplicarMayusculasInputsInformeAlcoholemia();
+    actualizarReglasInformeAlcoholemia();
+    if (!validarInformeAlcoholemia()) return;
+
+    const inicio = await obtenerInicioParaInformeAlcoholemia();
+    if (!inicio) {
+      alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
+      return;
+    }
+
+    const now = new Date();
+    const fecha = fmtFechaInforme(now);
+    const hora = fmtHoraInforme(now);
+    const tipoVehiculo = labelTipoVehiculoInforme();
+    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
+    const calc = calcularAlcoholemiaInforme(tipoVehiculo, grad);
+    const codigos = codigosInformeAlcoholemia(calc.codigo);
+    const medidas = medidasSeleccionadasInformeAlcoholemia();
+    const textoFinal = construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
+    const payload = construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
+    const fotos = fotosSeleccionadasInformeAlcoholemia();
+
+    const resultadoHistorial = await guardarHistorialOperativoWsp("ALCOHOLEMIA_POSITIVA", payload);
+    if (resultadoHistorial && fotos.length) {
+      try { await subirFotosInformeAlcoholemia(resultadoHistorial, fotos); }
+      catch (e) { console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e); alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase."); }
+    }
+
+    resetUI();
+    abrirWhatsappYCerrarWspLuego(textoFinal);
+  }
+
+  function valorAgregadoResultado(agregado, keys) {
+    const resultados = agregado?.resultados || {};
+    const lista = Array.isArray(keys) ? keys : [keys];
+    for (const key of lista) {
+      const n = Number(resultados[key] || 0);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }
+
+  function valorAgregadoMedida(agregado, keys) {
+    const medidas = agregado?.medidas || {};
+    const lista = Array.isArray(keys) ? keys : [keys];
+    for (const key of lista) {
+      const n = Number(medidas[key] || 0);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }
+
+  function agregadoInformesTieneDatos(agregado) {
+    return !!(agregado && (Object.values(agregado.resultados || {}).some((n) => Number(n) > 0) || Object.values(agregado.medidas || {}).some((n) => Number(n) > 0) || (agregado.detalles || []).length));
+  }
+
+  async function cargarAgregadoInformesIntermediosWsp() {
+    if (!franjaSeleccionada) return null;
+    const key = limpiarTextoSimple(franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada));
+    if (!key) return null;
+    try {
+      const params = new URLSearchParams({
+        select: "id,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at",
+        operativo_key: `eq.${key}`,
+        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA)",
+        order: "created_at.asc",
+      });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+      if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`);
+      const rows = await r.json();
+      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [] };
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const resultados = row?.resultados && typeof row.resultados === "object" ? row.resultados : {};
+        Object.entries(resultados).forEach(([k,v]) => { agregado.resultados[k] = Number(agregado.resultados[k] || 0) + Number(v || 0); });
+        const medidas = row?.medidas_cautelares && typeof row.medidas_cautelares === "object" ? row.medidas_cautelares : {};
+        Object.entries(medidas).forEach(([k,v]) => { agregado.medidas[k] = Number(agregado.medidas[k] || 0) + Number(v || 0); });
+        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => { if (d) agregado.detalles.push(String(d)); });
+        const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
+        if (Array.isArray(pc.graduaciones_sancionables)) agregado.graduacionesSancionables.push(...pc.graduaciones_sancionables);
+        if (Array.isArray(pc.graduaciones_no_sancionables)) agregado.graduacionesNoSancionables.push(...pc.graduaciones_no_sancionables);
+        if (row?.observaciones) agregado.observaciones.push(String(row.observaciones));
+      });
+      return agregadoInformesTieneDatos(agregado) ? agregado : null;
+    } catch (e) {
+      console.warn("[WSP] No se pudieron leer informes intermedios para finalizado.", e);
+      return null;
+    }
+  }
+
+  function construirLineasAlcoholimetroConAgregado(alcoholimetro, agregado) {
+    const aggSan = valorAgregadoResultado(agregado, ["Positiva Sancionable", "Alcoholemias Positivas Sancionables"]);
+    const aggNo = valorAgregadoResultado(agregado, ["Positiva no Sancionable", "Alcoholemias Positivas NO Sancionables"]);
+    const aggTest = valorAgregadoResultado(agregado, ["Test de Alcoholímetro", "Test con alcoholímetro"]) || (aggSan + aggNo);
+    const valoresSan = [...(alcoholimetro?.valoresSan || []), ...(agregado?.graduacionesSancionables || [])].filter(Boolean);
+    const valoresNo = [...(alcoholimetro?.valoresNo || []), ...(agregado?.graduacionesNoSancionables || [])].filter(Boolean);
+    const total = (alcoholimetro?.totalValidos || 0) + aggTest;
+    const san = valoresSan.length || ((alcoholimetro?.cantidadSancionables || 0) + aggSan);
+    const no = valoresNo.length || ((alcoholimetro?.cantidadNoSancionables || 0) + aggNo);
+    const lineas = [
+      `Test de Alcoholímetro: (${formatearCantidad(total)})`,
+      `Positiva Sancionable: (${formatearCantidad(san)})`,
+    ];
+    if (valoresSan.length) lineas.push(construirLineaGraduaciones(valoresSan));
+    lineas.push(`Positiva no Sancionable: (${formatearCantidad(no)})`);
+    if (valoresNo.length) lineas.push(construirLineaGraduaciones(valoresNo));
+    return lineas;
   }
 
   // ===== ENVIAR A WHATSAPP =====
@@ -5328,6 +5881,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (!franjaSeleccionada) return;
+
+    if (esInformeAlcoholemiaActivo()) {
+      await enviarInformeAlcoholemia();
+      return;
+    }
 
     if (esControlSuperiorActivo()) {
       const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
@@ -5363,8 +5921,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     const esFinaliza = selTipo.value === "FINALIZA";
-    const incluirResultadosFinaliza = esFinaliza && debeIncluirResultadosFinaliza();
-    const incluirDetallesFinaliza = esFinaliza && debeIncluirDetallesFinaliza();
+    const agregadoInformesFinalizado = esFinaliza ? await cargarAgregadoInformesIntermediosWsp() : null;
+    const hayAgregadoInformesFinalizado = agregadoInformesTieneDatos(agregadoInformesFinalizado);
+    const incluirResultadosFinaliza = esFinaliza && (debeIncluirResultadosFinaliza() || hayAgregadoInformesFinalizado);
+    const incluirDetallesFinaliza = esFinaliza && (debeIncluirDetallesFinaliza() || hayAgregadoInformesFinalizado);
     const usarPresenciaActiva = !!chkPresenciaActiva?.checked;
     const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
     const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
@@ -5464,8 +6024,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     partes.push(`Alómetros: ${alomTXT}`);
     partes.push(`Alcoholímetros: ${alcoTXT}`);
 
+    const textoDetallesManual = document.getElementById("detalles")?.value || "";
+    const textoDetallesAgregados = hayAgregadoInformesFinalizado ? (agregadoInformesFinalizado.detalles || []).join("\n") : "";
     const detallesProcesados = esFinaliza && incluirDetallesFinaliza
-      ? normalizarDetallesTexto(document.getElementById("detalles")?.value || "")
+      ? normalizarDetallesTexto([textoDetallesManual, textoDetallesAgregados].filter((v) => String(v || "").trim()).join("\n"))
       : { detalles: "", observaciones: [], cantidadValidos: 0, detalleItems: [], tieneTexto: false };
 
     const observacionesResultadosFinaliza = [];
@@ -5476,7 +6038,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esFinaliza && incluirResultadosFinaliza) {
-      const lineasResultados = construirLineasResultados();
+      const lineasResultados = construirLineasResultados(agregadoInformesFinalizado);
       if (!lineasResultados) return;
       lineasResultadosGeneradas = lineasResultados;
 
@@ -5617,6 +6179,31 @@ ${bold(`Moviles ${organismo}:`)}`)
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") cerrarAyudaControlMoviles();
   });
+
+  [infAlcoTipoVehiculo, infAlcoGraduacion, infAlco460, infAlcoLicenciaDigital, infAlcoMedRetencion, infAlcoMedRemision].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("input", actualizarReglasInformeAlcoholemia);
+    el.addEventListener("change", actualizarReglasInformeAlcoholemia);
+  });
+
+  [infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoLicenciaClase, infAlcoTipoOtro, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const pos = el.selectionStart;
+      const end = el.selectionEnd;
+      el.value = normalizarMayusInforme(el.value);
+      try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
+    });
+    el.addEventListener("blur", () => { el.value = normalizarMayusInforme(el.value); });
+  });
+
+  if (infAlcoActa) {
+    infAlcoActa.addEventListener("input", () => { infAlcoActa.value = normalizarNumeroActaInforme(infAlcoActa.value); });
+  }
+
+  if (infAlcoDominio) {
+    infAlcoDominio.addEventListener("blur", () => { infAlcoDominio.value = normalizarDominioInforme(infAlcoDominio.value); });
+  }
 
   bindControlMovilesEventos();
 
