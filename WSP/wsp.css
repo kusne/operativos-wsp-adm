@@ -3305,3 +3305,70 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
 }
 
 #bloqueInformeAlcoholemia .hidden{display:none !important;}
+
+/* Resumen automático de informes intermedios al armar FINALIZADO */
+.resumen-informes-finalizado{
+  margin:10px 0;
+  padding:10px 12px;
+  border:2px solid #0b63ce;
+  border-radius:12px;
+  background:#fff8d6;
+  color:#111;
+  box-shadow:0 0 16px rgba(255, 225, 80, .28);
+  font-weight:700;
+}
+.resumen-informes-title{
+  font-size:14px;
+  font-weight:900;
+  color:#0b3675;
+  margin-bottom:6px;
+  text-transform:uppercase;
+}
+.resumen-informes-resultados{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:8px;
+}
+.resumen-informes-resultados span{
+  display:inline-flex;
+  align-items:center;
+  border:1px solid rgba(11,99,206,.35);
+  background:#fff;
+  color:#111;
+  border-radius:999px;
+  padding:4px 8px;
+  font-size:12px;
+  font-weight:900;
+}
+.resumen-informes-subtitle{
+  font-size:12px;
+  font-weight:900;
+  color:#333;
+  margin:6px 0 4px;
+}
+.resumen-informes-detalles{
+  display:grid;
+  gap:4px;
+}
+.resumen-informe-detalle-readonly{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  align-items:center;
+  background:#f3f4f6;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  padding:5px 8px;
+  font-size:12px;
+}
+.resumen-informe-detalle-readonly span{
+  color:#111;
+  font-weight:800;
+}
+.resumen-informe-detalle-readonly em{
+  color:#0b63ce;
+  font-style:normal;
+  font-weight:900;
+  white-space:nowrap;
+}
