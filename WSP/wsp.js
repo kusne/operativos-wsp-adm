@@ -4084,6 +4084,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       actualizarVisibilidadBloquePresenciaActiva();
       actualizarVisibilidadResultadosFinaliza();
       desactivarControlesMismos();
+      ocultarResumenInformesIntermediosFinalizado();
       sincronizarUIAlcoholimetro();
       return;
     }
@@ -5169,6 +5170,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const payload = remoto || cargarInicioGuardadoCoincidente();
     aplicarInicioGuardadoAutomatico(payload);
+    refrescarResumenInformesIntermediosFinalizado();
   }
 
   function resetUI() {
@@ -6262,16 +6264,54 @@ ${bold(`Moviles ${organismo}:`)}`)
     return keys;
   }
 
+  function agregarKeyUnicaInformes(keys, value) {
+    const key = limpiarTextoSimple(value || "");
+    if (key && !keys.includes(key)) keys.push(key);
+  }
+
+  function informeIntermedioCoincideConFranja(row, franja, keys = []) {
+    if (!row || !franja) return false;
+    const rowKey = limpiarTextoSimple(row.operativo_key || "");
+    if (rowKey && keys.includes(rowKey)) return true;
+
+    const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
+    const fr = pc?.franja && typeof pc.franja === "object" ? pc.franja : {};
+
+    let puntos = 0;
+    if (valoresComparablesCoinciden(fr.horario || row.horario, franja.horario || "")) puntos += 45;
+    if (valoresComparablesCoinciden(fr.lugar || row.lugar, franja.lugar || "")) puntos += 35;
+    if (valoresComparablesCoinciden(obtenerTipoCortoFranja(fr) || row.tipo_operativo, obtenerTipoCortoFranja(franja) || "")) puntos += 15;
+    if (valoresComparablesCoinciden(obtenerNumeroOrdenDeFranja(fr), obtenerNumeroOrdenDeFranja(franja))) puntos += 10;
+    if (valoresComparablesCoinciden(obtenerTextoRefOrdenDeFranja(fr), obtenerTextoRefOrdenDeFranja(franja))) puntos += 5;
+
+    return puntos >= 70;
+  }
+
   async function cargarAgregadoInformesIntermediosWsp() {
     if (!franjaSeleccionada) return null;
     const keys = obtenerKeysInformesIntermediosFranja(franjaSeleccionada);
-    if (!keys.length) return null;
+
+    // Clave crítica: el informe intermedio suele guardarse con la key real del INICIO.
+    // El FINALIZADO a veces trae una franja reconstruida/publicada con otra key.
+    // Por eso se agregan también las keys del INICIO local/remoto y luego hay fallback por franja.
+    const inicioLocal = cargarInicioGuardadoCoincidente();
+    agregarKeyUnicaInformes(keys, inicioLocal?.operativo_key);
+    const inicioRemoto = await leerInicioDesdeSupabase(franjaSeleccionada);
+    agregarKeyUnicaInformes(keys, inicioRemoto?.operativo_key);
+
     try {
       const rows = [];
       const seen = new Set();
+      const addRow = (row) => {
+        const id = String(row?.id || "");
+        if (id && seen.has(id)) return;
+        if (id) seen.add(id);
+        rows.push(row);
+      };
+
       for (const key of keys) {
         const params = new URLSearchParams({
-          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at",
+          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo",
           operativo_key: `eq.${key}`,
           tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
           order: "created_at.asc",
@@ -6281,21 +6321,52 @@ ${bold(`Moviles ${organismo}:`)}`)
         });
         if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`);
         const data = await r.json();
-        (Array.isArray(data) ? data : []).forEach((row) => {
-          const id = String(row?.id || "");
-          if (id && seen.has(id)) return;
-          if (id) seen.add(id);
-          rows.push(row);
-        });
+        (Array.isArray(data) ? data : []).forEach(addRow);
       }
-      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [] };
+
+      // Respaldo: si no coincidió la key, se buscan los informes de la guardia
+      // y se filtran por lugar/horario/tipo/orden guardados en payload_completo.franja.
+      const paramsFallback = new URLSearchParams({
+        select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo",
+        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
+        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
+        order: "created_at.asc",
+        limit: "200",
+      });
+      const rf = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${paramsFallback.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+      if (rf.ok) {
+        const dataFallback = await rf.json();
+        (Array.isArray(dataFallback) ? dataFallback : [])
+          .filter((row) => informeIntermedioCoincideConFranja(row, franjaSeleccionada, keys))
+          .forEach(addRow);
+      } else {
+        console.warn("[WSP] No se pudo leer fallback de informes intermedios:", rf.status, await rf.text().catch(() => ""));
+      }
+
+      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [], detallesReadonly: [] };
       rows.forEach((row) => {
         const resultados = row?.resultados && typeof row.resultados === "object" ? row.resultados : {};
         Object.entries(resultados).forEach(([k,v]) => { agregado.resultados[k] = Number(agregado.resultados[k] || 0) + Number(v || 0); });
         const medidas = row?.medidas_cautelares && typeof row.medidas_cautelares === "object" ? row.medidas_cautelares : {};
         Object.entries(medidas).forEach(([k,v]) => { agregado.medidas[k] = Number(agregado.medidas[k] || 0) + Number(v || 0); });
-        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => { if (d) agregado.detalles.push(String(d)); });
         const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
+        const origen = pc.detalle_origen_visual || (row.tipo_evento === "DECTO_460_22" ? "460/22" : "alcoholemia");
+        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => {
+          if (!d) return;
+          const texto = String(d);
+          agregado.detalles.push(texto);
+          agregado.detallesReadonly.push({ texto, origen, readonly: true });
+        });
+        if (Array.isArray(pc.detalles_readonly)) {
+          pc.detalles_readonly.forEach((d) => {
+            if (!d?.texto) return;
+            const texto = String(d.texto);
+            if (!agregado.detalles.includes(texto)) agregado.detalles.push(texto);
+            agregado.detallesReadonly.push({ texto, origen: d.origen || origen, readonly: true });
+          });
+        }
         if (Array.isArray(pc.graduaciones_sancionables)) agregado.graduacionesSancionables.push(...pc.graduaciones_sancionables);
         if (Array.isArray(pc.graduaciones_no_sancionables)) agregado.graduacionesNoSancionables.push(...pc.graduaciones_no_sancionables);
         if (row?.observaciones) agregado.observaciones.push(String(row.observaciones));
@@ -6305,6 +6376,84 @@ ${bold(`Moviles ${organismo}:`)}`)
       console.warn("[WSP] No se pudieron leer informes intermedios para finalizado.", e);
       return null;
     }
+  }
+
+  function escapeHtmlWsp(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function ensureResumenInformesIntermediosFinalizado() {
+    let box = document.getElementById("resumenInformesIntermediosFinalizado");
+    if (box) return box;
+    box = document.createElement("div");
+    box.id = "resumenInformesIntermediosFinalizado";
+    box.className = "resumen-informes-finalizado hidden";
+    const destino = divFinaliza || document.getElementById("bloqueResultadosFinaliza") || document.body;
+    destino.parentNode?.insertBefore(box, destino);
+    return box;
+  }
+
+  function ocultarResumenInformesIntermediosFinalizado() {
+    const box = document.getElementById("resumenInformesIntermediosFinalizado");
+    if (box) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    }
+  }
+
+  function renderResumenInformesIntermediosFinalizado(agregado) {
+    const box = ensureResumenInformesIntermediosFinalizado();
+    if (!agregadoInformesTieneDatos(agregado)) {
+      ocultarResumenInformesIntermediosFinalizado();
+      return;
+    }
+
+    const lineasResultados = [];
+    const pushResultado = (label, n) => {
+      const num = Number(n || 0);
+      if (Number.isFinite(num) && num > 0) lineasResultados.push(`${label}: +${num}`);
+    };
+
+    pushResultado("Vehículos Fiscalizados", valorAgregadoResultado(agregado, ["Vehículos Fiscalizados", "Vehiculos Fiscalizados"]));
+    pushResultado("Personas Identificadas", valorAgregadoResultado(agregado, ["Personas Identificadas", "Personas identificadas"]));
+    pushResultado("Actas Labradas", valorAgregadoResultado(agregado, ["Actas Labradas", "Actas labradas"]));
+    pushResultado("Decreto 460/22", valorAgregadoResultado(agregado, ["Decreto 460/22", "Dto. 460/22"]));
+    pushResultado("Remisión", valorAgregadoMedida(agregado, ["Remisión", "Vehículos remitidos"]));
+    pushResultado("Inventario", (agregado.detalles || []).filter((d) => /inventari/i.test(String(d || ""))).length);
+
+    const detalles = Array.isArray(agregado.detallesReadonly) && agregado.detallesReadonly.length
+      ? agregado.detallesReadonly
+      : (agregado.detalles || []).map((texto) => ({ texto, origen: "informe", readonly: true }));
+
+    const seenDetalles = new Set();
+    const detallesHtml = detalles.map((d) => {
+      const texto = String(d?.texto || "").trim();
+      if (!texto || seenDetalles.has(`${texto}|${d?.origen || ""}`)) return "";
+      seenDetalles.add(`${texto}|${d?.origen || ""}`);
+      return `<div class="resumen-informe-detalle-readonly"><span>${escapeHtmlWsp(texto)}</span><em>&gt; ${escapeHtmlWsp(d?.origen || "informe")}</em></div>`;
+    }).filter(Boolean).join("");
+
+    box.innerHTML = `
+      <div class="resumen-informes-title">Datos incorporados automáticamente al FINALIZADO</div>
+      ${lineasResultados.length ? `<div class="resumen-informes-resultados">${lineasResultados.map((l) => `<span>${escapeHtmlWsp(l)}</span>`).join("")}</div>` : ""}
+      ${detallesHtml ? `<div class="resumen-informes-subtitle">Detalles solo lectura</div><div class="resumen-informes-detalles">${detallesHtml}</div>` : ""}
+    `;
+    box.classList.remove("hidden");
+  }
+
+  async function refrescarResumenInformesIntermediosFinalizado() {
+    if (selTipo?.value !== "FINALIZA" || !franjaSeleccionada) {
+      ocultarResumenInformesIntermediosFinalizado();
+      return null;
+    }
+    const agregado = await cargarAgregadoInformesIntermediosWsp();
+    renderResumenInformesIntermediosFinalizado(agregado);
+    return agregado;
   }
 
   function construirLineasAlcoholimetroConAgregado(alcoholimetro, agregado) {
