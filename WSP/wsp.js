@@ -4498,11 +4498,38 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
+  function obtenerCodigoDetalleInicialNoProcedimiento460(linea) {
+    const s = String(linea || "").replace(/\r/g, "").trim();
+    if (!s) return "";
+
+    const patrones = [
+      /^\(\s*\d{1,3}\s*\)\s*(\d{3,5})(?:\s*\/\s*22)?\b/i,
+      /^\d{1,3}\s*[-–—]\s*(\d{3,5})(?:\s*\/\s*22)?\b/i,
+      /^\d{1,3}\s+(\d{3,5})(?:\s*\/\s*22)?\b/i,
+      /^(\d{3,5})(?:\s*\/\s*22)?\b/i,
+    ];
+
+    for (const regex of patrones) {
+      const m = s.match(regex);
+      const codigo = String(m?.[1] || "").replace(/\D+/g, "");
+      if (!codigo) continue;
+      if (codigo === "460" || codigo === "46022" || codigo === "22") return "";
+      return codigo;
+    }
+
+    return "";
+  }
+
   function normalizarDetalleDecreto460(linea, { paraAutocompletar = false } = {}) {
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
 
     s = s.replace(/\s+/g, " ").trim();
+
+    // Si la línea es un detalle real con referencia visual de origen
+    // ej. "(02) 9119 sin habilitación > del 460/22", NO debe
+    // reinterpretarse como procedimiento 460/22. La referencia es solo visual.
+    if (obtenerCodigoDetalleInicialNoProcedimiento460(s)) return null;
 
     let cantidad = null;
     let cuerpo = s;
@@ -4701,6 +4728,89 @@ ${bold(`Moviles ${organismo}:`)}`)
     return total;
   }
 
+  function obtenerOrigenVisualDetalle(linea) {
+    const m = String(linea || "").match(/\s*>\s*(.+?)\s*$/i);
+    if (!m) return "";
+    const raw = limpiarTextoSimple(m[1] || "");
+    if (/460\s*\/\s*22|4060\s*\/\s*22|\b460\b/i.test(raw)) return "del 460/22";
+    if (/alcoholemia/i.test(raw)) return "alcoholemia";
+    return raw;
+  }
+
+  function consolidarDetallesVisualesTextarea(lineas) {
+    const originales = Array.isArray(lineas) ? lineas.map((x) => String(x ?? "")) : [];
+    const grupos = new Map();
+    const orden = [];
+    const otras = [];
+
+    originales.forEach((linea, idx) => {
+      const visual = String(linea || "").trim();
+      if (!visual) {
+        otras.push({ idx, texto: linea, vacia: true });
+        return;
+      }
+
+      const origen = obtenerOrigenVisualDetalle(visual);
+      const limpio = limpiarMarcaOrigenVisualDetalle(visual);
+      const item = normalizarLineaDetalle(limpio);
+
+      // Los procedimientos 460/22 no son detalles de infracción: no deben
+      // quedar en el cuadro Detalles. Su conteo vive en Resultados/Observaciones.
+      if (item?.tipo === "procedimiento460") return;
+
+      if (!item || item.tipo !== "detalle") {
+        otras.push({ idx, texto: linea, vacia: false });
+        return;
+      }
+
+      const codigo = String(item.codigo || "").replace(/\D+/g, "");
+      if (!codigo || !codigoExisteEnNomenclador(codigo)) {
+        otras.push({ idx, texto: linea, vacia: false });
+        return;
+      }
+
+      if (!grupos.has(codigo)) {
+        grupos.set(codigo, {
+          idx,
+          codigo,
+          cantidad: 0,
+          descripcion: obtenerReferenciaNomenclador(codigo, item.descripcion || "") || item.descripcion || "INFRACCIÓN",
+          origenes: new Set(),
+          tieneManual: false,
+        });
+        orden.push(codigo);
+      }
+
+      const grupo = grupos.get(codigo);
+      grupo.cantidad += Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
+      if (!grupo.descripcion && item.descripcion) grupo.descripcion = item.descripcion;
+      if (origen) grupo.origenes.add(origen);
+      else grupo.tieneManual = true;
+    });
+
+    const reconstruidas = orden.map((codigo) => {
+      const grupo = grupos.get(codigo);
+      const descripcion = obtenerReferenciaNomenclador(grupo.codigo, grupo.descripcion) || grupo.descripcion || "INFRACCIÓN";
+      let texto = reconstruirLineaDetalle(grupo.cantidad, grupo.codigo, descripcion) || `(${formatearCantidad(grupo.cantidad)}) ${grupo.codigo} ${descripcion}`;
+
+      // Si solo vino de informes, conservar la referencia para saber el origen.
+      // Si el usuario agregó manualmente el mismo código, se fusiona y se quita
+      // la referencia visual porque ya es un total mixto/manual.
+      if (!grupo.tieneManual && grupo.origenes.size === 1) {
+        texto += ` > ${Array.from(grupo.origenes)[0]}`;
+      }
+      return { idx: grupo.idx, texto };
+    });
+
+    const salida = [...reconstruidas, ...otras.filter((x) => !x.vacia)]
+      .sort((a, b) => a.idx - b.idx)
+      .map((x) => x.texto);
+
+    const antes = originales.map((x) => String(x || "").trim()).filter(Boolean).join("\n");
+    const despues = salida.map((x) => String(x || "").trim()).filter(Boolean).join("\n");
+    return { lineas: salida, changed: antes !== despues };
+  }
+
   function aplicarAutocompletadoDetalles(textarea, { forzar = false, saltarLinea = !forzar } = {}) {
     if (!textarea) return;
 
@@ -4759,8 +4869,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       cursorNuevo = longitudHastaLinea(lineasNuevas, lineaParaSaltar + 1);
     }
 
-    const valorNuevo = lineasNuevas.join("\n");
-    detallesAutocompletadoState.set(textarea, metasNuevas);
+    const consolidadoVisual = consolidarDetallesVisualesTextarea(lineasNuevas);
+    const lineasFinales = consolidadoVisual.lineas;
+    if (consolidadoVisual.changed) {
+      cursorNuevo = lineasFinales.join("\n").length;
+    }
+
+    const valorNuevo = lineasFinales.join("\n");
+    detallesAutocompletadoState.set(textarea, consolidadoVisual.changed ? [] : metasNuevas);
 
     if (valorNuevo === valorOriginal) {
       if (cursorNuevo != null) {
@@ -4777,9 +4893,9 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (cursorNuevo != null) {
         textarea.setSelectionRange(cursorNuevo, cursorNuevo);
       } else {
-        const lineaActual = Math.min(cursorOriginal.linea, lineasNuevas.length - 1);
-        const base = longitudHastaLinea(lineasNuevas, lineaActual);
-        const columna = Math.min(cursorOriginal.columna, String(lineasNuevas[lineaActual] || "").length);
+        const lineaActual = Math.min(cursorOriginal.linea, lineasFinales.length - 1);
+        const base = longitudHastaLinea(lineasFinales, lineaActual);
+        const columna = Math.min(cursorOriginal.columna, String(lineasFinales[lineaActual] || "").length);
         const pos = Math.max(0, Math.min(valorNuevo.length, base + columna));
         textarea.setSelectionRange(pos, pos);
       }
@@ -6625,9 +6741,26 @@ ${bold(`Moviles ${organismo}:`)}`)
       agregadasKeys.add(clean);
     });
 
-    el.value = [...base, ...agregadas].join("\n");
+    let lineasFinales = [...base, ...agregadas];
+    if (id === "detalles") {
+      lineasFinales = consolidarDetallesVisualesTextarea(lineasFinales).lineas;
+    }
+
+    let valorFinal = lineasFinales.join("\n");
+    if (id === "detalles" && agregadas.length > 0) {
+      valorFinal = valorFinal ? `${valorFinal}\n` : "";
+    }
+
+    el.value = valorFinal;
     el.dataset[dataKey] = JSON.stringify(agregadas);
     el.classList.toggle("input-auto-informe", agregadas.length > 0);
+
+    if (id === "detalles" && agregadas.length > 0 && typeof el.setSelectionRange === "function") {
+      try {
+        el.focus({ preventScroll: true });
+        el.setSelectionRange(el.value.length, el.value.length);
+      } catch {}
+    }
   }
 
   function aplicarGraduacionesAutomaticasFinaliza(agregado) {
