@@ -116,6 +116,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
+  let firmaInformesIntermediosAplicadosFinalizado = "";
+
 
   let controlMovilesCache = [];
   let controlMovilSeleccionado = null;
@@ -5177,6 +5179,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     ordenSeleccionada = null;
     franjaSeleccionada = null;
     inicioGuardadoActual = null;
+    firmaInformesIntermediosAplicadosFinalizado = "";
 
     selTipo.value = "INICIA";
     limpiarSeleccionOperativo();
@@ -6378,6 +6381,133 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
   }
 
+  function firmaAgregadoInformesFinalizado(agregado) {
+    if (!agregadoInformesTieneDatos(agregado)) return "";
+    try {
+      return JSON.stringify({
+        resultados: agregado?.resultados || {},
+        medidas: agregado?.medidas || {},
+        detalles: agregado?.detalles || [],
+        observaciones: agregado?.observaciones || [],
+        san: agregado?.graduacionesSancionables || [],
+        no: agregado?.graduacionesNoSancionables || [],
+      });
+    } catch {
+      return String(Date.now());
+    }
+  }
+
+  function sumarCampoFinalizaDesdeInforme(id, autoValor) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const autoNuevo = Math.max(0, Number(autoValor || 0));
+    const autoPrevio = Math.max(0, Number(el.dataset.autoInformeIntermedio || 0));
+    const actual = leerEnteroNoNegativo(el.value);
+    const baseManual = Math.max(0, actual - autoPrevio);
+    const nuevo = baseManual + autoNuevo;
+    el.value = nuevo > 0 ? String(nuevo) : "";
+    el.dataset.autoInformeIntermedio = String(autoNuevo);
+    el.classList.toggle("input-auto-informe", autoNuevo > 0);
+  }
+
+  function getAutoLineasPrevias(el, key) {
+    if (!el) return [];
+    try {
+      const parsed = JSON.parse(el.dataset[key] || "[]");
+      return Array.isArray(parsed) ? parsed.map((x) => String(x || "").trim()).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function limpiarMarcaOrigenVisualDetalle(texto) {
+    return String(texto || "")
+      .replace(/\s*>\s*(?:460\/22|4060\/22|alcoholemia|informe)\s*$/i, "")
+      .trim();
+  }
+
+  function aplicarLineasAutomaticasTextarea(id, lineasNuevas, dataKey) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const previas = getAutoLineasPrevias(el, dataKey);
+    const prevSet = new Set(previas.map((x) => x.trim()).filter(Boolean));
+    const base = String(el.value || "")
+      .split(/\n+/)
+      .map((x) => x.trim())
+      .filter((x) => x && !prevSet.has(x));
+
+    const agregadas = [];
+    (Array.isArray(lineasNuevas) ? lineasNuevas : []).forEach((linea) => {
+      const clean = limpiarMarcaOrigenVisualDetalle(linea);
+      if (!clean) return;
+      if (base.includes(clean) || agregadas.includes(clean)) return;
+      agregadas.push(clean);
+    });
+
+    el.value = [...base, ...agregadas].join("\n");
+    el.dataset[dataKey] = JSON.stringify(agregadas);
+    el.classList.toggle("input-auto-informe", agregadas.length > 0);
+  }
+
+  function aplicarGraduacionesAutomaticasFinaliza(agregado) {
+    const san = valorAgregadoResultado(agregado, ["Positiva Sancionable", "Alcoholemias Positivas Sancionables"]);
+    const no = valorAgregadoResultado(agregado, ["Positiva no Sancionable", "Alcoholemias Positivas NO Sancionables"]);
+    const test = valorAgregadoResultado(agregado, ["Test de Alcoholímetro", "Test con alcoholímetro"]) || (san + no);
+
+    sumarCampoFinalizaDesdeInforme("Alcotest", test);
+    sumarCampoFinalizaDesdeInforme("positivaSancionable", san);
+    sumarCampoFinalizaDesdeInforme("positivaNoSancionable", no);
+    sincronizarUIAlcoholimetro();
+
+    const setValores = (contenedor, valores) => {
+      const vals = Array.isArray(valores) ? valores.filter(Boolean) : [];
+      const inputs = Array.from(contenedor?.querySelectorAll('input[type="text"]') || []);
+      vals.forEach((v, idx) => {
+        if (inputs[idx]) inputs[idx].value = String(v).replace(".", ",");
+      });
+    };
+
+    setValores(graduacionesSancionable, agregado?.graduacionesSancionables || []);
+    setValores(graduacionesNoSancionable, agregado?.graduacionesNoSancionables || []);
+  }
+
+  function aplicarInformesIntermediosEnCamposFinalizado(agregado) {
+    const firma = firmaAgregadoInformesFinalizado(agregado);
+
+    if (chkMostrarResultadosFinaliza && agregadoInformesTieneDatos(agregado)) {
+      chkMostrarResultadosFinaliza.checked = true;
+    }
+    actualizarVisibilidadResultadosFinaliza();
+
+    sumarCampoFinalizaDesdeInforme("vehiculos", valorAgregadoResultado(agregado, ["Vehículos Fiscalizados", "Vehiculos Fiscalizados"]));
+    sumarCampoFinalizaDesdeInforme("personas", valorAgregadoResultado(agregado, ["Personas Identificadas", "Personas identificadas"]));
+    sumarCampoFinalizaDesdeInforme("actas", valorAgregadoResultado(agregado, ["Actas Labradas", "Actas labradas"]));
+    sumarCampoFinalizaDesdeInforme("Remision", valorAgregadoMedida(agregado, ["Remisión", "Vehículos remitidos"]));
+    sumarCampoFinalizaDesdeInforme("Retencion", valorAgregadoMedida(agregado, ["Retención", "Licencias Retenidas"]));
+    sumarCampoFinalizaDesdeInforme("Prohibicion", valorAgregadoMedida(agregado, ["Prohibición de Circulación", "Prohibición de circular"]));
+    sumarCampoFinalizaDesdeInforme("Cesion", valorAgregadoMedida(agregado, ["Cesión de Conducción", "Cesión de la conducción"]));
+    aplicarGraduacionesAutomaticasFinaliza(agregado);
+
+    const detalles = (agregado?.detalles || []).map((d) => limpiarMarcaOrigenVisualDetalle(d)).filter(Boolean);
+    aplicarLineasAutomaticasTextarea("detalles", detalles, "autoInformeIntermedioDetalles");
+
+    const observaciones = [];
+    const dto460 = valorAgregadoResultado(agregado, ["Decreto 460/22", "Dto. 460/22"]);
+    if (dto460 > 0) observaciones.push(construirObservacionDecreto460(dto460));
+    (Array.isArray(agregado?.observaciones) ? agregado.observaciones : []).forEach((obs) => {
+      const clean = limpiarTextoSimple(obs);
+      if (clean && !observaciones.includes(clean)) observaciones.push(clean);
+    });
+    aplicarLineasAutomaticasTextarea("obs", observaciones, "autoInformeIntermedioObs");
+
+    firmaInformesIntermediosAplicadosFinalizado = firma;
+  }
+
+  function informesIntermediosYaEstanAplicadosEnCampos(agregado) {
+    const firma = firmaAgregadoInformesFinalizado(agregado);
+    return !!firma && !!firmaInformesIntermediosAplicadosFinalizado && firma === firmaInformesIntermediosAplicadosFinalizado;
+  }
+
   function escapeHtmlWsp(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -6407,43 +6537,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function renderResumenInformesIntermediosFinalizado(agregado) {
-    const box = ensureResumenInformesIntermediosFinalizado();
-    if (!agregadoInformesTieneDatos(agregado)) {
-      ocultarResumenInformesIntermediosFinalizado();
-      return;
-    }
-
-    const lineasResultados = [];
-    const pushResultado = (label, n) => {
-      const num = Number(n || 0);
-      if (Number.isFinite(num) && num > 0) lineasResultados.push(`${label}: +${num}`);
-    };
-
-    pushResultado("Vehículos Fiscalizados", valorAgregadoResultado(agregado, ["Vehículos Fiscalizados", "Vehiculos Fiscalizados"]));
-    pushResultado("Personas Identificadas", valorAgregadoResultado(agregado, ["Personas Identificadas", "Personas identificadas"]));
-    pushResultado("Actas Labradas", valorAgregadoResultado(agregado, ["Actas Labradas", "Actas labradas"]));
-    pushResultado("Decreto 460/22", valorAgregadoResultado(agregado, ["Decreto 460/22", "Dto. 460/22"]));
-    pushResultado("Remisión", valorAgregadoMedida(agregado, ["Remisión", "Vehículos remitidos"]));
-    pushResultado("Inventario", (agregado.detalles || []).filter((d) => /inventari/i.test(String(d || ""))).length);
-
-    const detalles = Array.isArray(agregado.detallesReadonly) && agregado.detallesReadonly.length
-      ? agregado.detallesReadonly
-      : (agregado.detalles || []).map((texto) => ({ texto, origen: "informe", readonly: true }));
-
-    const seenDetalles = new Set();
-    const detallesHtml = detalles.map((d) => {
-      const texto = String(d?.texto || "").trim();
-      if (!texto || seenDetalles.has(`${texto}|${d?.origen || ""}`)) return "";
-      seenDetalles.add(`${texto}|${d?.origen || ""}`);
-      return `<div class="resumen-informe-detalle-readonly"><span>${escapeHtmlWsp(texto)}</span><em>&gt; ${escapeHtmlWsp(d?.origen || "informe")}</em></div>`;
-    }).filter(Boolean).join("");
-
-    box.innerHTML = `
-      <div class="resumen-informes-title">Datos incorporados automáticamente al FINALIZADO</div>
-      ${lineasResultados.length ? `<div class="resumen-informes-resultados">${lineasResultados.map((l) => `<span>${escapeHtmlWsp(l)}</span>`).join("")}</div>` : ""}
-      ${detallesHtml ? `<div class="resumen-informes-subtitle">Detalles solo lectura</div><div class="resumen-informes-detalles">${detallesHtml}</div>` : ""}
-    `;
-    box.classList.remove("hidden");
+    // La información de informes intermedios NO debe mostrarse como resumen aparte.
+    // Debe impactar directamente en los campos existentes del FINALIZADO.
+    aplicarInformesIntermediosEnCamposFinalizado(agregado);
+    ocultarResumenInformesIntermediosFinalizado();
   }
 
   async function refrescarResumenInformesIntermediosFinalizado() {
@@ -6528,7 +6625,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     const esFinaliza = selTipo.value === "FINALIZA";
-    const agregadoInformesFinalizado = esFinaliza ? await cargarAgregadoInformesIntermediosWsp() : null;
+    const agregadoInformesLeidosFinalizado = esFinaliza ? await cargarAgregadoInformesIntermediosWsp() : null;
+    const agregadoYaAplicadoEnCampos = esFinaliza && informesIntermediosYaEstanAplicadosEnCampos(agregadoInformesLeidosFinalizado);
+    const agregadoInformesFinalizado = agregadoYaAplicadoEnCampos ? null : agregadoInformesLeidosFinalizado;
     const hayAgregadoInformesFinalizado = agregadoInformesTieneDatos(agregadoInformesFinalizado);
     const incluirResultadosFinaliza = esFinaliza && (debeIncluirResultadosFinaliza() || hayAgregadoInformesFinalizado);
     const incluirDetallesFinaliza = esFinaliza && (debeIncluirDetallesFinaliza() || hayAgregadoInformesFinalizado);
