@@ -26,6 +26,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const labelObs = document.getElementById("labelObs");
   const textareaObs = document.getElementById("obs");
   const btnEnviar = document.getElementById("btnEnviar");
+  const bloqueInformeSelector = document.getElementById("bloqueInformeSelector");
+  const tipoInforme = document.getElementById("tipoInforme");
 
   // ===== INFORME ALCOHOLEMIA POSITIVA =====
   const bloqueInformeAlcoholemia = document.getElementById("bloqueInformeAlcoholemia");
@@ -114,8 +116,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesSincronizando = false;
   let controlMovilesUltimaFirmaRender = "";
 
-  const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA POSITIVA";
-  const INFORME_ALCOHOLEMIA_460_TIPO = "INFORME ALCOHOLEMIA Y 460/22";
+  const INFORMES_TIPO = "INFORMES";
+  const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
+  const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
+  const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
@@ -3942,6 +3946,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  function estaEnMenuInformes() {
+    return selTipo?.value === INFORMES_TIPO;
+  }
+
+  function getTipoInformeActivo() {
+    if (estaEnMenuInformes()) return tipoInforme?.value || "";
+    // Compatibilidad por si queda algún valor viejo guardado o seleccionado.
+    return selTipo?.value || "";
+  }
+
+  function setSelectorInformesVisible(visible) {
+    if (bloqueInformeSelector) bloqueInformeSelector.classList.toggle("hidden", !visible);
+    if (!visible && tipoInforme) tipoInforme.value = "";
+  }
+
   function actualizarDatosFranja() {
     const key = selHorario?.value || "";
     franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
@@ -3966,9 +3985,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function actualizarTipo() {
+    const enInformes = estaEnMenuInformes();
+    setSelectorInformesVisible(enInformes);
     const controlMoviles = esControlMovilesActivo();
     const controlSuperior = esControlSuperiorActivo();
     const informeAlcoholemia = esInformeAlcoholemiaActivo();
+    const informeDecto460 = esInformeDecto460Activo();
     const fin = selTipo.value === "FINALIZA";
 
     if (chkPresenciaActiva) {
@@ -3985,6 +4007,30 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     setUIControlMovilesActiva(false);
+
+    if (enInformes && !getTipoInformeActivo()) {
+      setUIControlSuperiorActiva(false);
+      setUIInformeAlcoholemiaActiva(false);
+      setPersonalVisible(false);
+      setMovilidadVisible(false);
+      setElementosVisibles(false);
+      setObservacionesVisible(false);
+      if (divFinaliza) divFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
+      return;
+    }
+
+    if (informeDecto460) {
+      setUIControlSuperiorActiva(false);
+      setUIInformeAlcoholemiaActiva(false);
+      setPersonalVisible(false);
+      setMovilidadVisible(false);
+      setElementosVisibles(false);
+      setObservacionesVisible(false);
+      if (divFinaliza) divFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
+      return;
+    }
 
     if (informeAlcoholemia) {
       cargarOperativosDisponibles(selHorario?.value || "");
@@ -4987,7 +5033,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         return !!window.ControlSuperior.isActive();
       }
     } catch {}
-    return selTipo?.value === "CONTROL SUPERIOR";
+    return getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO;
   }
 
   function setObservacionesVisible(visible) {
@@ -5386,11 +5432,15 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== INFORMES INTERMEDIOS: ALCOHOLEMIA POSITIVA =====
   function esInformeAlcoholemiaActivo() {
-    return selTipo?.value === INFORME_ALCOHOLEMIA_TIPO || selTipo?.value === INFORME_ALCOHOLEMIA_460_TIPO;
+    return getTipoInformeActivo() === INFORME_ALCOHOLEMIA_TIPO;
+  }
+
+  function esInformeDecto460Activo() {
+    return getTipoInformeActivo() === INFORME_DECRETO_460_TIPO;
   }
 
   function esInformeAlcoholemia460Seleccionado() {
-    return selTipo?.value === INFORME_ALCOHOLEMIA_460_TIPO;
+    return !!infAlco460?.checked;
   }
 
   function normalizarMayusInforme(value) {
@@ -5466,10 +5516,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarReglasInformeAlcoholemia() {
-    const forzar460 = esInformeAlcoholemia460Seleccionado();
-
-    if (forzar460 && infAlco460) infAlco460.checked = true;
-
+    // Alcoholemia y 460/22 es una casilla dentro del informe Alcoholemia, no una plantilla aparte.
     if (infAlco460?.checked && infAlcoTipoVehiculo && infAlcoTipoVehiculo.value !== "moto") {
       infAlcoTipoVehiculo.value = "moto";
     }
@@ -5567,10 +5614,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
     if (activa) {
-      if (infAlco460) infAlco460.checked = esInformeAlcoholemia460Seleccionado();
-      if (infAlcoTipoVehiculo && infAlco460?.checked) infAlcoTipoVehiculo.value = "moto";
       const titulo = bloqueInformeAlcoholemia?.querySelector(".informe-alcohol-title");
-      if (titulo) titulo.textContent = infAlco460?.checked ? "INFORME - ALCOHOLEMIA Y 460/22" : "INFORME - ALCOHOLEMIA";
+      if (titulo) titulo.textContent = "INFORME - ALCOHOLEMIA";
       actualizarReglasInformeAlcoholemia();
       refrescarContextoInformeAlcoholemia();
     }
@@ -5934,6 +5979,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       return;
     }
 
+    if (esInformeDecto460Activo()) {
+      alert("Informe Decto 460/22 seleccionado. Falta definir su formulario específico antes de generar el texto.");
+      return;
+    }
+
     if (esControlSuperiorActivo()) {
       const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
       if (!inicioControlSuperior) {
@@ -6160,6 +6210,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
+  if (tipoInforme) tipoInforme.addEventListener("change", actualizarTipo);
   if (chkMostrarResultadosFinaliza) {
     chkMostrarResultadosFinaliza.addEventListener("change", () => {
       actualizarVisibilidadResultadosFinaliza();
