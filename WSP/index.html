@@ -41,13 +41,16 @@
       </div>
     </div>
 
-    <label class="top-label" for="tipo">INICIA/FINALIZA</label>
+    <label class="top-label" for="tipo">INICIA / FINALIZA / INFORMES</label>
     <select id="tipo" class="obligatorio">
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
-      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
-      <option value="INFORME ALCOHOLEMIA POSITIVA">INFORME - ALCOHOLEMIA POSITIVA</option>
+      <optgroup label="INFORMES">
+        <option value="CONTROL SUPERIOR">Control Superior</option>
+        <option value="INFORME ALCOHOLEMIA POSITIVA">Alcoholemia</option>
+        <option value="INFORME ALCOHOLEMIA Y 460/22">Alcoholemia y 460/22</option>
+      </optgroup>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
     <div class="operativos-title-row">
@@ -107,8 +110,8 @@
         </label>
       </div>
 
-      <div class="informe-alcohol-grid informe-alcohol-grid-4">
-        <div class="informe-field">
+      <div id="informeAlcoCampos" class="informe-alcohol-grid informe-alcohol-grid-2 informe-alcohol-compact">
+        <div class="informe-field campo-tipo-vehiculo">
           <label for="infAlcoTipoVehiculo">Tipo de vehículo</label>
           <select id="infAlcoTipoVehiculo">
             <option value="">Seleccionar</option>
@@ -128,49 +131,53 @@
             <option value="otros">Otros</option>
           </select>
         </div>
-        <div class="informe-field hidden" id="wrapInfAlcoTipoOtro">
+
+        <div class="informe-field hidden campo-otro-tipo" id="wrapInfAlcoTipoOtro">
           <label for="infAlcoTipoOtro">Otro tipo</label>
           <input type="text" id="infAlcoTipoOtro" class="upper-input" placeholder="TIPO">
         </div>
-        <div class="informe-field">
+
+        <div class="informe-field campo-marca">
           <label for="infAlcoMarca">Marca</label>
           <input type="text" id="infAlcoMarca" class="upper-input" placeholder="MARCA">
         </div>
-        <div class="informe-field">
-          <label for="infAlcoModelo">Modelo</label>
-          <input type="text" id="infAlcoModelo" class="upper-input" placeholder="MODELO">
-        </div>
-        <div class="informe-field">
+
+        <div class="informe-field campo-dominio">
           <label for="infAlcoDominio">Dominio</label>
           <input type="text" id="infAlcoDominio" class="upper-input" placeholder="DOMINIO">
         </div>
-      </div>
 
-      <div class="informe-alcohol-grid informe-alcohol-grid-3">
-        <div class="informe-field informe-field-wide">
+        <div class="informe-field campo-modelo">
+          <label for="infAlcoModelo">Modelo</label>
+          <input type="text" id="infAlcoModelo" class="upper-input" placeholder="MODELO">
+        </div>
+
+        <div class="informe-field campo-conductor">
           <label for="infAlcoConductor">Conductor</label>
           <input type="text" id="infAlcoConductor" class="upper-input" placeholder="APELLIDO Y NOMBRE">
         </div>
-        <div class="informe-field">
+
+        <div class="informe-field campo-graduacion">
           <label for="infAlcoGraduacion">Graduación [g/l]</label>
           <input type="text" id="infAlcoGraduacion" inputmode="decimal" placeholder="0.51 / 0,51">
         </div>
-        <div class="informe-field">
-          <label for="infAlcoActa">N° de acta</label>
-          <input type="text" id="infAlcoActa" inputmode="numeric" pattern="[0-9]*" placeholder="SOLO NÚMEROS">
-        </div>
-      </div>
 
-      <div class="informe-alcohol-grid informe-alcohol-grid-3">
-        <div class="informe-field">
+        <div class="informe-field campo-licencia">
           <label for="infAlcoLicenciaClase">Licencia Clase</label>
           <input type="text" id="infAlcoLicenciaClase" class="upper-input" placeholder="A/B/C...">
         </div>
-        <label class="check check-chip informe-check-inline">
+
+        <label class="check check-chip informe-check-inline campo-digital">
           <span>Digital</span>
           <input type="checkbox" id="infAlcoLicenciaDigital">
         </label>
-        <div class="informe-field">
+
+        <div class="informe-field campo-acta">
+          <label for="infAlcoActa">N° de acta</label>
+          <input type="text" id="infAlcoActa" inputmode="numeric" pattern="[0-9]*" placeholder="SOLO NÚMEROS">
+        </div>
+
+        <div class="informe-field campo-otros-codigos">
           <label for="infAlcoOtrosCodigos">Otros códigos</label>
           <input type="text" id="infAlcoOtrosCodigos" placeholder="5011/4084">
         </div>
@@ -179,31 +186,23 @@
       <div class="informe-medidas-box">
         <label class="informe-medidas-title">Medidas cautelares</label>
         <div class="informe-medidas-grid">
-          <label class="check check-chip informe-check-inline"><span>Prohib. de Circulación</span><input type="checkbox" id="infAlcoMedProhibicion"></label>
-          <label class="check check-chip informe-check-inline"><span>Cesión de Conducción</span><input type="checkbox" id="infAlcoMedCesion"></label>
+          <label class="check check-chip informe-check-inline"><span>Prohibición</span><input type="checkbox" id="infAlcoMedProhibicion"></label>
+          <label class="check check-chip informe-check-inline"><span>Cesión</span><input type="checkbox" id="infAlcoMedCesion"></label>
           <label class="check check-chip informe-check-inline"><span>Remisión</span><input type="checkbox" id="infAlcoMedRemision"></label>
           <label class="check check-chip informe-check-inline"><span>Retención</span><input type="checkbox" id="infAlcoMedRetencion"></label>
         </div>
       </div>
 
-      <div class="informe-alcohol-grid informe-alcohol-grid-3">
-        <div class="informe-field">
-          <label for="infAlcoDependenciaRemite">Dependencia / personal que remite</label>
-          <input type="text" id="infAlcoDependenciaRemite" class="upper-input" placeholder="MUNICIPALIDAD / PERSONAL">
-        </div>
+      <div id="bloqueAlcoRemisionDestino" class="informe-alcohol-grid informe-alcohol-grid-2 informe-remision-destino hidden">
+        <input type="hidden" id="infAlcoDependenciaRemite" value="PERSONAL MUNICIPAL">
         <div class="informe-field">
           <label for="infAlcoCorralon">Corralón / destino</label>
-          <input type="text" id="infAlcoCorralon" class="upper-input" placeholder="CORRALÓN">
+          <input type="text" id="infAlcoCorralon" class="upper-input" placeholder="RINCON / RECREO / SANTA FE">
         </div>
         <label class="check check-chip informe-check-inline">
-          <span>Acta de inventario</span>
+          <span>Inventario</span>
           <input type="checkbox" id="infAlcoInventario">
         </label>
-      </div>
-
-      <div class="informe-field">
-        <label for="infAlcoObservacionExtra">Observación adicional</label>
-        <textarea id="infAlcoObservacionExtra" class="upper-input" rows="2" placeholder="OPCIONAL"></textarea>
       </div>
 
       <div class="informe-fotos-grid">
