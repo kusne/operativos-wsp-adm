@@ -57,6 +57,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const infAlcoResultadoAuto = document.getElementById("infAlcoResultadoAuto");
   const infAlcoFotos = [1,2,3,4].map((n) => document.getElementById(`infAlcoFoto${n}`)).filter(Boolean);
 
+  // ===== INFORME DECTO 460/22 =====
+  const bloqueInformeDecto460 = document.getElementById("bloqueInformeDecto460");
+  const informeDecto460Contexto = document.getElementById("informeDecto460Contexto");
+  const inf460Marca = document.getElementById("inf460Marca");
+  const inf460Modelo = document.getElementById("inf460Modelo");
+  const inf460Dominio = document.getElementById("inf460Dominio");
+  const inf460Acta = document.getElementById("inf460Acta");
+  const inf460OtrosCodigos = document.getElementById("inf460OtrosCodigos");
+  const inf460Corralon = document.getElementById("inf460Corralon");
+  const inf460Inventario = document.getElementById("inf460Inventario");
+  const inf460ResultadoAuto = document.getElementById("inf460ResultadoAuto");
+  const inf460Fotos = [1,2,3,4].map((n) => document.getElementById(`inf460Foto${n}`)).filter(Boolean);
+
   // ===== CONTROL DE MÓVILES =====
   const bloqueControlMoviles = document.getElementById("bloqueControlMoviles");
   const controlMovilesEstado = document.getElementById("controlMovilesEstado");
@@ -3982,6 +3995,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (esInformeAlcoholemiaActivo()) {
       refrescarContextoInformeAlcoholemia();
     }
+    if (esInformeDecto460Activo()) {
+      refrescarContextoInformeDecto460();
+    }
   }
 
   function actualizarTipo() {
@@ -4011,6 +4027,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (enInformes && !getTipoInformeActivo()) {
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
+      setUIInformeDecto460Activa(false);
       setPersonalVisible(false);
       setMovilidadVisible(false);
       setElementosVisibles(false);
@@ -4021,20 +4038,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (informeDecto460) {
+      cargarOperativosDisponibles(selHorario?.value || "");
+      actualizarDatosFranja();
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
-      setPersonalVisible(false);
-      setMovilidadVisible(false);
-      setElementosVisibles(false);
-      setObservacionesVisible(false);
-      if (divFinaliza) divFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
+      setUIInformeDecto460Activa(true);
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
       return;
     }
 
     if (informeAlcoholemia) {
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
+      setUIInformeDecto460Activa(false);
       setUIInformeAlcoholemiaActiva(true);
       actualizarReglasInformeAlcoholemia();
       sincronizarUIAlcoholimetro();
@@ -4043,6 +4060,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     setUIInformeAlcoholemiaActiva(false);
+    setUIInformeDecto460Activa(false);
 
     if (controlSuperior) {
       cargarOperativosDisponibles(selHorario?.value || "");
@@ -5185,6 +5203,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     setControlSuperiorVisible(false);
     setUIInformeAlcoholemiaActiva(false);
     limpiarInformeAlcoholemia();
+    setUIInformeDecto460Activa(false);
+    limpiarInformeDecto460();
     setUIControlMovilesActiva(false);
     setObservacionesVisible(true);
 
@@ -5887,6 +5907,260 @@ ${bold(`Moviles ${organismo}:`)}`)
     abrirWhatsappYCerrarWspLuego(textoFinal);
   }
 
+
+  // ===== INFORME INTERMEDIO: DECTO 460/22 =====
+  async function obtenerInicioParaInformeDecto460() {
+    if (!franjaSeleccionada) return null;
+    return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+  }
+
+  async function refrescarContextoInformeDecto460() {
+    if (!informeDecto460Contexto || !esInformeDecto460Activo()) return;
+    if (!franjaSeleccionada) {
+      informeDecto460Contexto.textContent = "Seleccione un operativo.";
+      return;
+    }
+    const inicio = await obtenerInicioParaInformeDecto460();
+    if (!inicio) {
+      informeDecto460Contexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
+      return;
+    }
+    const moviles = lineaDesdeArray(inicio.moviles, "/");
+    const motos = lineaDesdeArray(inicio.motos, "/");
+    const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
+    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+  }
+
+  function setUIInformeDecto460Activa(activa) {
+    if (bloqueInformeDecto460) bloqueInformeDecto460.classList.toggle("hidden", !activa);
+    document.body.classList.toggle("modo-informe-decto460", !!activa);
+    setControlSuperiorVisible(false);
+    setPersonalVisible(!activa);
+    setMovilidadVisible(!activa);
+    setElementosVisibles(!activa);
+    setObservacionesVisible(!activa);
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divDetalles) divDetalles.classList.add("hidden");
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    if (activa) {
+      completarDestinoDecto460SiVacio();
+      refrescarContextoInformeDecto460();
+    }
+  }
+
+  function completarDestinoDecto460SiVacio() {
+    if (!inf460Corralon) return;
+    if (normalizarMayusInforme(inf460Corralon.value)) return;
+    const destino = inferirDestinoRemisionAlcoholemia();
+    if (destino) inf460Corralon.value = destino;
+  }
+
+  function aplicarMayusculasInputsDecto460() {
+    document.querySelectorAll("#bloqueInformeDecto460 .upper-input").forEach((el) => {
+      const pos = el.selectionStart;
+      const end = el.selectionEnd;
+      el.value = normalizarMayusInforme(el.value);
+      try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
+    });
+    if (inf460Acta) inf460Acta.value = normalizarNumeroActaInforme(inf460Acta.value);
+    if (inf460Dominio) inf460Dominio.value = normalizarDominioInforme(inf460Dominio.value);
+  }
+
+  function codigosInformeDecto460() {
+    return String(inf460OtrosCodigos?.value || "")
+      .split(/[\s,;/]+/)
+      .map((v) => v.replace(/\D+/g, ""))
+      .filter(Boolean)
+      .filter((codigo, idx, arr) => arr.indexOf(codigo) === idx);
+  }
+
+  function fotosSeleccionadasInformeDecto460() {
+    return inf460Fotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
+  }
+
+  function limpiarInformeDecto460() {
+    [inf460Marca, inf460Modelo, inf460Dominio, inf460Acta, inf460OtrosCodigos, inf460Corralon].forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
+    if (inf460Inventario) inf460Inventario.checked = false;
+    inf460Fotos.forEach((el) => { if (el) el.value = ""; });
+    completarDestinoDecto460SiVacio();
+  }
+
+  function validarInformeDecto460() {
+    aplicarMayusculasInputsDecto460();
+    if (!normalizarMayusInforme(inf460Marca?.value)) return marcarErrorCampo(inf460Marca, "Debe completar marca.");
+    if (!normalizarDominioInforme(inf460Dominio?.value)) return marcarErrorCampo(inf460Dominio, "Debe completar dominio.");
+    if (!normalizarNumeroActaInforme(inf460Acta?.value)) return marcarErrorCampo(inf460Acta, "Debe completar N° de acta. Solo números.");
+    if (!normalizarMayusInforme(inf460Corralon?.value)) return marcarErrorCampo(inf460Corralon, "Debe completar corralón/destino.");
+    if (!codigosInformeDecto460().length) return marcarErrorCampo(inf460OtrosCodigos, "Debe cargar al menos un código de infracción.");
+    return true;
+  }
+
+  function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
+    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
+    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
+    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const marca = normalizarMayusInforme(inf460Marca?.value);
+    const modelo = normalizarMayusInforme(inf460Modelo?.value);
+    const dominio = normalizarDominioInforme(inf460Dominio?.value);
+    const nroActa = normalizarNumeroActaInforme(inf460Acta?.value);
+    const corralon = normalizarMayusInforme(inf460Corralon?.value);
+    const codigosTxt = codigos.join("/");
+    const inventarioFrase = inf460Inventario?.checked ? " Labrando acta de inventario." : "";
+    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón/destino ${corralon}.${inventarioFrase}`;
+
+    return compactarSaltos([
+      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
+      bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE SANTA FE"),
+      bold("TERCIO CHARLIE"),
+      "",
+      bold("MOTIVO: REMISIÓN DE MOTOCICLETA POR DECTO 460/22"),
+      "",
+      `${bold("LUGAR:")} ${lugar}`,
+      "",
+      `${bold("HORA:")} ${hora}HS`,
+      "",
+      `${bold("FECHA:")} ${fecha}`,
+      "",
+      `${bold("MÓVIL:")} ${moviles}`,
+      "",
+      bold("PERSONAL"),
+      personal,
+      "",
+      `${bold("OBSERVACIÓN:")} ${obs}`,
+      fotosSeleccionadasInformeDecto460().length ? bold("Se adjunta vista fotográfica") : "",
+    ].filter((v) => v !== null && v !== undefined).join("\n"));
+  }
+
+  function construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora }) {
+    const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
+    const detalles = codigos.map(detalleLineaInforme);
+    if (inf460Inventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
+    const resultados = {
+      "Actas Labradas": 1,
+      "Decreto 460/22": 1,
+    };
+    const medidasPayload = {
+      "Remisión": 1,
+    };
+    return {
+      fuente: "WSP",
+      operativo_key: limpiarTextoSimple(franjaSeleccionada?.__operativoKey || inicio?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada)),
+      operativo_publicado_id: franjaSeleccionada?.__operativoPublicadoId || null,
+      guardia_fecha: getGuardiaFechaISO(),
+      fecha_operativo: fechaFranjaHistorialWsp(franjaSeleccionada),
+      fecha,
+      horario: hora,
+      hora_desde: hora,
+      hora_hasta: hora,
+      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      titulo: "DECTO 460/22",
+      ordenes_origen: ordenes,
+      personal: normalizarArrayTexto(inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio),
+      resultados,
+      medidas_cautelares: medidasPayload,
+      detalles,
+      observaciones: "",
+      texto_generado: textoFinal,
+      payload_completo: {
+        tipo_evento: "DECTO_460_22",
+        tipo_informe: "DECTO_460_22",
+        franja: franjaSeleccionada,
+        datos_formulario: {
+          marca: normalizarMayusInforme(inf460Marca?.value),
+          modelo: normalizarMayusInforme(inf460Modelo?.value),
+          dominio: normalizarDominioInforme(inf460Dominio?.value),
+          nro_acta: normalizarNumeroActaInforme(inf460Acta?.value),
+          codigos,
+          corralon: normalizarMayusInforme(inf460Corralon?.value),
+          acta_inventario: !!inf460Inventario?.checked,
+        },
+        detalle_origen_visual: "460/22",
+      },
+      metadata: {
+        tipo_evento: "DECTO_460_22",
+        generado_desde: "wsp.js",
+        alimenta_finalizado: true,
+      },
+    };
+  }
+
+  async function subirFotoInformeDecto460(file, resultadoHistorial, numero) {
+    if (!file || !resultadoHistorial?.evento?.id) return null;
+    const archivo = await normalizarImagenControlMovil(file);
+    const eventoId = String(resultadoHistorial.evento.id);
+    const estadoId = String(resultadoHistorial.estado?.id || "");
+    const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
+    const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
+    const path = `${getGuardiaFechaISO()}/${safeKey}/${eventoId}/${Date.now()}_${numero}.jpg`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: headersSupabase({
+        "Content-Type": archivo.type || "image/jpeg",
+        "x-upsert": "false",
+      }),
+      body: archivo,
+    });
+    if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const row = {
+      evento_id: eventoId,
+      operativo_estado_id: estadoId || null,
+      operativo_key: operativoKey,
+      tipo_evento: "DECTO_460_22",
+      foto_numero: numero,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_path: path,
+      public_url: publicUrl,
+    };
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+      method: "POST",
+      headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
+      body: JSON.stringify(row),
+    });
+    if (!ins.ok) throw new Error(`No se pudo registrar foto ${numero}: ${ins.status} ${await ins.text().catch(() => "")}`);
+    return row;
+  }
+
+  async function subirFotosInformeDecto460(resultadoHistorial, files) {
+    const fotos = (Array.isArray(files) ? files : []).slice(0, 4);
+    for (let i = 0; i < fotos.length; i += 1) {
+      await subirFotoInformeDecto460(fotos[i], resultadoHistorial, i + 1);
+    }
+  }
+
+  async function enviarInformeDecto460() {
+    aplicarMayusculasInputsDecto460();
+    if (!validarInformeDecto460()) return;
+    const inicio = await obtenerInicioParaInformeDecto460();
+    if (!inicio) {
+      alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
+      return;
+    }
+    const now = new Date();
+    const fecha = fmtFechaInforme(now);
+    const hora = fmtHoraInforme(now);
+    const codigos = codigosInformeDecto460();
+    const textoFinal = construirTextoInformeDecto460({ inicio, fecha, hora, codigos });
+    const payload = construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora });
+    const fotos = fotosSeleccionadasInformeDecto460();
+    const resultadoHistorial = await guardarHistorialOperativoWsp("DECTO_460_22", payload);
+    if (resultadoHistorial && fotos.length) {
+      try { await subirFotosInformeDecto460(resultadoHistorial, fotos); }
+      catch (e) { console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e); alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase."); }
+    }
+    resetUI();
+    abrirWhatsappYCerrarWspLuego(textoFinal);
+  }
+
   function valorAgregadoResultado(agregado, keys) {
     const resultados = agregado?.resultados || {};
     const lista = Array.isArray(keys) ? keys : [keys];
@@ -5919,7 +6193,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       const params = new URLSearchParams({
         select: "id,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at",
         operativo_key: `eq.${key}`,
-        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA)",
+        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
         order: "created_at.asc",
       });
       const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
@@ -5980,7 +6254,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esInformeDecto460Activo()) {
-      alert("Informe Decto 460/22 seleccionado. Falta definir su formulario específico antes de generar el texto.");
+      await enviarInformeDecto460();
       return;
     }
 
@@ -6301,6 +6575,24 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   if (infAlcoDominio) {
     infAlcoDominio.addEventListener("blur", () => { infAlcoDominio.value = normalizarDominioInforme(infAlcoDominio.value); });
+  }
+
+
+  [inf460Marca, inf460Modelo, inf460Dominio, inf460OtrosCodigos, inf460Corralon].forEach((el) => {
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const pos = el.selectionStart;
+      const end = el.selectionEnd;
+      el.value = normalizarMayusInforme(el.value);
+      try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
+    });
+    el.addEventListener("blur", () => { el.value = normalizarMayusInforme(el.value); });
+  });
+  if (inf460Acta) {
+    inf460Acta.addEventListener("input", () => { inf460Acta.value = normalizarNumeroActaInforme(inf460Acta.value); });
+  }
+  if (inf460Dominio) {
+    inf460Dominio.addEventListener("blur", () => { inf460Dominio.value = normalizarDominioInforme(inf460Dominio.value); });
   }
 
   bindControlMovilesEventos();
