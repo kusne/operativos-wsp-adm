@@ -4387,6 +4387,33 @@ ${bold(`Moviles ${organismo}:`)}`)
     return fallback;
   }
 
+  function codigoExisteEnNomenclador(codigo) {
+    const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
+    if (!codigoLimpio) return false;
+    // 460/22 es procedimiento/contador, no detalle de infracción.
+    if (codigoLimpio === "460" || codigoLimpio === "46022" || codigoLimpio === "22") return false;
+    try {
+      if (typeof window !== "undefined" && typeof window.getNomencladorFalta === "function") {
+        return !!window.getNomencladorFalta(codigoLimpio);
+      }
+      if (typeof window !== "undefined" && window.NOMENCLADOR_CODIGOS) {
+        return !!window.NOMENCLADOR_CODIGOS[codigoLimpio];
+      }
+      if (typeof window !== "undefined" && typeof window.getReferenciaFalta === "function") {
+        return !!limpiarDescripcionDetalle(window.getReferenciaFalta(codigoLimpio, ""));
+      }
+    } catch {}
+    return !!obtenerReferenciaNomenclador(codigoLimpio, "");
+  }
+
+  function codigosInvalidosNomenclador(codigos) {
+    return (Array.isArray(codigos) ? codigos : [])
+      .map((c) => String(c || "").replace(/\D+/g, ""))
+      .filter(Boolean)
+      .filter((codigo, idx, arr) => arr.indexOf(codigo) === idx)
+      .filter((codigo) => !codigoExisteEnNomenclador(codigo));
+  }
+
   function reconstruirLineaDetalle(cantidad, codigo, descripcion) {
     const descripcionFinal = limpiarDescripcionDetalle(descripcion);
     if (!descripcionFinal) return null;
@@ -5702,15 +5729,19 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!/^\d+(?:\.\d+)?$/.test(grad) || !calc) return marcarErrorCampo(infAlcoGraduacion, "Graduación inválida. Use 0.51 o 0,51 y debe ser mayor a cero.");
     if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Debe completar N° de acta. Solo números.");
     if (infAlco460?.checked || infAlcoMedRemision?.checked) {
-      if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón/destino.");
+      if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón.");
     }
+    const codigos = codigosInformeAlcoholemia(calc.codigo);
+    const invalidos = codigosInvalidosNomenclador(codigos);
+    if (invalidos.length) return marcarErrorCampo(infAlcoOtrosCodigos, `Código/s fuera del nomenclador o no permitidos: ${invalidos.join(" / ")}.`);
     return true;
   }
 
   function construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
+    // Los inventarios provenientes de informes no se imprimen como Detalle.
+    // Se contabilizan para la observación automática del 460/22/remisión.
     const detalles = codigos.map(detalleLineaInforme);
-    if (infAlcoInventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
 
     const esAlco460 = !!infAlco460?.checked;
     const actasInforme = (calc.sancionable || esAlco460) ? 1 : 0;
@@ -5776,6 +5807,12 @@ ${bold(`Moviles ${organismo}:`)}`)
         },
         graduaciones_sancionables: calc.sancionable ? [grad] : [],
         graduaciones_no_sancionables: calc.noSancionable ? [grad] : [],
+        detalle_origen_visual: infAlco460?.checked ? "460/22" : "alcoholemia",
+        detalles_readonly: detalles.map((texto) => ({ texto, origen: infAlco460?.checked ? "460/22" : "alcoholemia", readonly: true })),
+        remisiones_460: infAlco460?.checked && medidas.remision ? 1 : 0,
+        inventarios_460: infAlco460?.checked && infAlcoInventario?.checked ? 1 : 0,
+        corralon_460: infAlco460?.checked ? normalizarClaveCorralonInforme(infAlcoCorralon?.value) : "",
+        corralon_460_texto: infAlco460?.checked ? textoCorralonInforme(infAlcoCorralon?.value) : "",
       },
       metadata: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
@@ -6084,8 +6121,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!normalizarMayusInforme(inf460Marca?.value)) return marcarErrorCampo(inf460Marca, "Debe completar marca.");
     if (!normalizarDominioInforme(inf460Dominio?.value)) return marcarErrorCampo(inf460Dominio, "Debe completar dominio.");
     if (!normalizarNumeroActaInforme(inf460Acta?.value)) return marcarErrorCampo(inf460Acta, "Debe completar N° de acta. Solo números.");
-    if (!normalizarMayusInforme(inf460Corralon?.value)) return marcarErrorCampo(inf460Corralon, "Debe completar corralón/destino.");
-    if (!codigosInformeDecto460().length) return marcarErrorCampo(inf460OtrosCodigos, "Debe cargar al menos un código de infracción.");
+    if (!normalizarMayusInforme(inf460Corralon?.value)) return marcarErrorCampo(inf460Corralon, "Debe completar corralón.");
+    const codigos = codigosInformeDecto460();
+    if (!codigos.length) return marcarErrorCampo(inf460OtrosCodigos, "Debe cargar al menos un código de infracción.");
+    const invalidos = codigosInvalidosNomenclador(codigos);
+    if (invalidos.length) return marcarErrorCampo(inf460OtrosCodigos, `Código/s fuera del nomenclador o no permitidos: ${invalidos.join(" / ")}.`);
     return true;
   }
 
@@ -6368,9 +6408,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     const item = normalizarLineaDetalle(limpio);
     if (!item || item.tipo !== "detalle") return null;
     const codigo = String(item.codigo || "").replace(/\D+/g, "");
+    if (!codigo || !codigoExisteEnNomenclador(codigo)) return null;
     const cantidad = Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
-    const descripcion = limpiarDescripcionDetalle(item.descripcion || "") || descripcionCodigoInforme(codigo);
-    if (!codigo) return null;
+    const descripcion = obtenerReferenciaNomenclador(codigo, "") || limpiarDescripcionDetalle(item.descripcion || "") || descripcionCodigoInforme(codigo);
+    if (!descripcion) return null;
     return { codigo, cantidad, descripcion };
   }
 
@@ -6401,7 +6442,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       const texto = reconstruirLineaDetalle(item.cantidad, item.codigo, descripcion) || `(${formatearCantidad(item.cantidad)}) ${item.codigo} ${descripcion}`;
       return { texto, origen: item.origen, readonly: true };
     });
-    agregado.detalles = agregado.detallesReadonly.map((item) => `${item.texto} > ${item.origen}`);
+    agregado.detalles = agregado.detallesReadonly.map((item) => {
+      const origen = String(item.origen || "informe").trim();
+      const origenVisual = /460\/22/i.test(origen) ? "del 460/22" : origen;
+      return `${item.texto} > ${origenVisual}`;
+    });
   }
 
   function construirObservacionDecto460Extendida(agregado) {
@@ -6496,9 +6541,10 @@ ${bold(`Moviles ${organismo}:`)}`)
           if (destino) agregado.destinos460.add(destino);
         }
 
-        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d || ""), origen));
-        if (Array.isArray(pc.detalles_readonly)) {
+        if (Array.isArray(pc.detalles_readonly) && pc.detalles_readonly.length) {
           pc.detalles_readonly.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d?.texto || ""), d?.origen || origen));
+        } else if (Array.isArray(row?.detalles)) {
+          row.detalles.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d || ""), origen));
         }
         if (Array.isArray(pc.graduaciones_sancionables)) agregado.graduacionesSancionables.push(...pc.graduaciones_sancionables);
         if (Array.isArray(pc.graduaciones_no_sancionables)) agregado.graduacionesNoSancionables.push(...pc.graduaciones_no_sancionables);
@@ -6553,7 +6599,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function limpiarMarcaOrigenVisualDetalle(texto) {
     return String(texto || "")
-      .replace(/\s*>\s*(?:460\/22|4060\/22|alcoholemia|informe)\s*$/i, "")
+      .replace(/\s*>\s*(?:del\s+)?(?:460\/22|4060\/22|alcoholemia|informe)\s*$/i, "")
       .trim();
   }
 
