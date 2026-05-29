@@ -4917,8 +4917,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const campoProhibicion = leerResultadoCampo("Prohibicion");
     const campoCesion = leerResultadoCampo("Cesion");
 
-    const vehiculos = campoVehiculos.valor;
-    const personas = campoPersonas.valor;
+    const vehiculos = campoVehiculos.valor + valorAgregadoResultado(agregadoInformes, ["Vehículos Fiscalizados", "Vehiculos Fiscalizados"]);
+    const personas = campoPersonas.valor + valorAgregadoResultado(agregadoInformes, ["Personas Identificadas", "Personas identificadas"]);
     const testalom = campoTestAlom.valor;
     const actasManual = campoActas.valor;
     const actas = campoActas.valor + valorAgregadoResultado(agregadoInformes, ["Actas Labradas", "Actas labradas"]);
@@ -5909,15 +5909,74 @@ ${bold(`Moviles ${organismo}:`)}`)
 
 
   // ===== INFORME INTERMEDIO: DECTO 460/22 =====
+  function esFranjaPatrullajeInformeDecto460(franja) {
+    const t = normalizarBasicoSinAcentos([
+      franja?.titulo,
+      franja?.__tipoPublicado,
+      obtenerTipoCortoFranja(franja),
+    ].filter(Boolean).join(" "));
+    return /\bpatrullaje\b|\bpatrullajes\b|\bpatrulla\b/.test(t);
+  }
+
+  function ordenarCandidatosInformeDecto460(candidatos = []) {
+    return (Array.isArray(candidatos) ? candidatos : []).slice().sort((a, b) => {
+      const ap = esFranjaPatrullajeInformeDecto460(a) ? 0 : 1;
+      const bp = esFranjaPatrullajeInformeDecto460(b) ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      const at = Number.isFinite(a?.__inicioTs) ? a.__inicioTs : Number.MAX_SAFE_INTEGER;
+      const bt = Number.isFinite(b?.__inicioTs) ? b.__inicioTs : Number.MAX_SAFE_INTEGER;
+      return at - bt;
+    });
+  }
+
+  async function seleccionarOperativoDecto460PorDefecto() {
+    if (!selHorario || !Array.isArray(operativosCache) || !operativosCache.length) return false;
+
+    if (franjaSeleccionada) {
+      try {
+        const inicioActual = await leerInicioDesdeSupabase(franjaSeleccionada);
+        if (inicioActual) return true;
+      } catch {}
+    }
+
+    const candidatos = ordenarCandidatosInformeDecto460(operativosCache);
+    for (const candidato of candidatos) {
+      try {
+        const inicio = await leerInicioDesdeSupabase(candidato);
+        if (!inicio) continue;
+        selHorario.value = candidato.__key || "";
+        franjaSeleccionada = candidato;
+        ordenSeleccionada = null;
+        completarDestinoDecto460SiVacio();
+        return true;
+      } catch {}
+    }
+
+    // Respaldo visual: si no pudo confirmar INICIO desde Supabase todavía,
+    // deja preseleccionado el primer operativo priorizando PATRULLAJE para que el usuario pueda cambiarlo.
+    if (!franjaSeleccionada && candidatos.length) {
+      const candidato = candidatos[0];
+      selHorario.value = candidato.__key || "";
+      franjaSeleccionada = candidato;
+      ordenSeleccionada = null;
+      completarDestinoDecto460SiVacio();
+      return true;
+    }
+
+    return false;
+  }
+
   async function obtenerInicioParaInformeDecto460() {
+    if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
     return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeDecto460() {
     if (!informeDecto460Contexto || !esInformeDecto460Activo()) return;
+    if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) {
-      informeDecto460Contexto.textContent = "Seleccione un operativo.";
+      informeDecto460Contexto.textContent = "No hay operativos iniciados para vincular el informe.";
       return;
     }
     const inicio = await obtenerInicioParaInformeDecto460();
@@ -6039,6 +6098,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const detalles = codigos.map(detalleLineaInforme);
     if (inf460Inventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
     const resultados = {
+      "Vehículos Fiscalizados": 1,
+      "Personas Identificadas": 1,
       "Actas Labradas": 1,
       "Decreto 460/22": 1,
     };
@@ -6083,6 +6144,7 @@ ${bold(`Moviles ${organismo}:`)}`)
           acta_inventario: !!inf460Inventario?.checked,
         },
         detalle_origen_visual: "460/22",
+        detalles_readonly: detalles.map((texto) => ({ texto, origen: "460/22", readonly: true })),
       },
       metadata: {
         tipo_evento: "DECTO_460_22",
@@ -6185,24 +6247,49 @@ ${bold(`Moviles ${organismo}:`)}`)
     return !!(agregado && (Object.values(agregado.resultados || {}).some((n) => Number(n) > 0) || Object.values(agregado.medidas || {}).some((n) => Number(n) > 0) || (agregado.detalles || []).length));
   }
 
+  function obtenerKeysInformesIntermediosFranja(franja) {
+    const keys = [];
+    const add = (value) => {
+      const key = limpiarTextoSimple(value || "");
+      if (key && !keys.includes(key)) keys.push(key);
+    };
+    const lista = [franja];
+    if (Array.isArray(franja?.__franjasOrigenTemporal)) lista.push(...franja.__franjasOrigenTemporal);
+    lista.filter(Boolean).forEach((item) => {
+      add(item.__operativoKey);
+      add(construirOperativoKeyEstable(item));
+    });
+    return keys;
+  }
+
   async function cargarAgregadoInformesIntermediosWsp() {
     if (!franjaSeleccionada) return null;
-    const key = limpiarTextoSimple(franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada));
-    if (!key) return null;
+    const keys = obtenerKeysInformesIntermediosFranja(franjaSeleccionada);
+    if (!keys.length) return null;
     try {
-      const params = new URLSearchParams({
-        select: "id,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at",
-        operativo_key: `eq.${key}`,
-        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
-        order: "created_at.asc",
-      });
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-      if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`);
-      const rows = await r.json();
+      const rows = [];
+      const seen = new Set();
+      for (const key of keys) {
+        const params = new URLSearchParams({
+          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at",
+          operativo_key: `eq.${key}`,
+          tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
+          order: "created_at.asc",
+        });
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
+          headers: headersSupabase({ Accept: "application/json" }),
+        });
+        if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`);
+        const data = await r.json();
+        (Array.isArray(data) ? data : []).forEach((row) => {
+          const id = String(row?.id || "");
+          if (id && seen.has(id)) return;
+          if (id) seen.add(id);
+          rows.push(row);
+        });
+      }
       const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [] };
-      (Array.isArray(rows) ? rows : []).forEach((row) => {
+      rows.forEach((row) => {
         const resultados = row?.resultados && typeof row.resultados === "object" ? row.resultados : {};
         Object.entries(resultados).forEach(([k,v]) => { agregado.resultados[k] = Number(agregado.resultados[k] || 0) + Number(v || 0); });
         const medidas = row?.medidas_cautelares && typeof row.medidas_cautelares === "object" ? row.medidas_cautelares : {};
