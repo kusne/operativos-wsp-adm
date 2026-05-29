@@ -4763,6 +4763,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     let s = String(linea || "").replace(/\r/g, "").trim();
     if (!s) return null;
 
+    // Las referencias visuales de origen de informes intermedios
+    // (> 460/22, > alcoholemia) no deben imprimirse ni guardarse
+    // como parte real del detalle.
+    s = limpiarMarcaOrigenVisualDetalle(s);
     s = s.replace(/\s+/g, " ").trim();
 
     const decreto460 = normalizarDetalleDecreto460(s);
@@ -5914,6 +5918,31 @@ ${bold(`Moviles ${organismo}:`)}`)
 
 
   // ===== INFORME INTERMEDIO: DECTO 460/22 =====
+  function normalizarClaveCorralonInforme(value) {
+    const raw = normalizarMayusInforme(value || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^A-Z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!raw) return "";
+    if (/RINCON|SAN JOSE/.test(raw)) return "RINCON";
+    if (/SANTA FE|SANTAFE|CIUDAD/.test(raw)) return "SANTA FE";
+    if (/RECREO/.test(raw)) return "RECREO";
+    if (/SAUCE/.test(raw)) return "SAUCE VIEJO";
+    return raw;
+  }
+
+  function textoCorralonInforme(value) {
+    const key = normalizarClaveCorralonInforme(value);
+    const map = {
+      "RINCON": "San Jose del Rincon",
+      "SANTA FE": "Ciudad de Santa Fe",
+      "RECREO": "Ciudad de Recreo",
+      "SAUCE VIEJO": "Localidad de Sauce Viejo",
+    };
+    return map[key] || normalizarMayusInforme(value || "");
+  }
+
   function esFranjaPatrullajeInformeDecto460(franja) {
     const t = normalizarBasicoSinAcentos([
       franja?.titulo,
@@ -6071,9 +6100,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
     const nroActa = normalizarNumeroActaInforme(inf460Acta?.value);
     const corralon = normalizarMayusInforme(inf460Corralon?.value);
+    const corralonTexto = textoCorralonInforme(corralon);
     const codigosTxt = codigos.join("/");
     const inventarioFrase = inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón/destino ${corralon}.${inventarioFrase}`;
+    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
 
     return compactarSaltos([
       bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
@@ -6100,8 +6130,12 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora }) {
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
+    // Los inventarios NO van como detalle. Se cuentan para armar la observación
+    // del 460/22 junto con las remisiones/corralón.
     const detalles = codigos.map(detalleLineaInforme);
-    if (inf460Inventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
+    const corralonClave = normalizarClaveCorralonInforme(inf460Corralon?.value);
+    const corralonTexto = textoCorralonInforme(inf460Corralon?.value);
+    const tieneInventario = !!inf460Inventario?.checked;
     const resultados = {
       "Vehículos Fiscalizados": 1,
       "Personas Identificadas": 1,
@@ -6145,9 +6179,15 @@ ${bold(`Moviles ${organismo}:`)}`)
           dominio: normalizarDominioInforme(inf460Dominio?.value),
           nro_acta: normalizarNumeroActaInforme(inf460Acta?.value),
           codigos,
-          corralon: normalizarMayusInforme(inf460Corralon?.value),
-          acta_inventario: !!inf460Inventario?.checked,
+          corralon: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
+          corralon_texto: corralonTexto,
+          acta_inventario: tieneInventario,
+          inventarios_460: tieneInventario ? 1 : 0,
         },
+        remisiones_460: 1,
+        inventarios_460: tieneInventario ? 1 : 0,
+        corralon_460: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
+        corralon_460_texto: corralonTexto,
         detalle_origen_visual: "460/22",
         detalles_readonly: detalles.map((texto) => ({ texto, origen: "460/22", readonly: true })),
       },
@@ -6290,6 +6330,93 @@ ${bold(`Moviles ${organismo}:`)}`)
     return puntos >= 70;
   }
 
+  function fingerprintInformeIntermedioWsp(row) {
+    const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
+    const datos = pc.datos_formulario && typeof pc.datos_formulario === "object" ? pc.datos_formulario : {};
+    const tipo = String(row?.tipo_evento || pc.tipo_evento || pc.tipo_informe || "").toUpperCase();
+    const acta = normalizarNumeroActaInforme(datos.nro_acta || datos.acta || "");
+    const dominio = normalizarDominioInforme(datos.dominio || "");
+    const codigos = Array.isArray(datos.codigos) ? datos.codigos.join("/") : String(datos.codigos || "");
+    if (acta) return `${tipo}|ACTA:${acta}`;
+    if (dominio || codigos) return `${tipo}|DOM:${dominio}|COD:${codigos}`;
+    return `ID:${row?.id || ""}`;
+  }
+
+  function filtrarDuplicadosInformesIntermedios(rows) {
+    const map = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const fp = fingerprintInformeIntermedioWsp(row);
+      if (!fp || fp === "ID:") return;
+      const prev = map.get(fp);
+      // Si el mismo informe fue enviado más de una vez en pruebas, se conserva el último.
+      if (!prev || String(row?.created_at || "") > String(prev?.created_at || "")) map.set(fp, row);
+    });
+    const used = new Set(Array.from(map.values()).map((row) => String(row?.id || "")));
+    const out = Array.from(map.values());
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const id = String(row?.id || "");
+      const fp = fingerprintInformeIntermedioWsp(row);
+      if ((fp && fp !== "ID:") || (id && used.has(id))) return;
+      out.push(row);
+      if (id) used.add(id);
+    });
+    return out.sort((a, b) => String(a?.created_at || "").localeCompare(String(b?.created_at || "")));
+  }
+
+  function parseDetalleParaAgruparOrigen(texto) {
+    const limpio = limpiarMarcaOrigenVisualDetalle(texto);
+    const item = normalizarLineaDetalle(limpio);
+    if (!item || item.tipo !== "detalle") return null;
+    const codigo = String(item.codigo || "").replace(/\D+/g, "");
+    const cantidad = Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
+    const descripcion = limpiarDescripcionDetalle(item.descripcion || "") || descripcionCodigoInforme(codigo);
+    if (!codigo) return null;
+    return { codigo, cantidad, descripcion };
+  }
+
+  function esDetalleInventarioTexto(texto) {
+    const t = normalizarBasicoSinAcentos(texto || "");
+    return /actas?\s+de\s+inventari|inventari/.test(t);
+  }
+
+  function agregarDetalleReadonlyAgrupado(agregado, texto, origen) {
+    if (!texto || esDetalleInventarioTexto(texto)) return;
+    const parsed = parseDetalleParaAgruparOrigen(texto);
+    if (!parsed) return;
+    const org = String(origen || "informe").trim();
+    const key = `${parsed.codigo}|${org}`;
+    if (!agregado.detallesMap) agregado.detallesMap = new Map();
+    if (!agregado.detallesMap.has(key)) {
+      agregado.detallesMap.set(key, { ...parsed, origen: org, cantidad: 0 });
+    }
+    const item = agregado.detallesMap.get(key);
+    item.cantidad += parsed.cantidad;
+    if (!item.descripcion && parsed.descripcion) item.descripcion = parsed.descripcion;
+  }
+
+  function finalizarDetallesReadonlyAgrupados(agregado) {
+    const items = Array.from(agregado?.detallesMap?.values?.() || []);
+    agregado.detallesReadonly = items.map((item) => {
+      const descripcion = obtenerReferenciaNomenclador(item.codigo, item.descripcion) || item.descripcion || "INFRACCIÓN";
+      const texto = reconstruirLineaDetalle(item.cantidad, item.codigo, descripcion) || `(${formatearCantidad(item.cantidad)}) ${item.codigo} ${descripcion}`;
+      return { texto, origen: item.origen, readonly: true };
+    });
+    agregado.detalles = agregado.detallesReadonly.map((item) => `${item.texto} > ${item.origen}`);
+  }
+
+  function construirObservacionDecto460Extendida(agregado) {
+    const proc = Math.max(0, Number(agregado?.procedimientos460 || valorAgregadoResultado(agregado, ["Decreto 460/22", "Dto. 460/22"]) || 0));
+    if (proc <= 0) return "";
+    const rem = Math.max(0, Number(agregado?.remisiones460 || valorAgregadoMedida(agregado, ["Remisión", "Vehículos remitidos"]) || 0));
+    const inv = Math.max(0, Number(agregado?.inventarios460 || 0));
+    const destinos = Array.from(new Set(Array.from(agregado?.destinos460 || []).map(textoCorralonInforme).filter(Boolean)));
+    const destinoTxt = destinos.length === 1 ? ` al corralon de ${destinos[0]}` : (destinos.length > 1 ? ` a los corralones de ${destinos.join(" / ")}` : "");
+    const partes = [`Se Realizaron (${formatearCantidad(proc)}) Proc. Policiales por 460/22`];
+    if (rem > 0) partes.push(`con (${formatearCantidad(rem)}) Remisiones${destinoTxt}`);
+    if (inv > 0) partes.push(`${rem > 0 ? "y" : "con"} (${formatearCantidad(inv)}) inventarios`);
+    return `${partes.join(" ")}.`;
+  }
+
   async function cargarAgregadoInformesIntermediosWsp() {
     if (!franjaSeleccionada) return null;
     const keys = obtenerKeysInformesIntermediosFranja(franjaSeleccionada);
@@ -6348,32 +6475,36 @@ ${bold(`Moviles ${organismo}:`)}`)
         console.warn("[WSP] No se pudo leer fallback de informes intermedios:", rf.status, await rf.text().catch(() => ""));
       }
 
-      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [], detallesReadonly: [] };
-      rows.forEach((row) => {
+      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [], detallesReadonly: [], detallesMap: new Map(), procedimientos460: 0, remisiones460: 0, inventarios460: 0, destinos460: new Set() };
+      filtrarDuplicadosInformesIntermedios(rows).forEach((row) => {
         const resultados = row?.resultados && typeof row.resultados === "object" ? row.resultados : {};
         Object.entries(resultados).forEach(([k,v]) => { agregado.resultados[k] = Number(agregado.resultados[k] || 0) + Number(v || 0); });
         const medidas = row?.medidas_cautelares && typeof row.medidas_cautelares === "object" ? row.medidas_cautelares : {};
         Object.entries(medidas).forEach(([k,v]) => { agregado.medidas[k] = Number(agregado.medidas[k] || 0) + Number(v || 0); });
         const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
         const origen = pc.detalle_origen_visual || (row.tipo_evento === "DECTO_460_22" ? "460/22" : "alcoholemia");
-        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => {
-          if (!d) return;
-          const texto = String(d);
-          agregado.detalles.push(texto);
-          agregado.detallesReadonly.push({ texto, origen, readonly: true });
-        });
+
+        if (row.tipo_evento === "DECTO_460_22") {
+          const proc = Number(resultados["Decreto 460/22"] || resultados["Dto. 460/22"] || 1);
+          const rem = Number(medidas["Remisión"] || medidas["Vehículos remitidos"] || 1);
+          const datos = pc.datos_formulario && typeof pc.datos_formulario === "object" ? pc.datos_formulario : {};
+          const inv = Number(pc.inventarios_460 || datos.inventarios_460 || (datos.acta_inventario ? 1 : 0) || 0);
+          agregado.procedimientos460 += Number.isFinite(proc) && proc > 0 ? proc : 1;
+          agregado.remisiones460 += Number.isFinite(rem) && rem > 0 ? rem : 1;
+          agregado.inventarios460 += Number.isFinite(inv) && inv > 0 ? inv : 0;
+          const destino = pc.corralon_460 || pc.corralon_460_texto || datos.corralon || datos.corralon_texto || "";
+          if (destino) agregado.destinos460.add(destino);
+        }
+
+        if (Array.isArray(row?.detalles)) row.detalles.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d || ""), origen));
         if (Array.isArray(pc.detalles_readonly)) {
-          pc.detalles_readonly.forEach((d) => {
-            if (!d?.texto) return;
-            const texto = String(d.texto);
-            if (!agregado.detalles.includes(texto)) agregado.detalles.push(texto);
-            agregado.detallesReadonly.push({ texto, origen: d.origen || origen, readonly: true });
-          });
+          pc.detalles_readonly.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d?.texto || ""), d?.origen || origen));
         }
         if (Array.isArray(pc.graduaciones_sancionables)) agregado.graduacionesSancionables.push(...pc.graduaciones_sancionables);
         if (Array.isArray(pc.graduaciones_no_sancionables)) agregado.graduacionesNoSancionables.push(...pc.graduaciones_no_sancionables);
         if (row?.observaciones) agregado.observaciones.push(String(row.observaciones));
       });
+      finalizarDetallesReadonlyAgrupados(agregado);
       return agregadoInformesTieneDatos(agregado) ? agregado : null;
     } catch (e) {
       console.warn("[WSP] No se pudieron leer informes intermedios para finalizado.", e);
@@ -6437,11 +6568,15 @@ ${bold(`Moviles ${organismo}:`)}`)
       .filter((x) => x && !prevSet.has(x));
 
     const agregadas = [];
+    const baseKeys = new Set(base.map((x) => limpiarMarcaOrigenVisualDetalle(x)));
+    const agregadasKeys = new Set();
     (Array.isArray(lineasNuevas) ? lineasNuevas : []).forEach((linea) => {
-      const clean = limpiarMarcaOrigenVisualDetalle(linea);
+      const visual = String(linea || "").trim();
+      const clean = limpiarMarcaOrigenVisualDetalle(visual);
       if (!clean) return;
-      if (base.includes(clean) || agregadas.includes(clean)) return;
-      agregadas.push(clean);
+      if (baseKeys.has(clean) || agregadasKeys.has(clean)) return;
+      agregadas.push(visual);
+      agregadasKeys.add(clean);
     });
 
     el.value = [...base, ...agregadas].join("\n");
@@ -6488,12 +6623,12 @@ ${bold(`Moviles ${organismo}:`)}`)
     sumarCampoFinalizaDesdeInforme("Cesion", valorAgregadoMedida(agregado, ["Cesión de Conducción", "Cesión de la conducción"]));
     aplicarGraduacionesAutomaticasFinaliza(agregado);
 
-    const detalles = (agregado?.detalles || []).map((d) => limpiarMarcaOrigenVisualDetalle(d)).filter(Boolean);
+    const detalles = (agregado?.detalles || []).filter(Boolean);
     aplicarLineasAutomaticasTextarea("detalles", detalles, "autoInformeIntermedioDetalles");
 
     const observaciones = [];
-    const dto460 = valorAgregadoResultado(agregado, ["Decreto 460/22", "Dto. 460/22"]);
-    if (dto460 > 0) observaciones.push(construirObservacionDecreto460(dto460));
+    const obs460 = construirObservacionDecto460Extendida(agregado);
+    if (obs460) observaciones.push(obs460);
     (Array.isArray(agregado?.observaciones) ? agregado.observaciones : []).forEach((obs) => {
       const clean = limpiarTextoSimple(obs);
       if (clean && !observaciones.includes(clean)) observaciones.push(clean);
