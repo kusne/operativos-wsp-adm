@@ -50,6 +50,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const infAlcoDependenciaRemite = document.getElementById("infAlcoDependenciaRemite");
   const infAlcoCorralon = document.getElementById("infAlcoCorralon");
   const infAlcoInventario = document.getElementById("infAlcoInventario");
+  const bloqueAlcoRemisionDestino = document.getElementById("bloqueAlcoRemisionDestino");
   const infAlcoObservacionExtra = document.getElementById("infAlcoObservacionExtra");
   const infAlcoResultadoAuto = document.getElementById("infAlcoResultadoAuto");
   const infAlcoFotos = [1,2,3,4].map((n) => document.getElementById(`infAlcoFoto${n}`)).filter(Boolean);
@@ -114,6 +115,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let controlMovilesUltimaFirmaRender = "";
 
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA POSITIVA";
+  const INFORME_ALCOHOLEMIA_460_TIPO = "INFORME ALCOHOLEMIA Y 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
@@ -5384,7 +5386,11 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== INFORMES INTERMEDIOS: ALCOHOLEMIA POSITIVA =====
   function esInformeAlcoholemiaActivo() {
-    return selTipo?.value === INFORME_ALCOHOLEMIA_TIPO;
+    return selTipo?.value === INFORME_ALCOHOLEMIA_TIPO || selTipo?.value === INFORME_ALCOHOLEMIA_460_TIPO;
+  }
+
+  function esInformeAlcoholemia460Seleccionado() {
+    return selTipo?.value === INFORME_ALCOHOLEMIA_460_TIPO;
   }
 
   function normalizarMayusInforme(value) {
@@ -5439,9 +5445,39 @@ ${bold(`Moviles ${organismo}:`)}`)
     return { grupo, codigo: "2016", sancionable: n > 0.50, noSancionable: n > 0 && n <= 0.50 };
   }
 
+  function inferirDestinoRemisionAlcoholemia() {
+    const fuente = normalizarBasicoSinAcentos([
+      franjaSeleccionada?.lugar,
+      franjaSeleccionada?.titulo,
+      franjaSeleccionada?.tipo,
+      franjaSeleccionada?.__tipoPublicado,
+      obtenerTipoCortoFranja(franjaSeleccionada),
+    ].filter(Boolean).join(" "));
+    if (/rn\s*(?:n|nro|num|numero|n°|nº)?\s*168|ruta\s*nacional\s*(?:n|nro|num|numero|n°|nº)?\s*168|rp\s*0*1\b|ruta\s*provincial\s*(?:n|nro|num|numero|n°|nº)?\s*0*1\b|km\s*0+\s*(?:a|al|hasta)\s*km\s*18/.test(fuente)) return "RINCON";
+    if (/rp\s*0*5\b|ruta\s*provincial\s*(?:n|nro|num|numero|n°|nº)?\s*0*5\b|rp\s*0*2\b|ruta\s*provincial\s*(?:n|nro|num|numero|n°|nº)?\s*0*2\b/.test(fuente)) return "RECREO";
+    return "";
+  }
+
+  function completarDestinoRemisionSiVacio() {
+    if (!infAlcoCorralon) return;
+    if (normalizarMayusInforme(infAlcoCorralon.value)) return;
+    const destino = inferirDestinoRemisionAlcoholemia();
+    if (destino) infAlcoCorralon.value = destino;
+  }
+
   function actualizarReglasInformeAlcoholemia() {
+    const forzar460 = esInformeAlcoholemia460Seleccionado();
+
+    if (forzar460 && infAlco460) infAlco460.checked = true;
+
+    if (infAlco460?.checked && infAlcoTipoVehiculo && infAlcoTipoVehiculo.value !== "moto") {
+      infAlcoTipoVehiculo.value = "moto";
+    }
+
     if (wrapInfAlcoTipoOtro && infAlcoTipoVehiculo) {
-      wrapInfAlcoTipoOtro.classList.toggle("hidden", infAlcoTipoVehiculo.value !== "otros");
+      const esOtro = infAlcoTipoVehiculo.value === "otros";
+      wrapInfAlcoTipoOtro.classList.toggle("hidden", !esOtro);
+      if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.toggle("alco-tipo-otros", esOtro);
     }
 
     if (infAlcoActa) infAlcoActa.value = normalizarNumeroActaInforme(infAlcoActa.value);
@@ -5462,6 +5498,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       infAlcoMedRemision.disabled = false;
     }
 
+    const mostrarDestino = !!(infAlco460?.checked || infAlcoMedRemision?.checked);
+    if (bloqueAlcoRemisionDestino) bloqueAlcoRemisionDestino.classList.toggle("hidden", !mostrarDestino);
+    if (mostrarDestino) completarDestinoRemisionSiVacio();
+
     const tipo = labelTipoVehiculoInforme();
     const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value || "");
     const calc = calcularAlcoholemiaInforme(tipo, grad);
@@ -5469,7 +5509,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!calc) {
         infAlcoResultadoAuto.textContent = "Complete tipo de vehículo y graduación mayor a cero.";
       } else {
-        infAlcoResultadoAuto.textContent = `${calc.sancionable ? "POSITIVA SANCIONABLE" : "POSITIVA NO SANCIONABLE"} - CÓDIGO ${calc.codigo} - ${grad} G/L`;
+        const tag460 = infAlco460?.checked ? "  >460/22" : "";
+        infAlcoResultadoAuto.textContent = `${calc.sancionable ? "POSITIVA SANCIONABLE" : "POSITIVA NO SANCIONABLE"} - CÓDIGO ${calc.codigo}${tag460} - ${grad} G/L`;
       }
     }
   }
@@ -5525,7 +5566,14 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divDetalles) divDetalles.classList.add("hidden");
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
-    if (activa) refrescarContextoInformeAlcoholemia();
+    if (activa) {
+      if (infAlco460) infAlco460.checked = esInformeAlcoholemia460Seleccionado();
+      if (infAlcoTipoVehiculo && infAlco460?.checked) infAlcoTipoVehiculo.value = "moto";
+      const titulo = bloqueInformeAlcoholemia?.querySelector(".informe-alcohol-title");
+      if (titulo) titulo.textContent = infAlco460?.checked ? "INFORME - ALCOHOLEMIA Y 460/22" : "INFORME - ALCOHOLEMIA";
+      actualizarReglasInformeAlcoholemia();
+      refrescarContextoInformeAlcoholemia();
+    }
   }
 
   function codigosInformeAlcoholemia(codigoPrincipal) {
@@ -5580,7 +5628,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!/^\d+(?:\.\d+)?$/.test(grad) || !calc) return marcarErrorCampo(infAlcoGraduacion, "Graduación inválida. Use 0.51 o 0,51 y debe ser mayor a cero.");
     if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Debe completar N° de acta. Solo números.");
     if (infAlco460?.checked || infAlcoMedRemision?.checked) {
-      if (!normalizarMayusInforme(infAlcoDependenciaRemite?.value)) return marcarErrorCampo(infAlcoDependenciaRemite, "Debe completar dependencia o personal que remite.");
       if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón/destino.");
     }
     return true;
@@ -5589,16 +5636,17 @@ ${bold(`Moviles ${organismo}:`)}`)
   function construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
     const detalles = codigos.map(detalleLineaInforme);
-    if (infAlco460?.checked) detalles.push("(01) 460/22 Decreto 460/22");
     if (infAlcoInventario?.checked) detalles.push(reconstruirLineaDetalle(1, "", "Actas de Inventarios") || "(01) Actas de Inventarios");
 
+    const esAlco460 = !!infAlco460?.checked;
+    const actasInforme = (calc.sancionable || esAlco460) ? 1 : 0;
     const resultados = {
       "Test de Alcoholímetro": 1,
-      "Actas Labradas": 1,
+      "Actas Labradas": actasInforme,
       "Positiva Sancionable": calc.sancionable ? 1 : 0,
       "Positiva no Sancionable": calc.noSancionable ? 1 : 0,
     };
-    if (infAlco460?.checked) resultados["Decreto 460/22"] = 1;
+    if (esAlco460) resultados["Decreto 460/22"] = 1;
 
     const medidasPayload = {
       "Prohibición de Circulación": medidas.prohibicion ? 1 : 0,
@@ -5629,7 +5677,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       resultados,
       medidas_cautelares: medidasPayload,
       detalles,
-      observaciones: normalizarMayusInforme(infAlcoObservacionExtra?.value || ""),
+      observaciones: "",
       texto_generado: textoFinal,
       payload_completo: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
@@ -5665,7 +5713,9 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const motivo = infAlco460?.checked
-      ? "ALCOHOLEMIA POSITIVA CON REMISIÓN POR DECRETO 460/22"
+      ? (calc.sancionable
+        ? "ALCOHOLEMIA POSITIVA SANCIONABLE CON REMISIÓN POR DECTO 460/22"
+        : "REMISIÓN POR DECTO 460/22 Y ALCOHOLEMIA POSITIVA NO SANCIONABLE")
       : (calc.sancionable ? "ALCOHOLEMIA POSITIVA SANCIONABLE" : "ALCOHOLEMIA POSITIVA NO SANCIONABLE");
 
     const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
@@ -5684,14 +5734,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     const medidasTxt = textoMedidasInforme(medidas);
     const medidaFrase = medidasTxt.length ? ` Como medida cautelar se realiza ${medidasTxt.join(", ")}.` : "";
     const remisionFrase = (infAlco460?.checked || medidas.remision)
-      ? ` Remitiendo el vehículo ${normalizarMayusInforme(infAlcoDependenciaRemite?.value)} al ${normalizarMayusInforme(infAlcoCorralon?.value)}.`
+      ? ` Remitiendo el vehículo al destino/corralón ${normalizarMayusInforme(infAlcoCorralon?.value)}.`
       : "";
     const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
-    const obsExtra = normalizarMayusInforme(infAlcoObservacionExtra?.value);
-
     const obs = [
-      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por el código ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}` ,
-      obsExtra,
+      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por el código ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
