@@ -5631,6 +5631,52 @@ ${bold(`Moviles ${organismo}:`)}`)
     return String(value || "").replace(/\s+/g, "").replace(",", ".").trim();
   }
 
+  function normalizarLicenciaInforme(value) {
+    return normalizarMayusInforme(value || "").replace(/\s+/g, "");
+  }
+
+  function infoLicenciaInformeAlcoholemia() {
+    const valor = normalizarLicenciaInforme(infAlcoLicenciaClase?.value || "");
+    const digital = !!infAlcoLicenciaDigital?.checked;
+    const esDniSinLicencia = /^\d{7,8}$/.test(valor);
+    const esClaseLicencia = !esDniSinLicencia && /^[A-Z0-9.]{2,5}$/.test(valor);
+    return {
+      valor,
+      digital: digital && !esDniSinLicencia,
+      esDniSinLicencia,
+      esClaseLicencia,
+      retencionAutomatica: !!valor && esClaseLicencia && !digital,
+      codigoSinLicencia: esDniSinLicencia ? "9119" : "",
+    };
+  }
+
+  function parseCodigosInputInforme(value) {
+    return String(value || "")
+      .split(/[\s,;/]+/)
+      .map((v) => v.replace(/\D+/g, ""))
+      .filter(Boolean)
+      .filter((codigo, idx, arr) => arr.indexOf(codigo) === idx);
+  }
+
+  function sincronizarCodigoLicenciaAlcoholemia() {
+    if (!infAlcoOtrosCodigos) return;
+    const info = infoLicenciaInformeAlcoholemia();
+    let codigos = parseCodigosInputInforme(infAlcoOtrosCodigos.value);
+    const auto = infAlcoOtrosCodigos.dataset.codigoLicenciaAuto || "";
+
+    if (info.codigoSinLicencia) {
+      if (!codigos.includes(info.codigoSinLicencia)) {
+        codigos.push(info.codigoSinLicencia);
+        infAlcoOtrosCodigos.dataset.codigoLicenciaAuto = info.codigoSinLicencia;
+      }
+    } else if (auto) {
+      codigos = codigos.filter((codigo) => codigo !== auto);
+      delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
+    }
+
+    infAlcoOtrosCodigos.value = codigos.join("/");
+  }
+
   function graduacionNumeroInforme(value) {
     const n = Number(normalizarGraduacionInforme(value));
     return Number.isFinite(n) ? n : null;
@@ -5700,14 +5746,27 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (infAlcoActa) infAlcoActa.value = normalizarNumeroActaInforme(infAlcoActa.value);
+    if (infAlcoLicenciaClase) infAlcoLicenciaClase.value = normalizarLicenciaInforme(infAlcoLicenciaClase.value);
 
-    if (infAlcoLicenciaDigital?.checked) {
-      if (infAlcoMedRetencion) {
+    // Licencia: si se informa clase y NO está tildada Digital, se presume física y corresponde retención.
+    // Si se informa DNI de 7/8 dígitos, no posee licencia física/digital: no hay retención y se agrega 9119.
+    const infoLicencia = infoLicenciaInformeAlcoholemia();
+    if (infoLicencia.esDniSinLicencia && infAlcoLicenciaDigital) infAlcoLicenciaDigital.checked = false;
+    sincronizarCodigoLicenciaAlcoholemia();
+
+    if (infAlcoMedRetencion) {
+      if (infoLicencia.digital) {
         infAlcoMedRetencion.checked = false;
         infAlcoMedRetencion.disabled = true;
+      } else if (infoLicencia.retencionAutomatica) {
+        infAlcoMedRetencion.checked = true;
+        infAlcoMedRetencion.disabled = true;
+      } else if (infoLicencia.esDniSinLicencia) {
+        infAlcoMedRetencion.checked = false;
+        infAlcoMedRetencion.disabled = true;
+      } else {
+        infAlcoMedRetencion.disabled = false;
       }
-    } else if (infAlcoMedRetencion) {
-      infAlcoMedRetencion.disabled = false;
     }
 
     if (infAlco460?.checked && infAlcoMedRemision) {
@@ -5746,6 +5805,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function limpiarInformeAlcoholemia() {
     const campos = [infAlcoTipoVehiculo, infAlcoTipoOtro, infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoGraduacion, infAlcoActa, infAlcoLicenciaClase, infAlcoOtrosCodigos, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra];
     campos.forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
+    if (infAlcoOtrosCodigos) delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
     [infAlco460, infAlcoLicenciaDigital, infAlcoMedProhibicion, infAlcoMedCesion, infAlcoMedRemision, infAlcoMedRetencion, infAlcoInventario].forEach((el) => { if (el) { el.checked = false; el.disabled = false; } });
     infAlcoFotos.forEach((el) => { if (el) el.value = ""; });
     actualizarReglasInformeAlcoholemia();
@@ -5795,11 +5855,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function codigosInformeAlcoholemia(codigoPrincipal) {
     const codigos = [codigoPrincipal];
-    String(infAlcoOtrosCodigos?.value || "")
-      .split(/[\s,;/]+/)
-      .map((v) => v.replace(/\D+/g, ""))
-      .filter(Boolean)
+    parseCodigosInputInforme(infAlcoOtrosCodigos?.value || "")
       .forEach((codigo) => { if (!codigos.includes(codigo)) codigos.push(codigo); });
+    const codigoLicencia = infoLicenciaInformeAlcoholemia().codigoSinLicencia;
+    if (codigoLicencia && !codigos.includes(codigoLicencia)) codigos.push(codigoLicencia);
     return codigos;
   }
 
@@ -5812,11 +5871,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function medidasSeleccionadasInformeAlcoholemia() {
+    const lic = infoLicenciaInformeAlcoholemia();
     return {
       prohibicion: !!infAlcoMedProhibicion?.checked,
       cesion: !!infAlcoMedCesion?.checked,
       remision: !!infAlcoMedRemision?.checked,
-      retencion: !!infAlcoMedRetencion?.checked,
+      retencion: !!infAlcoMedRetencion?.checked || lic.retencionAutomatica,
     };
   }
 
@@ -5844,6 +5904,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     const calc = calcularAlcoholemiaInforme(tipo, grad);
     if (!/^\d+(?:\.\d+)?$/.test(grad) || !calc) return marcarErrorCampo(infAlcoGraduacion, "Graduación inválida. Use 0.51 o 0,51 y debe ser mayor a cero.");
     if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Debe completar N° de acta. Solo números.");
+    const lic = infoLicenciaInformeAlcoholemia();
+    if (lic.valor && !lic.esClaseLicencia && !lic.esDniSinLicencia) {
+      return marcarErrorCampo(infAlcoLicenciaClase, "Licencia: ingrese clase de 2 a 5 caracteres o DNI de 7/8 dígitos si no posee licencia.");
+    }
+    if (lic.digital && !lic.esClaseLicencia) {
+      return marcarErrorCampo(infAlcoLicenciaClase, "Si marca Digital debe ingresar la clase de licencia, no DNI.");
+    }
     if (infAlco460?.checked || infAlcoMedRemision?.checked) {
       if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón.");
     }
@@ -5862,6 +5929,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const esAlco460 = !!infAlco460?.checked;
     const actasInforme = (calc.sancionable || esAlco460) ? 1 : 0;
     const resultados = {
+      "Vehículos Fiscalizados": 1,
+      "Personas Identificadas": 1,
       "Test de Alcoholímetro": 1,
       "Actas Labradas": actasInforme,
       "Positiva Sancionable": calc.sancionable ? 1 : 0,
@@ -5912,8 +5981,10 @@ ${bold(`Moviles ${organismo}:`)}`)
           conductor: normalizarMayusInforme(infAlcoConductor?.value),
           graduacion: grad,
           nro_acta: normalizarNumeroActaInforme(infAlcoActa?.value),
-          licencia_clase: normalizarMayusInforme(infAlcoLicenciaClase?.value),
-          licencia_digital: !!infAlcoLicenciaDigital?.checked,
+          licencia_clase: normalizarLicenciaInforme(infAlcoLicenciaClase?.value),
+          licencia_digital: infoLicenciaInformeAlcoholemia().digital,
+          licencia_sin_poseer_dni: infoLicenciaInformeAlcoholemia().esDniSinLicencia,
+          retencion_licencia_automatica: infoLicenciaInformeAlcoholemia().retencionAutomatica,
           alcoholemia_460: !!infAlco460?.checked,
           codigos,
           medidas,
@@ -7201,7 +7272,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (event.key === "Escape") cerrarAyudaControlMoviles();
   });
 
-  [infAlcoTipoVehiculo, infAlcoGraduacion, infAlco460, infAlcoLicenciaDigital, infAlcoMedRetencion, infAlcoMedRemision].forEach((el) => {
+  [infAlcoTipoVehiculo, infAlcoGraduacion, infAlco460, infAlcoLicenciaDigital, infAlcoLicenciaClase, infAlcoMedRetencion, infAlcoMedRemision].forEach((el) => {
     if (!el) return;
     el.addEventListener("input", actualizarReglasInformeAlcoholemia);
     el.addEventListener("change", actualizarReglasInformeAlcoholemia);
