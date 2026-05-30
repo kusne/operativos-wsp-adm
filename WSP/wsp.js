@@ -5658,23 +5658,44 @@ ${bold(`Moviles ${organismo}:`)}`)
       .filter((codigo, idx, arr) => arr.indexOf(codigo) === idx);
   }
 
-  function sincronizarCodigoLicenciaAlcoholemia() {
+  function sincronizarCodigosAutomaticosAlcoholemia(calc = null) {
     if (!infAlcoOtrosCodigos) return;
+
     const info = infoLicenciaInformeAlcoholemia();
     let codigos = parseCodigosInputInforme(infAlcoOtrosCodigos.value);
-    const auto = infAlcoOtrosCodigos.dataset.codigoLicenciaAuto || "";
 
-    if (info.codigoSinLicencia) {
-      if (!codigos.includes(info.codigoSinLicencia)) {
-        codigos.push(info.codigoSinLicencia);
-        infAlcoOtrosCodigos.dataset.codigoLicenciaAuto = info.codigoSinLicencia;
-      }
-    } else if (auto) {
-      codigos = codigos.filter((codigo) => codigo !== auto);
+    const autoAlcoAnterior = infAlcoOtrosCodigos.dataset.codigoAlcoAuto || "";
+    const autoLicAnterior = infAlcoOtrosCodigos.dataset.codigoLicenciaAuto || "";
+    const codigoAlco = calc?.codigo ? String(calc.codigo).replace(/\D+/g, "") : "";
+    const codigoLicencia = info.codigoSinLicencia ? String(info.codigoSinLicencia).replace(/\D+/g, "") : "";
+
+    // Si cambia tipo de vehículo/graduación, retirar solo el código de alcoholemia
+    // que había sido agregado automáticamente por el sistema.
+    if (autoAlcoAnterior && autoAlcoAnterior !== codigoAlco) {
+      codigos = codigos.filter((codigo) => codigo !== autoAlcoAnterior);
+      delete infAlcoOtrosCodigos.dataset.codigoAlcoAuto;
+    }
+
+    // El tipo de vehículo + graduación define automáticamente el código de
+    // alcoholemia: moto=2020, profesional=2033, resto=2016.
+    if (codigoAlco) {
+      if (!codigos.includes(codigoAlco)) codigos.unshift(codigoAlco);
+      infAlcoOtrosCodigos.dataset.codigoAlcoAuto = codigoAlco;
+    }
+
+    // Si en Licencia se cargó DNI de 7/8 dígitos, significa que no posee
+    // licencia física ni digital: se agrega automáticamente 9119.
+    if (autoLicAnterior && autoLicAnterior !== codigoLicencia) {
+      codigos = codigos.filter((codigo) => codigo !== autoLicAnterior);
       delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
     }
 
-    infAlcoOtrosCodigos.value = codigos.join("/");
+    if (codigoLicencia) {
+      if (!codigos.includes(codigoLicencia)) codigos.push(codigoLicencia);
+      infAlcoOtrosCodigos.dataset.codigoLicenciaAuto = codigoLicencia;
+    }
+
+    infAlcoOtrosCodigos.value = codigos.filter((codigo, idx, arr) => arr.indexOf(codigo) === idx).join("/");
   }
 
   function graduacionNumeroInforme(value) {
@@ -5752,8 +5773,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     // Si se informa DNI de 7/8 dígitos, no posee licencia física/digital: no hay retención y se agrega 9119.
     const infoLicencia = infoLicenciaInformeAlcoholemia();
     if (infoLicencia.esDniSinLicencia && infAlcoLicenciaDigital) infAlcoLicenciaDigital.checked = false;
-    sincronizarCodigoLicenciaAlcoholemia();
-
     if (infAlcoMedRetencion) {
       if (infoLicencia.digital) {
         infAlcoMedRetencion.checked = false;
@@ -5783,6 +5802,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const tipo = labelTipoVehiculoInforme();
     const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value || "");
     const calc = calcularAlcoholemiaInforme(tipo, grad);
+    sincronizarCodigosAutomaticosAlcoholemia(calc);
     if (infAlcoResultadoAuto) {
       if (!calc) {
         infAlcoResultadoAuto.textContent = "Complete tipo de vehículo y graduación mayor a cero.";
@@ -5805,7 +5825,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   function limpiarInformeAlcoholemia() {
     const campos = [infAlcoTipoVehiculo, infAlcoTipoOtro, infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoGraduacion, infAlcoActa, infAlcoLicenciaClase, infAlcoOtrosCodigos, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra];
     campos.forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
-    if (infAlcoOtrosCodigos) delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
+    if (infAlcoOtrosCodigos) {
+      delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
+      delete infAlcoOtrosCodigos.dataset.codigoAlcoAuto;
+    }
     [infAlco460, infAlcoLicenciaDigital, infAlcoMedProhibicion, infAlcoMedCesion, infAlcoMedRemision, infAlcoMedRetencion, infAlcoInventario].forEach((el) => { if (el) { el.checked = false; el.disabled = false; } });
     infAlcoFotos.forEach((el) => { if (el) el.value = ""; });
     actualizarReglasInformeAlcoholemia();
