@@ -5843,15 +5843,95 @@ ${bold(`Moviles ${organismo}:`)}`)
     actualizarReglasInformeAlcoholemia();
   }
 
+  function esFranjaPatrullajeInformeAlcoholemia(franja) {
+    const t = normalizarBasicoSinAcentos([
+      franja?.titulo,
+      franja?.__tipoPublicado,
+      obtenerTipoCortoFranja(franja),
+    ].filter(Boolean).join(" "));
+    return /\bpatrullaje\b|\bpatrullajes\b|\bpatrulla\b/.test(t);
+  }
+
+  function ordenarCandidatosInformeAlcoholemia(candidatos = []) {
+    return (Array.isArray(candidatos) ? candidatos : []).slice().sort((a, b) => {
+      const ap = esFranjaPatrullajeInformeAlcoholemia(a) ? 0 : 1;
+      const bp = esFranjaPatrullajeInformeAlcoholemia(b) ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      const at = Number.isFinite(a?.__inicioTs) ? a.__inicioTs : Number.MAX_SAFE_INTEGER;
+      const bt = Number.isFinite(b?.__inicioTs) ? b.__inicioTs : Number.MAX_SAFE_INTEGER;
+      return at - bt;
+    });
+  }
+
+  async function seleccionarOperativoAlcoholemiaPorDefecto() {
+    if (!selHorario || !Array.isArray(operativosCache) || !operativosCache.length) return false;
+
+    if (franjaSeleccionada) {
+      try {
+        const inicioActual = await leerInicioDesdeSupabase(franjaSeleccionada);
+        if (inicioActual) return true;
+      } catch {}
+    }
+
+    const candidatos = ordenarCandidatosInformeAlcoholemia(operativosCache);
+    for (const candidato of candidatos) {
+      try {
+        const inicio = await leerInicioDesdeSupabase(candidato);
+        if (!inicio) continue;
+        selHorario.value = candidato.__key || "";
+        franjaSeleccionada = candidato;
+        ordenSeleccionada = null;
+        completarDestinoRemisionSiVacio();
+        return true;
+      } catch {}
+    }
+
+    // Respaldo local: si Supabase todavía no devolvió el inicio, pero hay un único
+    // inicio local guardado o un solo operativo en la lista, preseleccionarlo para
+    // no obligar al usuario a tocar el desplegable.
+    const inicioLocal = cargarInicioLocal();
+    if (inicioLocal) {
+      let mejor = null;
+      let mejorPuntaje = -1;
+      candidatos.forEach((candidato) => {
+        const puntaje = puntuarCoincidenciaInicio(inicioLocal, candidato);
+        if (puntaje > mejorPuntaje) {
+          mejor = candidato;
+          mejorPuntaje = puntaje;
+        }
+      });
+      if (mejor && (mejorPuntaje >= 90 || candidatos.length === 1)) {
+        selHorario.value = mejor.__key || "";
+        franjaSeleccionada = mejor;
+        ordenSeleccionada = null;
+        completarDestinoRemisionSiVacio();
+        return true;
+      }
+    }
+
+    if (!franjaSeleccionada && candidatos.length === 1) {
+      const candidato = candidatos[0];
+      selHorario.value = candidato.__key || "";
+      franjaSeleccionada = candidato;
+      ordenSeleccionada = null;
+      completarDestinoRemisionSiVacio();
+      return true;
+    }
+
+    return false;
+  }
+
   async function obtenerInicioParaInformeAlcoholemia() {
+    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
     return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeAlcoholemia() {
     if (!informeAlcoholemiaContexto || !esInformeAlcoholemiaActivo()) return;
+    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) {
-      informeAlcoholemiaContexto.textContent = "Seleccione un operativo.";
+      informeAlcoholemiaContexto.textContent = "No hay operativos iniciados para vincular el informe.";
       return;
     }
     const inicio = await obtenerInicioParaInformeAlcoholemia();
@@ -6141,6 +6221,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function enviarInformeAlcoholemia() {
     aplicarMayusculasInputsInformeAlcoholemia();
+    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     actualizarReglasInformeAlcoholemia();
     if (!validarInformeAlcoholemia()) return;
 
