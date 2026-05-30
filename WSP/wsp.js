@@ -910,7 +910,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const seleccionActual = selHorario?.value || "";
     const ok = await syncOrdenesDesdeServidor();
     if (ok) {
-      cargarOperativosDisponibles(seleccionActual);
+      if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
+        await cargarOperativosIniciadosParaInformes(seleccionActual);
+      } else {
+        cargarOperativosDisponibles(seleccionActual);
+      }
       actualizarDatosFranja();
     }
 
@@ -1113,6 +1117,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const dia = normalizarParteClave(getDiaGuardiaTexto() || "-") || "-";
 
     const keys = new Set();
+    if (franja?.__operativoKey) keys.add(limpiarTextoSimple(franja.__operativoKey));
     keys.add(construirOperativoKeyEstable(franja));
     keys.add([orden, dia, horario, lugar, tipo].join("|"));
     keys.add([orden, dia, horario, lugar, `${tipo} - ${textoRef}`].join("|"));
@@ -1453,6 +1458,119 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  async function leerIniciosGuardiaDesdeSupabase() {
+    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
+    const fechasBusqueda = getFechasBusquedaInicio();
+    const filas = [];
+
+    try {
+      for (const fechaBusqueda of fechasBusqueda) {
+        const params = new URLSearchParams({
+          select: selectCols,
+          guardia_fecha: `eq.${fechaBusqueda}`,
+          order: "id.desc",
+          limit: "300",
+        });
+
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+          headers: headersSupabase({ Accept: "application/json" }),
+        });
+
+        if (!r.ok) {
+          console.warn("[WSP] No se pudieron leer operativos iniciados:", r.status, await r.text());
+          continue;
+        }
+
+        const data = await r.json();
+        if (Array.isArray(data)) filas.push(...data.map(normalizarInicioGuardado).filter(Boolean));
+      }
+    } catch (e) {
+      console.warn("[WSP] Error leyendo operativos iniciados.", e);
+    }
+
+    const local = cargarInicioLocal();
+    if (local && local.operativo_key) filas.unshift(local);
+
+    const vistos = new Set();
+    const unicos = [];
+    filas.forEach((fila) => {
+      const key = limpiarTextoSimple(fila?.operativo_key || construirOperativoKeyEstable({
+        __ordenNum: fila?.orden_num,
+        __ordenTextoRef: fila?.texto_ref,
+        horario: fila?.horario,
+        lugar: fila?.lugar,
+        titulo: fila?.tipo_corto,
+      }));
+      if (!key || vistos.has(key)) return;
+      vistos.add(key);
+      unicos.push(fila);
+    });
+
+    return unicos;
+  }
+
+  function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
+    const data = normalizarInicioGuardado(inicio);
+    if (!data) return null;
+    const key = limpiarTextoSimple(data.operativo_key || `inicio-${idx}`);
+    return {
+      __key: `inicio-${idx}-${key}`,
+      __desdeInicioGuardado: true,
+      __operativoKey: key,
+      __ordenNum: limpiarTextoSimple(data.orden_num || ""),
+      __ordenTextoRef: limpiarTextoSimple(data.texto_ref || ""),
+      __tipoPublicado: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
+      __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
+      __inicioTs: Date.parse(`${data.guardia_fecha || getGuardiaFechaISO()}T${String(data.horario || "00:00").slice(0,5)}:00`) || Date.now(),
+      titulo: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
+      horario: limpiarTextoSimple(data.horario || ""),
+      lugar: limpiarTextoSimple(data.lugar || ""),
+      fecha: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
+      __inicioGuardadoPayload: data,
+    };
+  }
+
+  function setTituloOperativosIniciados(modoIniciados) {
+    try {
+      const label = document.querySelector(".operativos-title-label");
+      if (label) label.textContent = modoIniciados ? "OPERATIVOS INICIADOS" : "OPERATIVOS";
+    } catch {}
+  }
+
+  async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
+    if (!selHorario) return [];
+    setTituloOperativosIniciados(true);
+    selHorario.innerHTML = '<option value="">Seleccionar Operativo Iniciado</option>';
+    operativosCache = [];
+
+    const inicios = await leerIniciosGuardiaDesdeSupabase();
+    const candidatos = ordenarCandidatosInformeAlcoholemia(
+      inicios.map(construirFranjaInformeDesdeInicio).filter(Boolean)
+    );
+
+    candidatos.forEach((operativo) => {
+      operativosCache.push(operativo);
+      const option = document.createElement("option");
+      option.value = operativo.__key;
+      option.text = construirTextoOpcionHorario(operativo);
+      option.title = construirTextoOpcionHorario(operativo);
+      selHorario.appendChild(option);
+    });
+
+    if (valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
+      selHorario.value = valorSeleccionado;
+    } else if (operativosCache.length === 1) {
+      selHorario.value = operativosCache[0].__key;
+    } else if (operativosCache.length > 1) {
+      selHorario.value = ordenarCandidatosInformeAlcoholemia(operativosCache)[0].__key;
+    }
+
+    franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
+    ordenSeleccionada = null;
+    actualizarContadorOperativosWsp(operativosCache.length);
+    return operativosCache;
+  }
+
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
     return {
       ...franja,
@@ -1747,6 +1865,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
+    setTituloOperativosIniciados(false);
     const ordenes = cargarOrdenesSeguro();
 
     operativosCache = [];
@@ -4040,21 +4159,25 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (informeDecto460) {
-      cargarOperativosDisponibles(selHorario?.value || "");
-      actualizarDatosFranja();
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
       setUIInformeDecto460Activa(true);
+      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+        refrescarContextoInformeDecto460();
+      });
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
       return;
     }
 
     if (informeAlcoholemia) {
-      cargarOperativosDisponibles(selHorario?.value || "");
-      actualizarDatosFranja();
       setUIInformeDecto460Activa(false);
       setUIInformeAlcoholemiaActiva(true);
+      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+        refrescarContextoInformeAlcoholemia();
+      });
       actualizarReglasInformeAlcoholemia();
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
@@ -5864,7 +5987,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function seleccionarOperativoAlcoholemiaPorDefecto() {
-    if (!selHorario || !Array.isArray(operativosCache) || !operativosCache.length) return false;
+    if (!selHorario) return false;
+    if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
+      await cargarOperativosIniciadosParaInformes(selHorario.value || "");
+    }
+    if (!Array.isArray(operativosCache) || !operativosCache.length) return false;
 
     if (franjaSeleccionada) {
       try {
@@ -5924,7 +6051,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeAlcoholemia() {
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
-    return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeAlcoholemia() {
@@ -6301,7 +6428,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function seleccionarOperativoDecto460PorDefecto() {
-    if (!selHorario || !Array.isArray(operativosCache) || !operativosCache.length) return false;
+    if (!selHorario) return false;
+    if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
+      await cargarOperativosIniciadosParaInformes(selHorario.value || "");
+    }
+    if (!Array.isArray(operativosCache) || !operativosCache.length) return false;
 
     if (franjaSeleccionada) {
       try {
@@ -6340,7 +6471,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeDecto460() {
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
-    return await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeDecto460() {
