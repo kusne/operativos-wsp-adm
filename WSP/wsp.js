@@ -5883,7 +5883,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function grupoVehiculoAlcoholemia(value) {
     const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
     if (/\bmoto\b|motovehiculo|motovehiculo/.test(v)) return "moto";
-    if (/camion|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
+    if (/\bcamion\b|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
     return "general";
   }
 
@@ -6312,7 +6312,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       : "";
     const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
     const obs = [
-      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por el código ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
+      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
