@@ -5619,6 +5619,15 @@ ${bold(`Moviles ${organismo}:`)}`)
     return limpiarTextoSimple(value || "").toUpperCase();
   }
 
+  function normalizarMayusInformeInput(value) {
+    // Para escritura en vivo: no usar trim(), porque si el usuario escribe
+    // "QUISPE " se borra el espacio final y parece que el campo no permite
+    // separar nombre/apellido o marca/modelo. El recorte se hace en blur/envío.
+    return String(value || "")
+      .replace(/[–—]/g, "-")
+      .toUpperCase();
+  }
+
   function normalizarDominioInforme(value) {
     return normalizarMayusInforme(value).replace(/\s+/g, "");
   }
@@ -5817,7 +5826,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     document.querySelectorAll("#bloqueInformeAlcoholemia .upper-input").forEach((el) => {
       const pos = el.selectionStart;
       const end = el.selectionEnd;
-      el.value = normalizarMayusInforme(el.value);
+      el.value = normalizarMayusInformeInput(el.value);
       try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
     });
   }
@@ -7306,7 +7315,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     el.addEventListener("input", () => {
       const pos = el.selectionStart;
       const end = el.selectionEnd;
-      el.value = normalizarMayusInforme(el.value);
+      el.value = normalizarMayusInformeInput(el.value);
       try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
     });
     el.addEventListener("blur", () => { el.value = normalizarMayusInforme(el.value); });
@@ -7326,7 +7335,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     el.addEventListener("input", () => {
       const pos = el.selectionStart;
       const end = el.selectionEnd;
-      el.value = normalizarMayusInforme(el.value);
+      el.value = normalizarMayusInformeInput(el.value);
       try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
     });
     el.addEventListener("blur", () => { el.value = normalizarMayusInforme(el.value); });
