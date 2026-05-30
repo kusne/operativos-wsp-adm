@@ -174,14 +174,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }, AUTO_CIERRE_WSP_MS);
   }
 
-  function abrirWhatsappYCerrarWspLuego(texto) {
-    const url = "https://wa.me/?text=" + encodeURIComponent(texto || "");
+  function archivosCompartiblesWsp(files) {
+    return (Array.isArray(files) ? files : [])
+      .filter((file) => file && typeof File !== "undefined" && file instanceof File)
+      .filter((file) => String(file.type || "").toLowerCase().startsWith("image/"))
+      .slice(0, 4);
+  }
 
-    programarCierreVentanaWsp();
+  function abrirWhatsappTextoWsp(texto) {
+    const url = "https://wa.me/?text=" + encodeURIComponent(texto || "");
 
     try {
       const win = window.open(url, "_blank");
-      if (win) return;
+      if (win) return true;
     } catch (e) {
       console.warn("[WSP] No se pudo abrir WhatsApp en ventana nueva. Se usa navegación actual.", e);
     }
@@ -189,6 +194,38 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     // Respaldo: mantiene el comportamiento anterior si el navegador bloquea la ventana nueva.
     // En este caso el cierre automático puede no ejecutarse porque la página navega a WhatsApp.
     window.location.href = url;
+    return true;
+  }
+
+  async function compartirWhatsappConFotosSiCorresponde(texto, files = []) {
+    const fotos = archivosCompartiblesWsp(files);
+
+    if (fotos.length && navigator.share && (!navigator.canShare || navigator.canShare({ files: fotos }))) {
+      try {
+        await navigator.share({
+          title: "Informe BMZCN",
+          text: texto || "",
+          files: fotos,
+        });
+        return true;
+      } catch (e) {
+        const name = String(e?.name || "");
+        if (name === "AbortError" || name === "NotAllowedError") {
+          console.warn("[WSP] El usuario canceló o el navegador bloqueó compartir fotos.", e);
+          return false;
+        }
+        console.warn("[WSP] No se pudo compartir texto + fotos. Se enviará solo texto por WhatsApp.", e);
+      }
+    } else if (fotos.length) {
+      alert("Este navegador no permite adjuntar fotos automáticamente desde la app. Se abrirá WhatsApp solo con el texto del informe.");
+    }
+
+    return abrirWhatsappTextoWsp(texto);
+  }
+
+  function abrirWhatsappYCerrarWspLuego(texto, files = []) {
+    programarCierreVentanaWsp();
+    compartirWhatsappConFotosSiCorresponde(texto, files);
   }
 
   const detallesAutocompletadoState = new WeakMap();
@@ -6377,7 +6414,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal);
+    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
   }
 
 
@@ -6736,7 +6773,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       catch (e) { console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e); alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase."); }
     }
     resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal);
+    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
   }
 
   function valorAgregadoResultado(agregado, keys) {
