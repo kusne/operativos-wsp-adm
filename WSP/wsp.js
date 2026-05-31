@@ -4897,7 +4897,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     return raw;
   }
 
-  function consolidarDetallesVisualesTextarea(lineas) {
+  function consolidarDetallesVisualesTextarea(lineas, { preservarVacias = false } = {}) {
     const originales = Array.isArray(lineas) ? lineas.map((x) => String(x ?? "")) : [];
     const grupos = new Map();
     const orden = [];
@@ -4962,7 +4962,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       return { idx: grupo.idx, texto };
     });
 
-    const salida = [...reconstruidas, ...otras.filter((x) => !x.vacia)]
+    const salida = [
+      ...reconstruidas,
+      ...(preservarVacias ? otras : otras.filter((x) => !x.vacia)),
+    ]
       .sort((a, b) => a.idx - b.idx)
       .map((x) => x.texto);
 
@@ -5029,9 +5032,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       cursorNuevo = longitudHastaLinea(lineasNuevas, lineaParaSaltar + 1);
     }
 
-    const consolidadoVisual = consolidarDetallesVisualesTextarea(lineasNuevas);
+    const consolidadoVisual = consolidarDetallesVisualesTextarea(lineasNuevas, {
+      // Mientras el usuario escribe, no borrar la línea vacía creada para seguir cargando códigos.
+      // En blur/forzar sí se limpia para que el texto final quede prolijo.
+      preservarVacias: !forzar,
+    });
     const lineasFinales = consolidadoVisual.lineas;
-    if (consolidadoVisual.changed) {
+    if (consolidadoVisual.changed && cursorNuevo == null) {
       cursorNuevo = lineasFinales.join("\n").length;
     }
 
