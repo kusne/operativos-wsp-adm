@@ -6671,65 +6671,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     return out;
   }
 
-
-  function normalizarTipoOperativoObservacionInformeWsp(value) {
-    const raw = limpiarTextoSimple(value || "");
-    if (!raw) return "";
-
-    const norm = normalizarBasicoSinAcentos(raw)
-      .replace(/[^a-z0-9]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!norm || norm === "operativo") return "";
-
-    // El texto "Control Rango" proviene de una lectura mezclada entre tipo y referencia/orden.
-    // Para los informes se debe usar el tipo real del operativo iniciado, no esa mezcla.
-    if (/\brango\b/.test(norm)) return "";
-
-    if (/^ocv$/.test(norm)) return "OCV";
-    if (/\bocv\b/.test(norm) && /\balcoholemia\b/.test(norm)) return "OCV Y ALCOHOLEMIA";
-    if (/\bocv\b/.test(norm)) return "OCV";
-    if (/\bpatrullaje\b|\bpatrulla\b/.test(norm)) return "PATRULLAJE";
-    if (/\balcoholemia\b/.test(norm) && /\bcontrol\b/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR Y ALCOHOLEMIA";
-    if (/\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR";
-    if (/^control$/.test(norm) || /^control operativo$/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR";
-
-    return normalizarMayusInforme(raw);
-  }
-
-  function obtenerTipoOperativoRealInformeWsp(inicio = {}, franja = franjaSeleccionada) {
-    const candidatos = [
-      inicio?.tipo_operativo,
-      inicio?.tipo_corto,
-      inicio?.titulo,
-      franja?.__tipoPublicado,
-      franja?.titulo,
-      obtenerTipoCortoFranja(franja),
-    ];
-
-    for (const candidato of candidatos) {
-      const tipo = normalizarTipoOperativoObservacionInformeWsp(candidato);
-      if (tipo) return tipo;
-    }
-
-    return "OPERATIVO";
-  }
-
-  function obtenerOrdenObservacionInformeWsp(inicio = {}, franja = franjaSeleccionada) {
-    const raw = limpiarTextoSimple(obtenerNumeroOrdenDeFranja(franja) || inicio?.orden_num || "");
-    if (!raw) return "";
-
-    const txt = normalizarMayusInforme(raw);
-    const norm = normalizarBasicoSinAcentos(txt);
-
-    // No imprimir palabras sueltas como "RANGO", porque no son número de orden y ensucian la observación.
-    if (!/\d/.test(txt)) return "";
-    if (/^rango$/.test(norm)) return "";
-
-    return txt;
-  }
-
   function fotosSeleccionadasInformeAlcoholemia() {
     return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
   }
@@ -6850,6 +6791,24 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
+  function obtenerTipoOperativoRealInforme(inicio = {}) {
+    const candidatos = [
+      inicio?.tipo_corto,
+      inicio?.tipo_operativo,
+      inicio?.titulo,
+      franjaSeleccionada?.__tipoPublicado,
+      obtenerTipoCortoFranja(franjaSeleccionada),
+    ];
+
+    for (const candidato of candidatos) {
+      const limpio = normalizarMayusInforme(candidato || "");
+      if (!limpio) continue;
+      return limpio;
+    }
+
+    return "OPERATIVO";
+  }
+
   function construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const motivo = infAlco460?.checked
       ? (calc.sancionable
@@ -6860,8 +6819,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const orden = obtenerOrdenObservacionInformeWsp(inicio, franjaSeleccionada);
-    const tipoOp = obtenerTipoOperativoRealInformeWsp(inicio, franjaSeleccionada);
+    const tipoOp = obtenerTipoOperativoRealInforme(inicio);
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
@@ -6877,7 +6835,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       : "";
     const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
     const obs = [
-      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
+      `En momentos que nos encontrábamos realizando ${tipoOp} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
@@ -7176,8 +7134,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const orden = obtenerOrdenObservacionInformeWsp(inicio, franjaSeleccionada);
-    const tipoOp = obtenerTipoOperativoRealInformeWsp(inicio, franjaSeleccionada);
+    const tipoOp = obtenerTipoOperativoRealInforme(inicio);
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
@@ -7186,7 +7143,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const corralonTexto = textoCorralonInforme(corralon);
     const codigosTxt = codigos.join("/");
     const inventarioFrase = inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
+    const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
 
     return compactarSaltos([
       bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
