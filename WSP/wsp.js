@@ -1284,7 +1284,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
-      operativo_estado_id: limpiarTextoSimple(payload.operativo_estado_id || payload.estado_id || ""),
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
@@ -1496,12 +1495,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
-  function normalizarEstadoOperativoEnCurso(row) {
-    if (!row) return null;
+  function estadoOperativoEsEnCursoWsp(row) {
     const estadoTxt = limpiarTextoSimple(row?.estado || "").toUpperCase().replace(/\s+/g, "_");
+    const tieneInicioReal = !!row?.inicio_evento_id;
     const tieneFinalizado = !!row?.finalizado_evento_id || estadoTxt === "FINALIZADO" || estadoTxt === "CERRADO";
-    if (tieneFinalizado) return null;
-    if (estadoTxt && !["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return null;
+    if (tieneFinalizado) return false;
+
+    // Blindaje: no alcanza con que exista en operativos_estado. Debe estar marcado
+    // como iniciado/en curso o tener evento de INICIO real. Esto evita que el selector
+    // de INFORMES muestre operativos publicados, futuros, viejos o pruebas.
+    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return true;
+    if (tieneInicioReal && !estadoTxt) return true;
+    return false;
+  }
+
+  function normalizarEstadoOperativoEnCurso(row) {
+    if (!row || !estadoOperativoEsEnCursoWsp(row)) return null;
 
     const horaDesde = limpiarTextoSimple(row?.hora_desde || "");
     const horaHasta = limpiarTextoSimple(row?.hora_hasta || "");
@@ -1517,44 +1526,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       texto_ref: limpiarTextoSimple(meta?.texto_ref || meta?.archivo || "Operativo en curso"),
       horario,
       lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || "Operativo iniciado",
+      tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
       personal: row?.personal || meta?.personal || [],
       moviles: row?.moviles || meta?.moviles || [],
       motos: row?.motos || meta?.motos || [],
       elementos: row?.elementos || meta?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
-  }
-
-  async function leerOperativosEnCursoDesdeEstadoSupabase() {
-    const guardiaFecha = getGuardiaFechaISO();
-    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
-
-    try {
-      const params = new URLSearchParams({
-        select: selectCols,
-        guardia_fecha: `eq.${guardiaFecha}`,
-        order: "hora_desde.asc,updated_at.desc",
-        limit: "300",
-      });
-
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_estado?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-
-      if (!r.ok) {
-        console.warn("[WSP] No se pudieron leer operativos EN_CURSO desde operativos_estado:", r.status, await r.text());
-        return null;
-      }
-
-      const data = await r.json();
-      return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
-        .map(normalizarEstadoOperativoEnCurso)
-        .filter((item) => item && item.operativo_key));
-    } catch (e) {
-      console.warn("[WSP] Error leyendo operativos EN_CURSO desde operativos_estado.", e);
-      return null;
-    }
   }
 
   async function leerOperativoKeysFinalizadosGuardiaSupabase() {
@@ -1574,7 +1552,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       if (!r.ok) {
-        console.warn("[WSP] No se pudieron leer FINALIZADOS para depurar operativos iniciados:", r.status, await r.text());
+        console.warn("[WSP] No se pudieron leer FINALIZADOS para filtrar operativos iniciados:", r.status, await r.text());
         return out;
       }
 
@@ -1590,7 +1568,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         });
       });
     } catch (e) {
-      console.warn("[WSP] Error leyendo FINALIZADOS para depurar operativos iniciados.", e);
+      console.warn("[WSP] Error leyendo FINALIZADOS para filtrar operativos iniciados.", e);
     }
 
     return out;
@@ -1614,19 +1592,51 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return unicos;
   }
 
-  async function leerIniciosGuardiaDesdeSupabase() {
-    // BLINDAJE INFORMES/EVENTOS:
-    // El selector de INFORMES/EVENTOS toma SIEMPRE la fuente canónica operativos_estado
-    // y muestra únicamente operativos EN_CURSO de la guardia actual. No usa wsp_inicios
-    // para llenar el desplegable, porque esa tabla es historial de inicios y puede incluir
-    // finalizados, pruebas o registros viejos. Así no vuelve a aparecer un contador inflado.
-    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
-    if (Array.isArray(enCurso)) return enCurso;
+  async function leerOperativosEnCursoDesdeEstadoSupabase() {
+    const guardiaFecha = getGuardiaFechaISO();
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
 
-    // Solo si Supabase/operativos_estado no pudo leerse, usamos el inicio local como
-    // respaldo mínimo. No se trae la lista histórica de wsp_inicios.
-    const local = cargarInicioLocal();
-    return local && local.operativo_key ? [local] : [];
+    try {
+      const params = new URLSearchParams({
+        select: selectCols,
+        guardia_fecha: `eq.${guardiaFecha}`,
+        order: "hora_desde.asc,updated_at.desc",
+        limit: "300",
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_estado?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudieron leer operativos EN CURSO desde operativos_estado:", r.status, await r.text());
+        return null;
+      }
+
+      const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase();
+      const data = await r.json();
+      return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
+        .map(normalizarEstadoOperativoEnCurso)
+        .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
+    } catch (e) {
+      console.warn("[WSP] Error leyendo operativos EN CURSO desde operativos_estado.", e);
+      return null;
+    }
+  }
+
+  async function leerIniciosGuardiaDesdeSupabase() {
+    // Fuente canónica para INFORMES/EVENTOS: operativos_estado EN_CURSO.
+    // No se usa wsp_inicios como listado, porque es historial de inicios y puede
+    // contener pruebas, registros viejos o finalizados. Así evitamos contadores inflados.
+    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
+    const filas = Array.isArray(enCurso) ? enCurso.slice() : [];
+
+    const local = normalizarInicioGuardado(cargarInicioLocal());
+    if (local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
+      filas.unshift(local);
+    }
+
+    return deduplicarIniciosInformeWsp(filas);
   }
 
   function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
@@ -1637,7 +1647,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       __key: `inicio-${idx}-${key}`,
       __desdeInicioGuardado: true,
       __operativoKey: key,
-      __operativoEstadoId: limpiarTextoSimple(data.operativo_estado_id || ""),
       __ordenNum: limpiarTextoSimple(data.orden_num || ""),
       __ordenTextoRef: limpiarTextoSimple(data.texto_ref || ""),
       __tipoPublicado: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
@@ -1661,8 +1670,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
     if (!selHorario) return [];
     setTituloOperativosIniciados(true);
-    selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
     selHorario.disabled = true;
+    selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
     operativosCache = [];
     franjaSeleccionada = null;
     ordenSeleccionada = null;
@@ -1697,6 +1706,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
+    ordenSeleccionada = null;
     selHorario.disabled = false;
     actualizarContadorOperativosWsp(operativosCache.length);
     return operativosCache;
@@ -4266,6 +4276,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (controlMoviles) {
+      setTituloOperativosIniciados(false);
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
       setUIControlMovilesActiva(true);
@@ -4284,6 +4295,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       setMovilidadVisible(false);
       setElementosVisibles(false);
       setObservacionesVisible(false);
+      setTituloOperativosIniciados(true);
+      operativosCache = [];
+      franjaSeleccionada = null;
+      ordenSeleccionada = null;
+      if (selHorario) {
+        selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
+        selHorario.value = "";
+      }
+      actualizarContadorOperativosWsp(0);
       if (divFinaliza) divFinaliza.classList.add("hidden");
       if (divDetalles) divDetalles.classList.add("hidden");
       return;
@@ -4319,9 +4339,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setUIInformeDecto460Activa(false);
 
     if (controlSuperior) {
-      cargarOperativosDisponibles(selHorario?.value || "");
-      actualizarDatosFranja();
       setUIControlSuperiorActiva(true);
+      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+      });
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
       return;
@@ -4329,6 +4350,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     setUIControlSuperiorActiva(false);
     setUIInformeAlcoholemiaActiva(false);
+    setTituloOperativosIniciados(false);
     cargarOperativosDisponibles(selHorario?.value || "");
     actualizarDatosFranja();
     divFinaliza.classList.toggle("hidden", !fin);
@@ -5863,6 +5885,219 @@ ${bold(`Moviles ${organismo}:`)}`)
     return false;
   }
 
+  function normalizarComponenteInformeKeyWsp(value) {
+    return normalizarBasicoSinAcentos(String(value || ""))
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 120);
+  }
+
+  function clasificacionEventoInformeWsp(tipoEvento) {
+    const tipo = String(tipoEvento || "").toUpperCase();
+    if (tipo === "ALCOHOLEMIA_POSITIVA") {
+      return {
+        categoria_evento: "PREVENTIVO",
+        subtipo_evento: "ALCOHOLEMIA_POSITIVA",
+        area_interes: ["SEGURIDAD_VIAL", "POLICIAL"],
+        requiere_fiscalia: false,
+        requiere_traslado_comisaria: false,
+        requiere_word_semanal: true,
+        informe_word_destino: ["ALCOHOLEMIAS_SEMANAL"],
+        alimenta_finalizado: false,
+        alimenta_estadisticas: false,
+        contador_circular: true,
+      };
+    }
+    if (tipo === "DECTO_460_22") {
+      return {
+        categoria_evento: "PREVENTIVO",
+        subtipo_evento: "DECTO_460_22",
+        area_interes: ["SEGURIDAD_VIAL", "POLICIAL"],
+        requiere_fiscalia: false,
+        requiere_traslado_comisaria: false,
+        requiere_word_semanal: true,
+        informe_word_destino: ["PROCEDIMIENTOS_SEMANAL"],
+        alimenta_finalizado: false,
+        alimenta_estadisticas: false,
+        contador_circular: true,
+      };
+    }
+    return {
+      categoria_evento: "OPERATIVO",
+      subtipo_evento: tipo || "INFORME",
+      area_interes: ["POLICIAL"],
+      requiere_fiscalia: false,
+      requiere_traslado_comisaria: false,
+      requiere_word_semanal: false,
+      informe_word_destino: [],
+      alimenta_finalizado: false,
+      alimenta_estadisticas: false,
+      contador_circular: false,
+    };
+  }
+
+  function construirInformeKeyWsp(tipoEvento, payload, nroActa) {
+    const guardia = limpiarTextoSimple(payload?.guardia_fecha || getGuardiaFechaISO());
+    const operativoKey = limpiarTextoSimple(
+      payload?.operativo_key ||
+      franjaSeleccionada?.__operativoKey ||
+      construirOperativoKeyEstable(franjaSeleccionada) ||
+      "sin_operativo"
+    );
+    const tipo = String(tipoEvento || payload?.tipo_evento || "").toUpperCase() || "INFORME";
+    const acta = normalizarNumeroActaInforme(nroActa || payload?.payload_completo?.datos_formulario?.nro_acta || "");
+    return [
+      guardia,
+      normalizarComponenteInformeKeyWsp(operativoKey) || "sin_operativo",
+      tipo,
+      acta || "sin_acta",
+    ].join("|");
+  }
+
+  function prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa) {
+    const clasificacion = clasificacionEventoInformeWsp(tipoEvento);
+    const guardiaFecha = limpiarTextoSimple(payload?.guardia_fecha || getGuardiaFechaISO());
+    const operativoKey = limpiarTextoSimple(payload?.operativo_key || franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada));
+    const informeKey = limpiarTextoSimple(payload?.informe_key || construirInformeKeyWsp(tipoEvento, { ...payload, guardia_fecha: guardiaFecha, operativo_key: operativoKey }, nroActa));
+
+    return {
+      ...payload,
+      tipo_evento: tipoEvento,
+      guardia_fecha: guardiaFecha,
+      operativo_key: operativoKey,
+      informe_key: informeKey,
+
+      categoria_evento: clasificacion.categoria_evento,
+      subtipo_evento: clasificacion.subtipo_evento,
+      area_interes: clasificacion.area_interes,
+      requiere_fiscalia: clasificacion.requiere_fiscalia,
+      requiere_traslado_comisaria: clasificacion.requiere_traslado_comisaria,
+      requiere_word_semanal: clasificacion.requiere_word_semanal,
+      informe_word_destino: clasificacion.informe_word_destino,
+
+      // Regla actual: los informes NO alimentan el FINALIZADO ni los numerales estadísticos.
+      // Quedan guardados para historial/Word/fotos y solo alimentan contador visual cuando corresponda.
+      alimenta_finalizado: false,
+      alimenta_estadisticas: false,
+      contador_circular: clasificacion.contador_circular,
+
+      payload_completo: {
+        ...(payload?.payload_completo || {}),
+        informe_key: informeKey,
+        categoria_evento: clasificacion.categoria_evento,
+        subtipo_evento: clasificacion.subtipo_evento,
+        area_interes: clasificacion.area_interes,
+        alimenta_finalizado: false,
+        alimenta_estadisticas: false,
+        contador_circular: clasificacion.contador_circular,
+      },
+      metadata: {
+        ...(payload?.metadata || {}),
+        tipo_evento: tipoEvento,
+        informe_key: informeKey,
+        generado_desde: "wsp.js",
+        guardado_por_upsert: true,
+        alimenta_finalizado: false,
+        alimenta_estadisticas: false,
+        contador_circular: clasificacion.contador_circular,
+      },
+    };
+  }
+
+  function payloadInformeEventoParaSupabaseWsp(data) {
+    // Mantener el insert/upsert acotado a columnas usadas por la tabla de eventos.
+    // El informe completo queda igualmente dentro de payload_completo y texto_generado.
+    return {
+      fuente: data.fuente || "WSP",
+      operativo_key: data.operativo_key || "",
+      tipo_evento: data.tipo_evento,
+      guardia_fecha: data.guardia_fecha,
+      informe_key: data.informe_key,
+
+      horario: data.horario || "",
+      lugar: data.lugar || "",
+      tipo_operativo: data.tipo_operativo || "",
+      resultados: data.resultados || {},
+      medidas_cautelares: data.medidas_cautelares || {},
+      detalles: Array.isArray(data.detalles) ? data.detalles : [],
+      observaciones: data.observaciones || "",
+      texto_generado: data.texto_generado || "",
+      payload_completo: data.payload_completo || {},
+
+      categoria_evento: data.categoria_evento,
+      subtipo_evento: data.subtipo_evento,
+      area_interes: Array.isArray(data.area_interes) ? data.area_interes : [],
+      requiere_fiscalia: !!data.requiere_fiscalia,
+      requiere_traslado_comisaria: !!data.requiere_traslado_comisaria,
+      requiere_word_semanal: !!data.requiere_word_semanal,
+      informe_word_destino: Array.isArray(data.informe_word_destino) ? data.informe_word_destino : [],
+      alimenta_finalizado: false,
+      alimenta_estadisticas: false,
+      contador_circular: !!data.contador_circular,
+    };
+  }
+
+  async function guardarInformeEventoWsp(tipoEvento, payload, nroActa) {
+    const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
+    const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=guardia_fecha,informe_key`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: headersSupabase({
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Prefer: "resolution=merge-duplicates,return=representation",
+        }),
+        body: JSON.stringify(dataSupabase),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.error("[WSP] No se pudo guardar/upsert informe:", r.status, txt);
+        alert("No se pudo guardar el informe en Supabase. No se enviará por WhatsApp para evitar perder el registro o duplicar datos.");
+        return false;
+      }
+
+      const rows = await r.json().catch(() => []);
+      const evento = Array.isArray(rows) ? rows[0] : rows;
+      if (!evento?.id) {
+        alert("Supabase no devolvió el ID del informe guardado. No se enviará por WhatsApp para evitar perder fotos o duplicar datos.");
+        return false;
+      }
+
+      return { evento, estado: null, informe_key: data.informe_key };
+    } catch (e) {
+      console.error("[WSP] Error guardando/upsert informe.", e);
+      alert("Error guardando el informe en Supabase. Revise conexión y vuelva a intentar.");
+      return false;
+    }
+  }
+
+  async function eliminarFotosPreviasInformeWsp(resultadoHistorial) {
+    const evento = resultadoHistorial?.evento || {};
+    const informeKey = limpiarTextoSimple(evento.informe_key || resultadoHistorial?.informe_key || evento?.payload_completo?.informe_key || "");
+    const guardiaFecha = limpiarTextoSimple(evento.guardia_fecha || getGuardiaFechaISO());
+    if (!informeKey) return;
+
+    const filtros = new URLSearchParams({
+      guardia_fecha: `eq.${guardiaFecha}`,
+      informe_key: `eq.${informeKey}`,
+    });
+
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}?${filtros.toString()}`, {
+        method: "DELETE",
+        headers: headersSupabase({ Prefer: "return=minimal" }),
+      });
+      if (!r.ok) {
+        console.warn("[WSP] No se pudieron limpiar fotos previas por informe_key:", r.status, await r.text().catch(() => ""));
+      }
+    } catch (e) {
+      console.warn("[WSP] Error limpiando fotos previas del informe.", e);
+    }
+  }
+
   // ===== INFORMES INTERMEDIOS: ALCOHOLEMIA POSITIVA =====
   function esInformeAlcoholemiaActivo() {
     return getTipoInformeActivo() === INFORME_ALCOHOLEMIA_TIPO;
@@ -6381,7 +6616,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       metadata: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
         generado_desde: "wsp.js",
-        alimenta_finalizado: true,
+        alimenta_finalizado: false,
       },
     };
   }
@@ -6444,9 +6679,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
     const estadoId = String(resultadoHistorial.estado?.id || "");
+    const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
-    const path = `${getGuardiaFechaISO()}/${safeKey}/${eventoId}/${Date.now()}_${numero}.jpg`;
+    const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
+    const path = `informes/alcoholemia/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
     const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
@@ -6462,6 +6699,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
       operativo_key: operativoKey,
+      guardia_fecha: getGuardiaFechaISO(),
+      informe_key: informeKey || null,
       tipo_evento: "ALCOHOLEMIA_POSITIVA",
       foto_numero: numero,
       storage_bucket: HISTORIAL_FOTOS_BUCKET,
@@ -6508,10 +6747,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     const payload = construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const fotos = fotosSeleccionadasInformeAlcoholemia();
 
-    const resultadoHistorial = await guardarHistorialOperativoWsp("ALCOHOLEMIA_POSITIVA", payload);
-    if (resultadoHistorial && fotos.length) {
-      try { await subirFotosInformeAlcoholemia(resultadoHistorial, fotos); }
-      catch (e) { console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e); alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase."); }
+    const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
+    if (!resultadoHistorial) return;
+    if (fotos.length) {
+      try {
+        await eliminarFotosPreviasInformeWsp(resultadoHistorial);
+        await subirFotosInformeAlcoholemia(resultadoHistorial, fotos);
+      } catch (e) {
+        console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e);
+        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+      }
     }
 
     resetUI();
@@ -6643,6 +6888,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
     if (activa) {
+      if (inf460ResultadoAuto) {
+        inf460ResultadoAuto.textContent = "El informe queda guardado como evento. No carga numerales automáticamente en el FINALIZADO.";
+      }
       completarDestinoDecto460SiVacio();
       refrescarContextoInformeDecto460();
     }
@@ -6803,7 +7051,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       metadata: {
         tipo_evento: "DECTO_460_22",
         generado_desde: "wsp.js",
-        alimenta_finalizado: true,
+        alimenta_finalizado: false,
       },
     };
   }
@@ -6813,9 +7061,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
     const estadoId = String(resultadoHistorial.estado?.id || "");
+    const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
-    const path = `${getGuardiaFechaISO()}/${safeKey}/${eventoId}/${Date.now()}_${numero}.jpg`;
+    const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
+    const path = `informes/460/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
     const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
@@ -6831,6 +7081,8 @@ ${bold(`Moviles ${organismo}:`)}`)
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
       operativo_key: operativoKey,
+      guardia_fecha: getGuardiaFechaISO(),
+      informe_key: informeKey || null,
       tipo_evento: "DECTO_460_22",
       foto_numero: numero,
       storage_bucket: HISTORIAL_FOTOS_BUCKET,
@@ -6868,10 +7120,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = construirTextoInformeDecto460({ inicio, fecha, hora, codigos });
     const payload = construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora });
     const fotos = fotosSeleccionadasInformeDecto460();
-    const resultadoHistorial = await guardarHistorialOperativoWsp("DECTO_460_22", payload);
-    if (resultadoHistorial && fotos.length) {
-      try { await subirFotosInformeDecto460(resultadoHistorial, fotos); }
-      catch (e) { console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e); alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase."); }
+    const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, normalizarNumeroActaInforme(inf460Acta?.value));
+    if (!resultadoHistorial) return;
+    if (fotos.length) {
+      try {
+        await eliminarFotosPreviasInformeWsp(resultadoHistorial);
+        await subirFotosInformeDecto460(resultadoHistorial, fotos);
+      } catch (e) {
+        console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e);
+        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+      }
     }
     resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
@@ -7055,9 +7313,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       for (const key of keys) {
         const params = new URLSearchParams({
-          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo",
+          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo,alimenta_finalizado",
           operativo_key: `eq.${key}`,
           tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
+          alimenta_finalizado: "eq.true",
           order: "created_at.asc",
         });
         const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
@@ -7071,9 +7330,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       // Respaldo: si no coincidió la key, se buscan los informes de la guardia
       // y se filtran por lugar/horario/tipo/orden guardados en payload_completo.franja.
       const paramsFallback = new URLSearchParams({
-        select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo",
+        select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo,alimenta_finalizado",
         guardia_fecha: `eq.${getGuardiaFechaISO()}`,
         tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
+        alimenta_finalizado: "eq.true",
         order: "created_at.asc",
         limit: "200",
       });
