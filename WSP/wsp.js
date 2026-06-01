@@ -1696,11 +1696,28 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } catch {}
   }
 
-  async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
+  function setSelectorHorarioDisabledWsp(disabled) {
+    if (!selHorario) return;
+    const valor = !!disabled;
+    selHorario.disabled = valor;
+    if (valor) {
+      selHorario.setAttribute("disabled", "disabled");
+      selHorario.setAttribute("aria-disabled", "true");
+    } else {
+      selHorario.removeAttribute("disabled");
+      selHorario.setAttribute("aria-disabled", "false");
+      // Blindaje: si quedó alguna clase visual de deshabilitado, la removemos
+      // para que el select vuelva a abrirse al pasar de INFORMES a INICIA/FINALIZA
+      // o al cargar dos o más operativos iniciados.
+      selHorario.classList.remove("disabled", "select-disabled", "input-disabled", "is-disabled");
+    }
+  }
+
+  async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "", opciones = {}) {
     if (!selHorario) return [];
     const requestId = ++informesSelectorRequestId;
     setTituloOperativosIniciados(true);
-    selHorario.disabled = true;
+    setSelectorHorarioDisabledWsp(true);
     selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
 
     const inicios = await leerIniciosGuardiaDesdeSupabase();
@@ -1721,7 +1738,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       selHorario.value = "";
       franjaSeleccionada = null;
       ordenSeleccionada = null;
-      selHorario.disabled = true;
+      setSelectorHorarioDisabledWsp(true);
       actualizarContadorOperativosWsp(0);
       return operativosCache;
     }
@@ -1746,7 +1763,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     // Si hay dos o más operativos en curso, el usuario debe poder abrir el desplegable
     // y cambiar de operativo. Si hay uno solo, se deja preseleccionado y bloqueado.
-    selHorario.disabled = operativosCache.length <= 1;
+    setSelectorHorarioDisabledWsp((opciones && opciones.soloResumen) ? true : operativosCache.length <= 1);
     actualizarContadorOperativosWsp(operativosCache.length);
     return operativosCache;
   }
@@ -2055,7 +2072,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     operativosCache = [];
     if (selHorario) {
-      selHorario.disabled = false;
+      setSelectorHorarioDisabledWsp(false);
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
     }
 
@@ -4349,11 +4366,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       franjaSeleccionada = null;
       ordenSeleccionada = null;
       if (selHorario) {
-        selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
+        selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
         selHorario.value = "";
-        selHorario.disabled = true;
+        setSelectorHorarioDisabledWsp(true);
       }
       actualizarContadorOperativosWsp(0);
+      cargarOperativosIniciadosParaInformes("", { soloResumen: true }).then(() => {
+        // En el estado general INFORMES solo mostramos el resumen/cantidad de
+        // operativos iniciados. La selección real se habilita cuando se elige
+        // un informe concreto (Alcoholemia, Decto 460/22, Control Superior, etc.).
+      });
       return;
     }
 
