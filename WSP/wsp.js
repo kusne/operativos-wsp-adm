@@ -117,6 +117,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
   let firmaInformesIntermediosAplicadosFinalizado = "";
+  let cargaOperativosIniciadosInformesSeq = 0;
 
 
   let controlMovilesCache = [];
@@ -1284,6 +1285,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
+      operativo_estado_id: limpiarTextoSimple(payload.operativo_estado_id || payload.estado_id || ""),
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
@@ -1496,20 +1498,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function estadoOperativoEsEnCursoWsp(row) {
+    const meta = parseJsonObjectWsp(row?.metadata) || {};
     const estadoTxt = limpiarTextoSimple(row?.estado || "").toUpperCase().replace(/\s+/g, "_");
-    const tieneInicioReal = !!row?.inicio_evento_id;
+    const tieneInicioReal = !!row?.inicio_evento_id || !!meta?.inicio_evento_id || meta?.iniciado === true || meta?.inicio_guardado === true;
     const tieneFinalizado = !!row?.finalizado_evento_id || estadoTxt === "FINALIZADO" || estadoTxt === "CERRADO";
     if (tieneFinalizado) return false;
 
-    // Blindaje: no alcanza con que exista en operativos_estado. Debe estar marcado
-    // como iniciado/en curso o tener evento de INICIO real. Esto evita que el selector
-    // de INFORMES muestre operativos publicados, futuros, viejos o pruebas.
-    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return true;
-    if (tieneInicioReal && !estadoTxt) return true;
-    return false;
+    // Blindaje fuerte: para INFORMES no alcanza con que el operativo esté publicado
+    // ni con que operativos_estado diga ACTIVO/EN_CURSO. Debe existir un INICIO real.
+    // Si no, se inflan contadores con operativos publicados o pruebas viejas.
+    if (!tieneInicioReal) return false;
+
+    if (!estadoTxt) return true;
+    return ["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt);
   }
 
-  function normalizarEstadoOperativoEnCurso(row) {
+  function payloadCompletoEventoWsp(evento) {
+    return parseJsonObjectWsp(evento?.payload_completo) || {};
+  }
+
+  function valorEventoInicioWsp(evento, campo, fallback = undefined) {
+    const payload = payloadCompletoEventoWsp(evento);
+    const franja = parseJsonObjectWsp(payload?.franja) || payload?.franja || {};
+    if (evento && evento[campo] !== undefined && evento[campo] !== null) return evento[campo];
+    if (payload && payload[campo] !== undefined && payload[campo] !== null) return payload[campo];
+    if (franja && franja[campo] !== undefined && franja[campo] !== null) return franja[campo];
+    return fallback;
+  }
+
+  function normalizarEstadoOperativoEnCurso(row, eventoInicio = null) {
     if (!row || !estadoOperativoEsEnCursoWsp(row)) return null;
 
     const horaDesde = limpiarTextoSimple(row?.hora_desde || "");
@@ -1517,22 +1534,63 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const horario = limpiarTextoSimple(row?.horario || (horaDesde && horaHasta ? `${horaDesde} A ${horaHasta}` : horaDesde || horaHasta));
     const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
     const meta = parseJsonObjectWsp(row?.metadata) || {};
+    const payloadInicio = payloadCompletoEventoWsp(eventoInicio);
+    const franjaInicio = parseJsonObjectWsp(payloadInicio?.franja) || payloadInicio?.franja || {};
 
     return normalizarInicioGuardado({
-      guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
-      operativo_estado_id: row?.id || row?.operativo_estado_id || "",
-      operativo_key: row?.operativo_key || "",
-      orden_num: ordenes.join(" / ") || limpiarTextoSimple(meta?.orden_num || meta?.orden || ""),
-      texto_ref: limpiarTextoSimple(meta?.texto_ref || meta?.archivo || "Operativo en curso"),
-      horario,
-      lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
-      personal: row?.personal || meta?.personal || [],
-      moviles: row?.moviles || meta?.moviles || [],
-      motos: row?.motos || meta?.motos || [],
-      elementos: row?.elementos || meta?.elementos || {},
+      guardia_fecha: row?.guardia_fecha || valorEventoInicioWsp(eventoInicio, "guardia_fecha", getGuardiaFechaISO()),
+      operativo_estado_id: row?.id || row?.operativo_estado_id || eventoInicio?.operativo_estado_id || "",
+      operativo_key: row?.operativo_key || valorEventoInicioWsp(eventoInicio, "operativo_key", ""),
+      orden_num: ordenes.join(" / ") || limpiarTextoSimple(meta?.orden_num || meta?.orden || valorEventoInicioWsp(eventoInicio, "orden_num", franjaInicio?.__ordenNum || "")),
+      texto_ref: limpiarTextoSimple(meta?.texto_ref || meta?.archivo || valorEventoInicioWsp(eventoInicio, "texto_ref", franjaInicio?.__ordenTextoRef || "Operativo en curso")),
+      horario: horario || valorEventoInicioWsp(eventoInicio, "horario", franjaInicio?.horario || ""),
+      lugar: row?.lugar || valorEventoInicioWsp(eventoInicio, "lugar", franjaInicio?.lugar || ""),
+      // Para INFORMES no usamos el tipo genérico de operativos_estado (ej. "Control")
+      // si el INICIO real trae el tipo/título del operativo. Ese texto es la fuente correcta
+      // del operativo que se está realizando.
+      tipo_corto: limpiarTextoSimple(
+        franjaInicio?.titulo ||
+        valorEventoInicioWsp(eventoInicio, "tipo_corto", "") ||
+        valorEventoInicioWsp(eventoInicio, "tipo_operativo", "") ||
+        meta?.tipo_operativo ||
+        row?.tipo_operativo ||
+        row?.tipo ||
+        "Operativo iniciado"
+      ),
+      personal: row?.personal || meta?.personal || valorEventoInicioWsp(eventoInicio, "personal", []),
+      moviles: row?.moviles || meta?.moviles || valorEventoInicioWsp(eventoInicio, "moviles", []),
+      motos: row?.motos || meta?.motos || valorEventoInicioWsp(eventoInicio, "motos", []),
+      elementos: row?.elementos || meta?.elementos || valorEventoInicioWsp(eventoInicio, "elementos", {}),
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
+  }
+
+  async function leerEventosInicioPorIdsWsp(ids = []) {
+    const unicos = Array.from(new Set((Array.isArray(ids) ? ids : []).map((id) => limpiarTextoSimple(id)).filter(Boolean)));
+    const map = new Map();
+    if (!unicos.length) return map;
+
+    try {
+      const params = new URLSearchParams({
+        select: "id,operativo_estado_id,operativo_key,guardia_fecha,tipo_evento,personal,moviles,motos,elementos,payload_completo,texto_generado,created_at",
+        id: `in.(${unicos.join(",")})`,
+        limit: String(Math.min(1000, unicos.length)),
+      });
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+      if (!r.ok) {
+        console.warn("[WSP] No se pudieron leer eventos INICIO para completar operativos iniciados:", r.status, await r.text());
+        return map;
+      }
+      const data = await r.json();
+      (Array.isArray(data) ? data : []).forEach((row) => {
+        if (row?.id) map.set(String(row.id), row);
+      });
+    } catch (e) {
+      console.warn("[WSP] Error leyendo eventos INICIO para completar operativos iniciados.", e);
+    }
+    return map;
   }
 
   async function leerOperativoKeysFinalizadosGuardiaSupabase() {
@@ -1574,10 +1632,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return out;
   }
 
+  function firmaInicioInformeWsp(fila) {
+    return [
+      limpiarTextoSimple(fila?.guardia_fecha || getGuardiaFechaISO()),
+      normalizarValorComparacion(fila?.horario || ""),
+      normalizarValorComparacion(fila?.lugar || ""),
+      normalizarValorComparacion(fila?.tipo_corto || ""),
+      normalizarValorComparacion(fila?.orden_num || ""),
+    ].join("|");
+  }
+
+  function scoreInicioInformeWsp(fila) {
+    let score = 0;
+    if (limpiarTextoSimple(fila?.operativo_estado_id)) score += 20;
+    if (limpiarTextoSimple(fila?.operativo_key)) score += 20;
+    if (normalizarArrayTexto(fila?.personal).length) score += 10;
+    if (normalizarArrayTexto(fila?.moviles).length || normalizarArrayTexto(fila?.motos).length) score += 10;
+    if (limpiarTextoSimple(fila?.lugar)) score += 5;
+    if (limpiarTextoSimple(fila?.horario)) score += 5;
+    return score;
+  }
+
   function deduplicarIniciosInformeWsp(filas) {
-    const vistos = new Set();
-    const unicos = [];
+    const porClave = new Map();
+    const porFirma = new Map();
+
     (Array.isArray(filas) ? filas : []).forEach((fila) => {
+      if (!fila) return;
       const key = limpiarTextoSimple(fila?.operativo_key || construirOperativoKeyEstable({
         __ordenNum: fila?.orden_num,
         __ordenTextoRef: fila?.texto_ref,
@@ -1585,11 +1666,37 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         lugar: fila?.lugar,
         titulo: fila?.tipo_corto,
       }));
-      if (!key || vistos.has(key)) return;
-      vistos.add(key);
-      unicos.push(fila);
+      const firma = firmaInicioInformeWsp(fila);
+      const id = key || firma;
+      if (!id) return;
+
+      const existenteId = porClave.get(key) || porFirma.get(firma);
+      if (existenteId) {
+        const actual = porClave.get(existenteId) || porFirma.get(existenteId);
+        const actualFila = actual || null;
+        if (actualFila && scoreInicioInformeWsp(fila) > scoreInicioInformeWsp(actualFila)) {
+          porClave.set(existenteId, fila);
+          porFirma.set(existenteId, fila);
+        }
+        return;
+      }
+
+      porClave.set(key || id, fila);
+      porFirma.set(firma || id, fila);
     });
-    return unicos;
+
+    const vistos = new Set();
+    const out = [];
+    for (const fila of porClave.values()) {
+      const firma = firmaInicioInformeWsp(fila);
+      const key = limpiarTextoSimple(fila?.operativo_key || "");
+      const id = key || firma;
+      if (!id || vistos.has(id) || vistos.has(firma)) continue;
+      vistos.add(id);
+      vistos.add(firma);
+      out.push(fila);
+    }
+    return out;
   }
 
   async function leerOperativosEnCursoDesdeEstadoSupabase() {
@@ -1615,8 +1722,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
       const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase();
       const data = await r.json();
-      return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
-        .map(normalizarEstadoOperativoEnCurso)
+      const rows = Array.isArray(data) ? data : [];
+      const enCursoRows = rows.filter(estadoOperativoEsEnCursoWsp);
+      const inicioIds = enCursoRows.map((row) => row?.inicio_evento_id).filter(Boolean);
+      const eventosInicio = await leerEventosInicioPorIdsWsp(inicioIds);
+      return deduplicarIniciosInformeWsp(enCursoRows
+        .map((row) => normalizarEstadoOperativoEnCurso(row, eventosInicio.get(String(row?.inicio_evento_id || ""))))
         .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
     } catch (e) {
       console.warn("[WSP] Error leyendo operativos EN CURSO desde operativos_estado.", e);
@@ -1631,8 +1742,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
     const filas = Array.isArray(enCurso) ? enCurso.slice() : [];
 
+    // Respaldo local solo si Supabase no devolvió ningún operativo en curso.
+    // Si lo mezclamos siempre, un INICIO viejo guardado en localStorage puede inflar
+    // el contador de INFORMES aunque ya exista la fuente canónica en operativos_estado.
     const local = normalizarInicioGuardado(cargarInicioLocal());
-    if (local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
+    if (!filas.length && local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
       filas.unshift(local);
     }
 
@@ -1646,6 +1760,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return {
       __key: `inicio-${idx}-${key}`,
       __desdeInicioGuardado: true,
+      __operativoEstadoId: limpiarTextoSimple(data.operativo_estado_id || ""),
       __operativoKey: key,
       __ordenNum: limpiarTextoSimple(data.orden_num || ""),
       __ordenTextoRef: limpiarTextoSimple(data.texto_ref || ""),
@@ -1669,6 +1784,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
     if (!selHorario) return [];
+    const seq = ++cargaOperativosIniciadosInformesSeq;
     setTituloOperativosIniciados(true);
     selHorario.disabled = true;
     selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
@@ -1678,14 +1794,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     actualizarContadorOperativosWsp(0);
 
     const inicios = await leerIniciosGuardiaDesdeSupabase();
+    if (seq !== cargaOperativosIniciadosInformesSeq) return operativosCache;
+
     const candidatos = ordenarCandidatosInformeAlcoholemia(
-      inicios.map(construirFranjaInformeDesdeInicio).filter(Boolean)
+      deduplicarIniciosInformeWsp(inicios).map(construirFranjaInformeDesdeInicio).filter(Boolean)
     );
+
+    if (seq !== cargaOperativosIniciadosInformesSeq) return operativosCache;
 
     selHorario.innerHTML = candidatos.length
       ? '<option value="">Seleccionar Operativo Iniciado</option>'
       : '<option value="">No hay operativos iniciados</option>';
 
+    operativosCache = [];
     candidatos.forEach((operativo) => {
       operativosCache.push(operativo);
       const option = document.createElement("option");
@@ -6621,6 +6742,26 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
+  function descripcionTipoOperativoInformeWsp(value) {
+    const raw = limpiarTextoSimple(value || "");
+    const v = normalizarBasicoSinAcentos(raw);
+    const partes = [];
+    const add = (txt) => { if (txt && !partes.includes(txt)) partes.push(txt); };
+
+    if (/\bocv\b|control\s+vehicular|operativo\s+de\s+control\s+vehicular/.test(v)) {
+      add("OPERATIVO DE CONTROL VEHICULAR");
+    }
+    if (/alcoholemia|alcoholimetr/.test(v)) add("ALCOHOLEMIA");
+    if (/patrullaje/.test(v)) add("PATRULLAJE");
+    if (/ordenamiento/.test(v)) add("ORDENAMIENTO");
+    if (/dicep|multiagencial|multi\s+agencial/.test(v)) add("DICEP");
+    if (/cinemometro|cinemómetro/.test(v)) add("CINEMÓMETRO");
+    if (/balanza|bascula|báscula|pesaje|control\s+de\s+peso/.test(v)) add("BALANZA");
+
+    if (partes.length) return partes.join(" Y ");
+    return normalizarMayusInforme(raw || "OPERATIVO");
+  }
+
   function construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const motivo = infAlco460?.checked
       ? (calc.sancionable
@@ -6632,7 +6773,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const tipoOp = descripcionTipoOperativoInformeWsp(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || franjaSeleccionada?.titulo || "OPERATIVO");
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
@@ -6951,7 +7092,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const tipoOp = descripcionTipoOperativoInformeWsp(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || franjaSeleccionada?.titulo || "OPERATIVO");
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
