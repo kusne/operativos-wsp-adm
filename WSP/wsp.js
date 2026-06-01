@@ -6671,6 +6671,65 @@ ${bold(`Moviles ${organismo}:`)}`)
     return out;
   }
 
+
+  function normalizarTipoOperativoObservacionInformeWsp(value) {
+    const raw = limpiarTextoSimple(value || "");
+    if (!raw) return "";
+
+    const norm = normalizarBasicoSinAcentos(raw)
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!norm || norm === "operativo") return "";
+
+    // El texto "Control Rango" proviene de una lectura mezclada entre tipo y referencia/orden.
+    // Para los informes se debe usar el tipo real del operativo iniciado, no esa mezcla.
+    if (/\brango\b/.test(norm)) return "";
+
+    if (/^ocv$/.test(norm)) return "OCV";
+    if (/\bocv\b/.test(norm) && /\balcoholemia\b/.test(norm)) return "OCV Y ALCOHOLEMIA";
+    if (/\bocv\b/.test(norm)) return "OCV";
+    if (/\bpatrullaje\b|\bpatrulla\b/.test(norm)) return "PATRULLAJE";
+    if (/\balcoholemia\b/.test(norm) && /\bcontrol\b/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR Y ALCOHOLEMIA";
+    if (/\bcontrol\s+vehicular\b|\boperativo\s+de\s+control\s+vehicular\b/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR";
+    if (/^control$/.test(norm) || /^control operativo$/.test(norm)) return "OPERATIVO DE CONTROL VEHICULAR";
+
+    return normalizarMayusInforme(raw);
+  }
+
+  function obtenerTipoOperativoRealInformeWsp(inicio = {}, franja = franjaSeleccionada) {
+    const candidatos = [
+      inicio?.tipo_operativo,
+      inicio?.tipo_corto,
+      inicio?.titulo,
+      franja?.__tipoPublicado,
+      franja?.titulo,
+      obtenerTipoCortoFranja(franja),
+    ];
+
+    for (const candidato of candidatos) {
+      const tipo = normalizarTipoOperativoObservacionInformeWsp(candidato);
+      if (tipo) return tipo;
+    }
+
+    return "OPERATIVO";
+  }
+
+  function obtenerOrdenObservacionInformeWsp(inicio = {}, franja = franjaSeleccionada) {
+    const raw = limpiarTextoSimple(obtenerNumeroOrdenDeFranja(franja) || inicio?.orden_num || "");
+    if (!raw) return "";
+
+    const txt = normalizarMayusInforme(raw);
+    const norm = normalizarBasicoSinAcentos(txt);
+
+    // No imprimir palabras sueltas como "RANGO", porque no son número de orden y ensucian la observación.
+    if (!/\d/.test(txt)) return "";
+    if (/^rango$/.test(norm)) return "";
+
+    return txt;
+  }
+
   function fotosSeleccionadasInformeAlcoholemia() {
     return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
   }
@@ -6801,8 +6860,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const orden = obtenerOrdenObservacionInformeWsp(inicio, franjaSeleccionada);
+    const tipoOp = obtenerTipoOperativoRealInformeWsp(inicio, franjaSeleccionada);
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
@@ -7117,8 +7176,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const orden = obtenerOrdenObservacionInformeWsp(inicio, franjaSeleccionada);
+    const tipoOp = obtenerTipoOperativoRealInformeWsp(inicio, franjaSeleccionada);
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
