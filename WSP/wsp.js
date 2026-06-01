@@ -136,8 +136,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
+  // Fotos de INICIO / FINALIZADO / historial operativo.
+  // Se mantienen separadas de las fotos de informes.
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
+
+  // Fotos de INFORMES: Alcoholemia, Decto 460/22, Control Superior y futuros informes.
+  const INFORMES_FOTOS_BUCKET = "operativos-informes-fotos";
+  const INFORMES_FOTOS_TABLE = "operativos_informes_fotos";
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -6250,7 +6256,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
 
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}?${filtros.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}?${filtros.toString()}`, {
         method: "DELETE",
         headers: headersSupabase({ Prefer: "return=minimal" }),
       });
@@ -6848,7 +6854,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/alcoholemia/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -6858,7 +6864,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -6867,11 +6873,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "ALCOHOLEMIA_POSITIVA",
       foto_numero: numero,
-      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_bucket: INFORMES_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
@@ -7227,7 +7233,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/460/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7237,7 +7243,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7246,11 +7252,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "DECTO_460_22",
       foto_numero: numero,
-      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_bucket: INFORMES_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
