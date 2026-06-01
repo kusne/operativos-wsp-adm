@@ -1763,7 +1763,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     // Si hay dos o más operativos en curso, el usuario debe poder abrir el desplegable
     // y cambiar de operativo. Si hay uno solo, se deja preseleccionado y bloqueado.
-    setSelectorHorarioDisabledWsp((opciones && opciones.soloResumen) ? true : operativosCache.length <= 1);
+    const deshabilitarSelectorInforme = (opciones && opciones.soloResumen) ? true : operativosCache.length <= 1;
+    setSelectorHorarioDisabledWsp(deshabilitarSelectorInforme);
+
+    // Blindaje: el foco/click del selector no debe disparar una recarga que lo vuelva
+    // a deshabilitar justo cuando el usuario intenta abrirlo. Si hay más de un
+    // operativo iniciado y hay un informe concreto elegido, debe quedar habilitado.
+    if (!deshabilitarSelectorInforme) {
+      setTimeout(() => {
+        if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
+          setSelectorHorarioDisabledWsp(false);
+        }
+      }, 0);
+    }
+
     actualizarContadorOperativosWsp(operativosCache.length);
     return operativosCache;
   }
@@ -7988,9 +8001,32 @@ ${bold(`Moviles ${organismo}:`)}`)
     abrirWhatsappYCerrarWspLuego(textoFinal);
   }
 
+  function onFocusSelectorOperativosWsp() {
+    // En INICIA/FINALIZA sí corresponde sincronizar operativos publicados al enfocar.
+    // En INFORMES NO: al enfocar el select, syncAntesDeSeleccion recargaba el selector,
+    // lo deshabilitaba durante la consulta y cerraba el desplegable, impidiendo elegir
+    // entre dos operativos iniciados. Informes se carga al seleccionar el tipo de informe.
+    if (estaEnMenuInformes()) {
+      if (getTipoInformeActivo() && operativosCache.length > 1) {
+        setSelectorHorarioDisabledWsp(false);
+      }
+      return;
+    }
+    syncAntesDeSeleccion();
+  }
+
+  function asegurarSelectorInformesAbiertoWsp() {
+    if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
+      setSelectorHorarioDisabledWsp(false);
+    }
+  }
+
   // ===== Eventos =====
   if (selHorario) {
-    selHorario.addEventListener("focus", syncAntesDeSeleccion);
+    selHorario.addEventListener("focus", onFocusSelectorOperativosWsp);
+    selHorario.addEventListener("pointerdown", asegurarSelectorInformesAbiertoWsp);
+    selHorario.addEventListener("mousedown", asegurarSelectorInformesAbiertoWsp);
+    selHorario.addEventListener("click", asegurarSelectorInformesAbiertoWsp);
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
