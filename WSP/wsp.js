@@ -2045,11 +2045,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
+    // Al volver desde INFORMES a INICIA/FINALIZA/otros modos normales,
+    // el selector pudo haber quedado deshabilitado porque no había operativos iniciados.
+    // Acá se invalida cualquier lectura async pendiente de INFORMES y se restablece
+    // el selector normal de operativos publicados.
+    informesSelectorRequestId += 1;
     setTituloOperativosIniciados(false);
     const ordenes = cargarOrdenesSeguro();
 
     operativosCache = [];
     if (selHorario) {
+      selHorario.disabled = false;
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
     }
 
@@ -4326,6 +4332,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setUIControlMovilesActiva(false);
 
     if (enInformes && !getTipoInformeActivo()) {
+      // Estado neutro de INFORMES: no debe conservar lecturas anteriores ni
+      // dejar que una consulta pendiente vuelva a escribir el selector.
+      informesSelectorRequestId += 1;
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
       setUIInformeDecto460Activa(false);
