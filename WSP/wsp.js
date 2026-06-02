@@ -136,14 +136,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
-  // Fotos de INICIO / FINALIZADO / historial operativo.
-  // Se mantienen separadas de las fotos de informes.
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
-
-  // Fotos de INFORMES: Alcoholemia, Decto 460/22, Control Superior y futuros informes.
-  const INFORMES_FOTOS_BUCKET = "operativos-informes-fotos";
-  const INFORMES_FOTOS_TABLE = "operativos_informes_fotos";
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -1150,6 +1144,46 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return [ordenNum, textoRef, horario, lugar, tipo].join("|");
   }
 
+  function obtenerTipoOperativoInicioTextoActual(franja = franjaSeleccionada) {
+    const tituloNormalizado = limpiarTextoSimple(normalizarTituloOperativo(franja?.titulo || ""));
+    if (tituloNormalizado) return tituloNormalizado;
+
+    const publicado = limpiarTextoSimple(franja?.__tipoPublicado || "");
+    if (publicado && !/^control$/i.test(publicado) && !/^rango$/i.test(publicado)) return publicado;
+
+    const tipoCorto = limpiarTextoSimple(obtenerTipoCortoFranja(franja) || "");
+    if (tipoCorto && !/^control$/i.test(tipoCorto) && !/^rango$/i.test(tipoCorto)) return tipoCorto;
+
+    return "Operativo";
+  }
+
+  function limpiarTipoOperativoInicioTextoInforme(value) {
+    const raw = limpiarTextoSimple(value || "");
+    if (!raw) return "";
+    if (/^(control|rango)$/i.test(raw)) return "";
+    return raw.replace(/\bRANGO\b/gi, "").replace(/\s{2,}/g, " ").trim();
+  }
+
+  function obtenerTipoOperativoInicioTextoInforme(inicio = {}, franja = franjaSeleccionada) {
+    const candidatos = [
+      inicio?.tipo_operativo_inicio_texto,
+      inicio?.tipo_operativo_mostrar,
+      franja?.__inicioGuardadoPayload?.tipo_operativo_inicio_texto,
+      franja?.__tipoOperativoInicioTexto,
+      franja?.titulo,
+      inicio?.tipo_corto,
+      inicio?.tipo_operativo,
+      franja?.__tipoPublicado,
+    ];
+
+    for (const candidato of candidatos) {
+      const limpio = limpiarTipoOperativoInicioTextoInforme(candidato);
+      if (limpio) return limpio;
+    }
+
+    return "Operativo";
+  }
+
   function construirOperativoKeysPosibles(franja) {
     if (!franja) return [];
 
@@ -1288,19 +1322,45 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!payload) return null;
 
     const derivado = extraerPartesDeOperativoKey(payload.operativo_key || "");
+    const pc = parseJsonObjectWsp(payload?.payload_completo) || {};
+    const pcPayload = parseJsonObjectWsp(pc?.payload) || pc;
+
+    const personalInicio = normalizarArrayTexto(payload.personal_inicio || pc.personal_inicio || pcPayload.personal_inicio || payload.personal);
+    const movilesInicio = normalizarArrayTexto(payload.moviles_inicio || pc.moviles_inicio || pcPayload.moviles_inicio || payload.moviles);
+    const motosInicio = normalizarArrayTexto(payload.motos_inicio || pc.motos_inicio || pcPayload.motos_inicio || payload.motos);
+    const elementosInicio = normalizarPayloadElementos(payload.elementos_inicio || pc.elementos_inicio || pcPayload.elementos_inicio || payload.elementos);
+    const lugarInicio = limpiarTextoSimple(payload.lugar_inicio || pc.lugar_inicio || pcPayload.lugar_inicio || payload.lugar || derivado.lugar || "");
+    const horarioInicio = limpiarTextoSimple(payload.horario_inicio || pc.horario_inicio || pcPayload.horario_inicio || payload.horario || derivado.horario || "");
+    const tipoInicioTexto = limpiarTextoSimple(
+      payload.tipo_operativo_inicio_texto ||
+      payload.tipo_operativo_mostrar ||
+      pc.tipo_operativo_inicio_texto ||
+      pc.tipo_operativo_mostrar ||
+      pcPayload.tipo_operativo_inicio_texto ||
+      pcPayload.tipo_operativo_mostrar ||
+      ""
+    );
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
-      horario: limpiarTextoSimple(payload.horario || derivado.horario || ""),
-      lugar: limpiarTextoSimple(payload.lugar || derivado.lugar || ""),
+      horario: horarioInicio,
+      lugar: lugarInicio,
       tipo_corto: limpiarTextoSimple(payload.tipo_corto || derivado.tipo_corto || ""),
-      personal: normalizarArrayTexto(payload.personal),
-      moviles: normalizarArrayTexto(payload.moviles),
-      motos: normalizarArrayTexto(payload.motos),
-      elementos: normalizarPayloadElementos(payload),
+      tipo_operativo_inicio_texto: tipoInicioTexto,
+      personal_inicio: personalInicio,
+      moviles_inicio: movilesInicio,
+      motos_inicio: motosInicio,
+      elementos_inicio: elementosInicio,
+      lugar_inicio: lugarInicio,
+      horario_inicio: horarioInicio,
+      inicio_updated_at: limpiarTextoSimple(payload.inicio_updated_at || pc.inicio_updated_at || pcPayload.inicio_updated_at || new Date().toISOString()),
+      personal: personalInicio,
+      moviles: movilesInicio,
+      motos: motosInicio,
+      elementos: elementosInicio,
       ts: payload?.ts || Date.now(),
     };
   }
@@ -1308,18 +1368,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function construirInicioGuardadoActual() {
     if (!franjaSeleccionada) return null;
 
+    const personalInicio = leerSeleccionPorClase("personal");
+    const movilesInicio = leerSeleccionPorClase("movil");
+    const motosInicio = leerSeleccionPorClase("moto");
+    const elementosInicio = construirPayloadElementosActual();
+    const lugarInicio = limpiarTextoSimple(franjaSeleccionada?.lugar || "");
+    const horarioInicio = limpiarTextoSimple(franjaSeleccionada?.horario || "");
+    const tipoInicioTexto = obtenerTipoOperativoInicioTextoActual(franjaSeleccionada);
+    const nowIso = new Date().toISOString();
+
     return normalizarInicioGuardado({
       guardia_fecha: getGuardiaFechaISO(),
       operativo_key: construirOperativoKeyEstable(franjaSeleccionada),
       orden_num: obtenerNumeroOrdenDeFranja(franjaSeleccionada),
       texto_ref: obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
-      horario: limpiarTextoSimple(franjaSeleccionada?.horario || ""),
-      lugar: limpiarTextoSimple(franjaSeleccionada?.lugar || ""),
+      horario: horarioInicio,
+      lugar: lugarInicio,
       tipo_corto: obtenerTipoCortoFranja(franjaSeleccionada),
-      personal: leerSeleccionPorClase("personal"),
-      moviles: leerSeleccionPorClase("movil"),
-      motos: leerSeleccionPorClase("moto"),
-      elementos: construirPayloadElementosActual(),
+      tipo_operativo_inicio_texto: tipoInicioTexto,
+      personal_inicio: personalInicio,
+      moviles_inicio: movilesInicio,
+      motos_inicio: motosInicio,
+      elementos_inicio: elementosInicio,
+      lugar_inicio: lugarInicio,
+      horario_inicio: horarioInicio,
+      inicio_updated_at: nowIso,
+      personal: personalInicio,
+      moviles: movilesInicio,
+      motos: motosInicio,
+      elementos: elementosInicio,
       ts: Date.now(),
     });
   }
@@ -1432,7 +1509,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
+    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at";
     const fechasBusqueda = getFechasBusquedaInicio();
     const keysPosibles = construirOperativoKeysPosibles(franja);
 
@@ -1551,27 +1628,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const payload = leerJsonObjetoSeguroWsp(pc?.payload) || pc;
     const inicio = leerJsonObjetoSeguroWsp(pc?.inicio) || payload;
 
-    return {
+    return normalizarInicioGuardado({
       guardia_fecha: limpiarTextoSimple(ev?.guardia_fecha || inicio?.guardia_fecha || ""),
       operativo_key: limpiarTextoSimple(ev?.operativo_key || inicio?.operativo_key || ""),
       orden_num: limpiarTextoSimple(inicio?.orden_num || payload?.orden_num || ""),
       texto_ref: limpiarTextoSimple(inicio?.texto_ref || payload?.texto_ref || ""),
-      horario: limpiarTextoSimple(ev?.horario || inicio?.horario || payload?.horario || ""),
-      lugar: limpiarTextoSimple(ev?.lugar || inicio?.lugar || payload?.lugar || ""),
-      tipo_corto: limpiarTextoSimple(ev?.tipo_operativo || inicio?.tipo_corto || inicio?.tipo_operativo || payload?.tipo_corto || payload?.tipo_operativo || ""),
-      personal: normalizarArrayTexto(ev?.personal || inicio?.personal || payload?.personal),
-      moviles: normalizarArrayTexto(ev?.moviles || inicio?.moviles || payload?.moviles),
-      motos: normalizarArrayTexto(ev?.motos || inicio?.motos || payload?.motos),
-      elementos: normalizarPayloadElementos(ev?.elementos || inicio?.elementos || payload?.elementos || {}),
+      horario: limpiarTextoSimple(ev?.horario_inicio || ev?.horario || inicio?.horario_inicio || inicio?.horario || payload?.horario_inicio || payload?.horario || ""),
+      lugar: limpiarTextoSimple(ev?.lugar_inicio || ev?.lugar || inicio?.lugar_inicio || inicio?.lugar || payload?.lugar_inicio || payload?.lugar || ""),
+      tipo_corto: limpiarTextoSimple(inicio?.tipo_corto || payload?.tipo_corto || ev?.tipo_operativo || inicio?.tipo_operativo || payload?.tipo_operativo || ""),
+      tipo_operativo_inicio_texto: limpiarTextoSimple(ev?.tipo_operativo_inicio_texto || inicio?.tipo_operativo_inicio_texto || payload?.tipo_operativo_inicio_texto || ""),
+      personal_inicio: ev?.personal_inicio || inicio?.personal_inicio || payload?.personal_inicio || ev?.personal || inicio?.personal || payload?.personal,
+      moviles_inicio: ev?.moviles_inicio || inicio?.moviles_inicio || payload?.moviles_inicio || ev?.moviles || inicio?.moviles || payload?.moviles,
+      motos_inicio: ev?.motos_inicio || inicio?.motos_inicio || payload?.motos_inicio || ev?.motos || inicio?.motos || payload?.motos,
+      elementos_inicio: ev?.elementos_inicio || inicio?.elementos_inicio || payload?.elementos_inicio || ev?.elementos || inicio?.elementos || payload?.elementos || {},
+      lugar_inicio: limpiarTextoSimple(ev?.lugar_inicio || inicio?.lugar_inicio || payload?.lugar_inicio || ev?.lugar || inicio?.lugar || payload?.lugar || ""),
+      horario_inicio: limpiarTextoSimple(ev?.horario_inicio || inicio?.horario_inicio || payload?.horario_inicio || ev?.horario || inicio?.horario || payload?.horario || ""),
+      inicio_updated_at: limpiarTextoSimple(ev?.inicio_updated_at || inicio?.inicio_updated_at || payload?.inicio_updated_at || ev?.created_at || ""),
       ts: ev?.created_at ? Date.parse(ev.created_at) : Date.now(),
-    };
+    });
   }
 
   async function leerEventosInicioGuardiaParaInformesWsp(guardiaActual) {
     const out = [];
     try {
       const params = new URLSearchParams({
-        select: "id,operativo_estado_id,operativo_key,tipo_evento,guardia_fecha,horario,lugar,tipo_operativo,personal,moviles,motos,elementos,payload_completo,created_at",
+        select: "id,operativo_estado_id,operativo_key,tipo_evento,guardia_fecha,horario,lugar,tipo_operativo,personal,moviles,motos,elementos,payload_completo,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at,created_at",
         guardia_fecha: `eq.${guardiaActual}`,
         tipo_evento: "eq.INICIO",
         order: "created_at.desc",
@@ -1647,13 +1728,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         operativo_key: key || limpiarTextoSimple(inicio.operativo_key || ""),
         orden_num: limpiarTextoSimple(row?.orden_num || row?.orden || inicio.orden_num || ""),
         texto_ref: limpiarTextoSimple(row?.texto_ref || row?.archivo_nombre || inicio.texto_ref || ""),
-        horario: normalizarHorarioEstadoInformeWsp(row) || limpiarTextoSimple(inicio.horario || ""),
-        lugar: limpiarTextoSimple(row?.lugar || inicio.lugar || ""),
-        tipo_corto: limpiarTextoSimple(row?.tipo_operativo || row?.tipo || inicio.tipo_corto || ""),
-        personal: normalizarArrayTexto(inicio.personal || row?.personal),
-        moviles: normalizarArrayTexto(inicio.moviles || row?.moviles),
-        motos: normalizarArrayTexto(inicio.motos || row?.motos),
-        elementos: normalizarPayloadElementos(inicio.elementos || row?.elementos || {}),
+        horario: limpiarTextoSimple(row?.horario_inicio || normalizarHorarioEstadoInformeWsp(row) || inicio.horario_inicio || inicio.horario || ""),
+        lugar: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
+        tipo_corto: limpiarTextoSimple(inicio.tipo_corto || row?.tipo_operativo || row?.tipo || ""),
+        tipo_operativo_inicio_texto: limpiarTextoSimple(row?.tipo_operativo_inicio_texto || inicio.tipo_operativo_inicio_texto || ""),
+        personal_inicio: row?.personal_inicio || inicio.personal_inicio || inicio.personal || row?.personal,
+        moviles_inicio: row?.moviles_inicio || inicio.moviles_inicio || inicio.moviles || row?.moviles,
+        motos_inicio: row?.motos_inicio || inicio.motos_inicio || inicio.motos || row?.motos,
+        elementos_inicio: row?.elementos_inicio || inicio.elementos_inicio || inicio.elementos || row?.elementos || {},
+        lugar_inicio: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
+        horario_inicio: limpiarTextoSimple(row?.horario_inicio || normalizarHorarioEstadoInformeWsp(row) || inicio.horario_inicio || inicio.horario || ""),
+        inicio_updated_at: limpiarTextoSimple(row?.inicio_updated_at || inicio.inicio_updated_at || row?.updated_at || ""),
         ts: inicio.ts || Date.now(),
       });
     }).filter(Boolean);
@@ -1684,12 +1769,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       __operativoKey: key,
       __ordenNum: limpiarTextoSimple(data.orden_num || ""),
       __ordenTextoRef: limpiarTextoSimple(data.texto_ref || ""),
-      __tipoPublicado: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
+      __tipoPublicado: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
+      __tipoOperativoInicioTexto: limpiarTextoSimple(data.tipo_operativo_inicio_texto || ""),
       __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
-      __inicioTs: Date.parse(`${data.guardia_fecha || getGuardiaFechaISO()}T${String(data.horario || "00:00").slice(0,5)}:00`) || Date.now(),
-      titulo: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
-      horario: limpiarTextoSimple(data.horario || ""),
-      lugar: limpiarTextoSimple(data.lugar || ""),
+      __inicioTs: Date.parse(`${data.guardia_fecha || getGuardiaFechaISO()}T${String(data.horario_inicio || data.horario || "00:00").slice(0,5)}:00`) || Date.now(),
+      titulo: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
+      horario: limpiarTextoSimple(data.horario_inicio || data.horario || ""),
+      lugar: limpiarTextoSimple(data.lugar_inicio || data.lugar || ""),
       fecha: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
       __inicioGuardadoPayload: data,
     };
@@ -5910,6 +5996,21 @@ ${bold(`Moviles ${organismo}:`)}`)
     const partesHorario = extraerHorarioPartesWsp(franjaSeleccionada?.horario || "");
     const mapas = extraerMapasResultadosHistorialWsp(lineasResultados || []);
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || "");
+    const personalInicioArr = String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean);
+    const movilesInicioArr = arrayDesdeLineaHistorialWsp(mov);
+    const motosInicioArr = arrayDesdeLineaHistorialWsp(mot);
+    const elementosInicioObj = {
+      ESCOPETA: arrayDesdeLineaHistorialWsp(escopetasTXT),
+      HT: arrayDesdeLineaHistorialWsp(htTXT),
+      PDA: arrayDesdeLineaHistorialWsp(pdaTXT),
+      IMPRESORA: arrayDesdeLineaHistorialWsp(impTXT),
+      Alometro: arrayDesdeLineaHistorialWsp(alomTXT),
+      Alcoholimetro: arrayDesdeLineaHistorialWsp(alcoTXT),
+    };
+    const lugarInicioTexto = normalizarLugar(franjaSeleccionada?.lugar || "");
+    const horarioInicioTexto = normalizarHorario(franjaSeleccionada?.horario || "");
+    const tipoInicioTexto = obtenerTipoOperativoInicioTextoActual(franjaSeleccionada);
+    const inicioUpdatedAt = new Date().toISOString();
 
     return {
       fuente: "WSP",
@@ -5923,20 +6024,21 @@ ${bold(`Moviles ${organismo}:`)}`)
       hora_hasta: partesHorario.hasta || "",
       lugar: normalizarLugar(franjaSeleccionada?.lugar || ""),
       lugar_normalizado: normalizarLugar(franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      tipo_operativo: tipoInicioTexto,
+      tipo_operativo_inicio_texto: tipoInicioTexto,
       titulo: limpiarTextoSimple(franjaSeleccionada?.titulo || ""),
       ordenes_origen: ordenes,
-      personal: String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean),
-      moviles: arrayDesdeLineaHistorialWsp(mov),
-      motos: arrayDesdeLineaHistorialWsp(mot),
-      elementos: {
-        ESCOPETA: arrayDesdeLineaHistorialWsp(escopetasTXT),
-        HT: arrayDesdeLineaHistorialWsp(htTXT),
-        PDA: arrayDesdeLineaHistorialWsp(pdaTXT),
-        IMPRESORA: arrayDesdeLineaHistorialWsp(impTXT),
-        Alometro: arrayDesdeLineaHistorialWsp(alomTXT),
-        Alcoholimetro: arrayDesdeLineaHistorialWsp(alcoTXT),
-      },
+      personal: personalInicioArr,
+      moviles: movilesInicioArr,
+      motos: motosInicioArr,
+      elementos: elementosInicioObj,
+      personal_inicio: personalInicioArr,
+      moviles_inicio: movilesInicioArr,
+      motos_inicio: motosInicioArr,
+      elementos_inicio: elementosInicioObj,
+      lugar_inicio: lugarInicioTexto,
+      horario_inicio: horarioInicioTexto,
+      inicio_updated_at: inicioUpdatedAt,
       resultados: mapas.resultados,
       medidas_cautelares: mapas.medidas,
       detalles: Array.isArray(detallesProcesados?.detalleItems) ? detallesProcesados.detalleItems : [],
@@ -5946,6 +6048,14 @@ ${bold(`Moviles ${organismo}:`)}`)
         tipo_evento: tipoEvento,
         franja: franjaSeleccionada,
         registro_original: franjaSeleccionada?.__registroOriginalPublicado || null,
+        tipo_operativo_inicio_texto: tipoInicioTexto,
+        personal_inicio: personalInicioArr,
+        moviles_inicio: movilesInicioArr,
+        motos_inicio: motosInicioArr,
+        elementos_inicio: elementosInicioObj,
+        lugar_inicio: lugarInicioTexto,
+        horario_inicio: horarioInicioTexto,
+        inicio_updated_at: inicioUpdatedAt,
       },
       metadata: {
         tipo_evento: tipoEvento,
@@ -6114,7 +6224,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function buscarOperativoEstadoParaInformeWsp(data) {
     const guardiaFecha = limpiarTextoSimple(data?.guardia_fecha || getGuardiaFechaISO());
     const operativoKey = limpiarTextoSimple(data?.operativo_key || franjaSeleccionada?.__operativoKey || "");
-    const selectCols = "id,operativo_key,guardia_fecha,hora_desde,hora_hasta,lugar,tipo_operativo,estado,inicio_evento_id,finalizado_evento_id";
+    const selectCols = "id,operativo_key,guardia_fecha,hora_desde,hora_hasta,lugar,tipo_operativo,estado,inicio_evento_id,finalizado_evento_id,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at";
 
     try {
       if (operativoKey) {
@@ -6180,6 +6290,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: data.horario || "",
       lugar: data.lugar || "",
       tipo_operativo: data.tipo_operativo || "",
+      tipo_operativo_inicio_texto: data.tipo_operativo_inicio_texto || data.tipo_operativo || "",
+      personal_inicio: Array.isArray(data.personal_inicio) ? data.personal_inicio : (Array.isArray(data.personal) ? data.personal : []),
+      moviles_inicio: Array.isArray(data.moviles_inicio) ? data.moviles_inicio : (Array.isArray(data.moviles) ? data.moviles : []),
+      motos_inicio: Array.isArray(data.motos_inicio) ? data.motos_inicio : (Array.isArray(data.motos) ? data.motos : []),
+      elementos_inicio: data.elementos_inicio || data.elementos || {},
+      lugar_inicio: data.lugar_inicio || data.lugar || "",
+      horario_inicio: data.horario_inicio || data.horario || "",
+      inicio_updated_at: data.inicio_updated_at || new Date().toISOString(),
       resultados: data.resultados || {},
       medidas_cautelares: data.medidas_cautelares || {},
       detalles: Array.isArray(data.detalles) ? data.detalles : [],
@@ -6256,7 +6374,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
 
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}?${filtros.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}?${filtros.toString()}`, {
         method: "DELETE",
         headers: headersSupabase({ Prefer: "return=minimal" }),
       });
@@ -6737,15 +6855,23 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: hora,
       hora_desde: hora,
       hora_hasta: hora,
-      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      lugar: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+      tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
       titulo: "ALCOHOLEMIA POSITIVA",
       ordenes_origen: ordenes,
-      personal: normalizarArrayTexto(inicio?.personal),
-      moviles: normalizarArrayTexto(inicio?.moviles),
-      motos: normalizarArrayTexto(inicio?.motos),
-      elementos: normalizarPayloadElementos(inicio),
+      personal: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+      personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+      moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+      motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+      lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
+      inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
       resultados,
       medidas_cautelares: medidasPayload,
       detalles,
@@ -6754,6 +6880,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       payload_completo: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
         tipo_informe: infAlco460?.checked ? "ALCOHOLEMIA_460" : "ALCOHOLEMIA_POSITIVA",
+        tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+        personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+        moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+        motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+        elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+        lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+        horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
+        inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
         franja: franjaSeleccionada,
         datos_formulario: {
           tipo_vehiculo: tipoVehiculo,
@@ -6791,24 +6925,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
-  function obtenerTipoOperativoRealInforme(inicio = {}) {
-    const candidatos = [
-      inicio?.tipo_corto,
-      inicio?.tipo_operativo,
-      inicio?.titulo,
-      franjaSeleccionada?.__tipoPublicado,
-      obtenerTipoCortoFranja(franjaSeleccionada),
-    ];
-
-    for (const candidato of candidatos) {
-      const limpio = normalizarMayusInforme(candidato || "");
-      if (!limpio) continue;
-      return limpio;
-    }
-
-    return "OPERATIVO";
-  }
-
   function construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
     const motivo = infAlco460?.checked
       ? (calc.sancionable
@@ -6816,10 +6932,13 @@ ${bold(`Moviles ${organismo}:`)}`)
         : "REMISIÓN POR DECTO 460/22 Y ALCOHOLEMIA POSITIVA NO SANCIONABLE")
       : (calc.sancionable ? "ALCOHOLEMIA POSITIVA SANCIONABLE" : "ALCOHOLEMIA POSITIVA NO SANCIONABLE");
 
-    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
-    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const tipoOp = obtenerTipoOperativoRealInforme(inicio);
+    const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [
+      lineaDesdeArray(inicio?.moviles_inicio || inicio?.moviles, "/"),
+      lineaDesdeArray(inicio?.motos_inicio || inicio?.motos, "/"),
+    ].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal).join("\n") || "/";
+    const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
@@ -6871,7 +6990,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/alcoholemia/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -6881,7 +7000,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -6890,11 +7009,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "ALCOHOLEMIA_POSITIVA",
       foto_numero: numero,
-      storage_bucket: INFORMES_FOTOS_BUCKET,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
@@ -7131,10 +7250,13 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
-    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
-    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const tipoOp = obtenerTipoOperativoRealInforme(inicio);
+    const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [
+      lineaDesdeArray(inicio?.moviles_inicio || inicio?.moviles, "/"),
+      lineaDesdeArray(inicio?.motos_inicio || inicio?.motos, "/"),
+    ].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal).join("\n") || "/";
+    const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
@@ -7195,15 +7317,23 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: hora,
       hora_desde: hora,
       hora_hasta: hora,
-      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
+      lugar: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+      tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
       titulo: "DECTO 460/22",
       ordenes_origen: ordenes,
-      personal: normalizarArrayTexto(inicio?.personal),
-      moviles: normalizarArrayTexto(inicio?.moviles),
-      motos: normalizarArrayTexto(inicio?.motos),
-      elementos: normalizarPayloadElementos(inicio),
+      personal: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+      personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+      moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+      motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+      lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
+      inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
       resultados,
       medidas_cautelares: medidasPayload,
       detalles,
@@ -7212,6 +7342,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       payload_completo: {
         tipo_evento: "DECTO_460_22",
         tipo_informe: "DECTO_460_22",
+        tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+        personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
+        moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
+        motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+        elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
+        lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
+        horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
+        inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
         franja: franjaSeleccionada,
         datos_formulario: {
           marca: normalizarMayusInforme(inf460Marca?.value),
@@ -7249,7 +7387,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/460/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7259,7 +7397,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7268,11 +7406,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "DECTO_460_22",
       foto_numero: numero,
-      storage_bucket: INFORMES_FOTOS_BUCKET,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
