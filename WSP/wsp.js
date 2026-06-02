@@ -139,6 +139,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
+  // Fotos de informes separadas de fotos de INICIO/FINALIZADO/historial.
+  const INFORMES_FOTOS_BUCKET = "operativos-informes-fotos";
+  const INFORMES_FOTOS_TABLE = "operativos_informes_fotos";
+
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
 
@@ -6327,6 +6331,34 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
     data.operativo_estado_id = estado.id;
     if (estado.operativo_key) data.operativo_key = limpiarTextoSimple(estado.operativo_key);
+
+    // Antes de guardar el informe, pisar sus datos de contexto con el estado vivo del INICIO.
+    // Así el informe queda vinculado al último tipo/personal/móviles del operativo en curso.
+    const inicioVigente = normalizarInicioGuardado(estado);
+    if (inicioVigente) {
+      data.tipo_operativo_inicio_texto = obtenerTipoOperativoInicioTextoInforme(inicioVigente, franjaSeleccionada);
+      data.tipo_operativo = data.tipo_operativo_inicio_texto || data.tipo_operativo || "";
+      data.personal_inicio = normalizarArrayTexto(inicioVigente.personal_inicio || inicioVigente.personal);
+      data.moviles_inicio = normalizarArrayTexto(inicioVigente.moviles_inicio || inicioVigente.moviles);
+      data.motos_inicio = normalizarArrayTexto(inicioVigente.motos_inicio || inicioVigente.motos);
+      data.elementos_inicio = normalizarPayloadElementos(inicioVigente.elementos_inicio || inicioVigente.elementos || {});
+      data.lugar_inicio = inicioVigente.lugar_inicio || inicioVigente.lugar || data.lugar || "";
+      data.horario_inicio = inicioVigente.horario_inicio || inicioVigente.horario || data.horario || "";
+      data.inicio_updated_at = inicioVigente.inicio_updated_at || data.inicio_updated_at || new Date().toISOString();
+
+      data.payload_completo = {
+        ...(data.payload_completo || {}),
+        tipo_operativo_inicio_texto: data.tipo_operativo_inicio_texto,
+        personal_inicio: data.personal_inicio,
+        moviles_inicio: data.moviles_inicio,
+        motos_inicio: data.motos_inicio,
+        elementos_inicio: data.elementos_inicio,
+        lugar_inicio: data.lugar_inicio,
+        horario_inicio: data.horario_inicio,
+        inicio_updated_at: data.inicio_updated_at,
+      };
+    }
+
     const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
     try {
       const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=guardia_fecha,informe_key`;
@@ -6354,7 +6386,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         return false;
       }
 
-      return { evento, estado: null, informe_key: data.informe_key };
+      return { evento, estado, informe_key: data.informe_key };
     } catch (e) {
       console.error("[WSP] Error guardando/upsert informe.", e);
       alert("Error guardando el informe en Supabase. Revise conexión y vuelva a intentar.");
@@ -6374,7 +6406,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
 
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}?${filtros.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}?${filtros.toString()}`, {
         method: "DELETE",
         headers: headersSupabase({ Prefer: "return=minimal" }),
       });
@@ -6709,10 +6741,62 @@ ${bold(`Moviles ${organismo}:`)}`)
     return false;
   }
 
+
+  async function obtenerInicioVigenteParaInformeWsp() {
+    if (!franjaSeleccionada) return null;
+
+    const operativoKey = limpiarTextoSimple(
+      franjaSeleccionada?.__operativoKey ||
+      franjaSeleccionada?.__inicioGuardadoPayload?.operativo_key ||
+      construirOperativoKeyEstable(franjaSeleccionada)
+    );
+
+    try {
+      const estado = await buscarOperativoEstadoParaInformeWsp({
+        guardia_fecha: getGuardiaFechaISO(),
+        operativo_key: operativoKey,
+      });
+
+      if (estado && !estadoEsFinalizadoInformeWsp(estado)) {
+        const normal = normalizarInicioGuardado({
+          ...estado,
+          horario: estado.horario_inicio || normalizarHorarioEstadoInformeWsp(estado),
+          lugar: estado.lugar_inicio || estado.lugar || "",
+          tipo_corto: estado.tipo_operativo_inicio_texto || estado.tipo_operativo || "",
+          tipo_operativo_inicio_texto: estado.tipo_operativo_inicio_texto || "",
+          personal_inicio: estado.personal_inicio,
+          moviles_inicio: estado.moviles_inicio,
+          motos_inicio: estado.motos_inicio,
+          elementos_inicio: estado.elementos_inicio,
+          lugar_inicio: estado.lugar_inicio || estado.lugar || "",
+          horario_inicio: estado.horario_inicio || normalizarHorarioEstadoInformeWsp(estado),
+          inicio_updated_at: estado.inicio_updated_at || estado.updated_at || "",
+        });
+
+        if (normal) {
+          franjaSeleccionada.__inicioGuardadoPayload = normal;
+          franjaSeleccionada.__tipoOperativoInicioTexto = normal.tipo_operativo_inicio_texto || franjaSeleccionada.__tipoOperativoInicioTexto || "";
+          return normal;
+        }
+      }
+    } catch (e) {
+      console.warn("[WSP] No se pudo leer estado vigente del inicio para informe.", e);
+    }
+
+    return null;
+  }
+
   async function obtenerInicioParaInformeAlcoholemia() {
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
-    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+
+    // Fuente principal: último estado vigente del INICIO en operativos_estado.
+    // No usar primero localStorage ni evento viejo porque el INICIO puede haberse actualizado.
+    return await obtenerInicioVigenteParaInformeWsp()
+      || franjaSeleccionada.__inicioGuardadoPayload
+      || await leerInicioDesdeSupabase(franjaSeleccionada)
+      || cargarInicioGuardadoCoincidente()
+      || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeAlcoholemia() {
@@ -6984,13 +7068,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
-    const estadoId = String(resultadoHistorial.estado?.id || "");
+    const estadoId = String(resultadoHistorial.estado?.id || resultadoHistorial.evento?.operativo_estado_id || "");
     const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/alcoholemia/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7000,7 +7084,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7009,11 +7093,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "ALCOHOLEMIA_POSITIVA",
       foto_numero: numero,
-      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_bucket: INFORMES_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
@@ -7160,7 +7244,14 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeDecto460() {
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
-    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+
+    // Fuente principal: último estado vigente del INICIO en operativos_estado.
+    // No usar primero localStorage ni evento viejo porque el INICIO puede haberse actualizado.
+    return await obtenerInicioVigenteParaInformeWsp()
+      || franjaSeleccionada.__inicioGuardadoPayload
+      || await leerInicioDesdeSupabase(franjaSeleccionada)
+      || cargarInicioGuardadoCoincidente()
+      || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeDecto460() {
@@ -7381,13 +7472,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
-    const estadoId = String(resultadoHistorial.estado?.id || "");
+    const estadoId = String(resultadoHistorial.estado?.id || resultadoHistorial.evento?.operativo_estado_id || "");
     const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/460/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7397,7 +7488,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7406,11 +7497,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "DECTO_460_22",
       foto_numero: numero,
-      storage_bucket: HISTORIAL_FOTOS_BUCKET,
+      storage_bucket: INFORMES_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
