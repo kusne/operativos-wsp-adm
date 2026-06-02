@@ -136,10 +136,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
+  // INICIO / FINALIZADO / historial operativo
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
-  // Fotos de informes separadas de fotos de INICIO/FINALIZADO/historial.
+  // INFORMES intermedios: fotos separadas del historial de INICIO/FINALIZADO
   const INFORMES_FOTOS_BUCKET = "operativos-informes-fotos";
   const INFORMES_FOTOS_TABLE = "operativos_informes_fotos";
 
@@ -1210,7 +1211,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarArrayTexto(arr) {
-    return (Array.isArray(arr) ? arr : []).map((v) => limpiarTextoSimple(v)).filter(Boolean);
+    if (Array.isArray(arr)) return arr.map((v) => limpiarTextoSimple(v)).filter(Boolean);
+    if (arr == null) return [];
+    if (typeof arr === "string") {
+      const raw = arr.trim();
+      if (!raw || raw === "/") return [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map((v) => limpiarTextoSimple(v)).filter(Boolean);
+      } catch {}
+      return raw.split(/[\n/]+/).map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
+    }
+    return [];
+  }
+
+  function tomarArrayInicioPreferido(...valores) {
+    for (const valor of valores) {
+      const arr = normalizarArrayTexto(valor);
+      if (arr.length) return arr;
+    }
+    return [];
+  }
+
+  function tomarObjetoInicioPreferido(...valores) {
+    for (const valor of valores) {
+      const obj = normalizarPayloadElementos(valor);
+      if (obj && Object.values(obj).some((arr) => Array.isArray(arr) && arr.length)) return obj;
+      if (valor && typeof valor === "object" && !Array.isArray(valor) && Object.keys(valor).length && !valor.elementos) return valor;
+    }
+    return normalizarPayloadElementos({});
   }
 
   function construirPayloadElementosActual() {
@@ -1329,10 +1358,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const pc = parseJsonObjectWsp(payload?.payload_completo) || {};
     const pcPayload = parseJsonObjectWsp(pc?.payload) || pc;
 
-    const personalInicio = normalizarArrayTexto(payload.personal_inicio || pc.personal_inicio || pcPayload.personal_inicio || payload.personal);
-    const movilesInicio = normalizarArrayTexto(payload.moviles_inicio || pc.moviles_inicio || pcPayload.moviles_inicio || payload.moviles);
-    const motosInicio = normalizarArrayTexto(payload.motos_inicio || pc.motos_inicio || pcPayload.motos_inicio || payload.motos);
-    const elementosInicio = normalizarPayloadElementos(payload.elementos_inicio || pc.elementos_inicio || pcPayload.elementos_inicio || payload.elementos);
+    const personalInicio = tomarArrayInicioPreferido(payload.personal_inicio, pc.personal_inicio, pcPayload.personal_inicio, payload.personal);
+    const movilesInicio = tomarArrayInicioPreferido(payload.moviles_inicio, pc.moviles_inicio, pcPayload.moviles_inicio, payload.moviles);
+    const motosInicio = tomarArrayInicioPreferido(payload.motos_inicio, pc.motos_inicio, pcPayload.motos_inicio, payload.motos);
+    const elementosInicio = tomarObjetoInicioPreferido(payload.elementos_inicio, pc.elementos_inicio, pcPayload.elementos_inicio, payload.elementos);
     const lugarInicio = limpiarTextoSimple(payload.lugar_inicio || pc.lugar_inicio || pcPayload.lugar_inicio || payload.lugar || derivado.lugar || "");
     const horarioInicio = limpiarTextoSimple(payload.horario_inicio || pc.horario_inicio || pcPayload.horario_inicio || payload.horario || derivado.horario || "");
     const tipoInicioTexto = limpiarTextoSimple(
@@ -1736,10 +1765,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         lugar: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
         tipo_corto: limpiarTextoSimple(inicio.tipo_corto || row?.tipo_operativo || row?.tipo || ""),
         tipo_operativo_inicio_texto: limpiarTextoSimple(row?.tipo_operativo_inicio_texto || inicio.tipo_operativo_inicio_texto || ""),
-        personal_inicio: row?.personal_inicio || inicio.personal_inicio || inicio.personal || row?.personal,
-        moviles_inicio: row?.moviles_inicio || inicio.moviles_inicio || inicio.moviles || row?.moviles,
-        motos_inicio: row?.motos_inicio || inicio.motos_inicio || inicio.motos || row?.motos,
-        elementos_inicio: row?.elementos_inicio || inicio.elementos_inicio || inicio.elementos || row?.elementos || {},
+        personal_inicio: tomarArrayInicioPreferido(row?.personal_inicio, inicio.personal_inicio, inicio.personal, row?.personal),
+        moviles_inicio: tomarArrayInicioPreferido(row?.moviles_inicio, inicio.moviles_inicio, inicio.moviles, row?.moviles),
+        motos_inicio: tomarArrayInicioPreferido(row?.motos_inicio, inicio.motos_inicio, inicio.motos, row?.motos),
+        elementos_inicio: tomarObjetoInicioPreferido(row?.elementos_inicio, inicio.elementos_inicio, inicio.elementos, row?.elementos),
         lugar_inicio: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
         horario_inicio: limpiarTextoSimple(row?.horario_inicio || normalizarHorarioEstadoInformeWsp(row) || inicio.horario_inicio || inicio.horario || ""),
         inicio_updated_at: limpiarTextoSimple(row?.inicio_updated_at || inicio.inicio_updated_at || row?.updated_at || ""),
@@ -1763,6 +1792,41 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return unicos;
   }
 
+  async function obtenerInicioVigenteParaInformeWsp(franja = franjaSeleccionada) {
+    if (!franja) return null;
+
+    const keyActual = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
+
+    try {
+      const inicios = await leerIniciosGuardiaDesdeSupabase();
+      let mejor = null;
+      let mejorPuntaje = -1;
+
+      (Array.isArray(inicios) ? inicios : []).forEach((inicio) => {
+        const data = normalizarInicioGuardado(inicio);
+        if (!data) return;
+        let puntaje = puntuarCoincidenciaInicio(data, franja);
+        if (keyActual && limpiarTextoSimple(data.operativo_key) === keyActual) puntaje += 1000;
+        if (puntaje > mejorPuntaje) {
+          mejor = data;
+          mejorPuntaje = puntaje;
+        }
+      });
+
+      if (mejor && (mejorPuntaje >= 90 || (keyActual && limpiarTextoSimple(mejor.operativo_key) === keyActual))) {
+        return mejor;
+      }
+    } catch (e) {
+      console.warn("[WSP] No se pudo leer estado vigente del inicio para informe.", e);
+    }
+
+    // Respaldos solamente si falla la fuente viva. No deben pisar datos reales de operativos_estado.
+    return normalizarInicioGuardado(franja?.__inicioGuardadoPayload)
+      || await leerInicioDesdeSupabase(franja)
+      || cargarInicioGuardadoCoincidente()
+      || cargarInicioLocal();
+  }
+
   function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
     const data = normalizarInicioGuardado(inicio);
     if (!data) return null;
@@ -1782,6 +1846,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       lugar: limpiarTextoSimple(data.lugar_inicio || data.lugar || ""),
       fecha: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
       __inicioGuardadoPayload: data,
+      __estadoVivoInicio: data,
     };
   }
 
@@ -6331,34 +6396,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
     data.operativo_estado_id = estado.id;
     if (estado.operativo_key) data.operativo_key = limpiarTextoSimple(estado.operativo_key);
-
-    // Antes de guardar el informe, pisar sus datos de contexto con el estado vivo del INICIO.
-    // Así el informe queda vinculado al último tipo/personal/móviles del operativo en curso.
-    const inicioVigente = normalizarInicioGuardado(estado);
-    if (inicioVigente) {
-      data.tipo_operativo_inicio_texto = obtenerTipoOperativoInicioTextoInforme(inicioVigente, franjaSeleccionada);
-      data.tipo_operativo = data.tipo_operativo_inicio_texto || data.tipo_operativo || "";
-      data.personal_inicio = normalizarArrayTexto(inicioVigente.personal_inicio || inicioVigente.personal);
-      data.moviles_inicio = normalizarArrayTexto(inicioVigente.moviles_inicio || inicioVigente.moviles);
-      data.motos_inicio = normalizarArrayTexto(inicioVigente.motos_inicio || inicioVigente.motos);
-      data.elementos_inicio = normalizarPayloadElementos(inicioVigente.elementos_inicio || inicioVigente.elementos || {});
-      data.lugar_inicio = inicioVigente.lugar_inicio || inicioVigente.lugar || data.lugar || "";
-      data.horario_inicio = inicioVigente.horario_inicio || inicioVigente.horario || data.horario || "";
-      data.inicio_updated_at = inicioVigente.inicio_updated_at || data.inicio_updated_at || new Date().toISOString();
-
-      data.payload_completo = {
-        ...(data.payload_completo || {}),
-        tipo_operativo_inicio_texto: data.tipo_operativo_inicio_texto,
-        personal_inicio: data.personal_inicio,
-        moviles_inicio: data.moviles_inicio,
-        motos_inicio: data.motos_inicio,
-        elementos_inicio: data.elementos_inicio,
-        lugar_inicio: data.lugar_inicio,
-        horario_inicio: data.horario_inicio,
-        inicio_updated_at: data.inicio_updated_at,
-      };
-    }
-
     const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
     try {
       const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=guardia_fecha,informe_key`;
@@ -6386,7 +6423,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         return false;
       }
 
-      return { evento, estado, informe_key: data.informe_key };
+      return { evento, estado: null, informe_key: data.informe_key };
     } catch (e) {
       console.error("[WSP] Error guardando/upsert informe.", e);
       alert("Error guardando el informe en Supabase. Revise conexión y vuelva a intentar.");
@@ -6741,62 +6778,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     return false;
   }
 
-
-  async function obtenerInicioVigenteParaInformeWsp() {
-    if (!franjaSeleccionada) return null;
-
-    const operativoKey = limpiarTextoSimple(
-      franjaSeleccionada?.__operativoKey ||
-      franjaSeleccionada?.__inicioGuardadoPayload?.operativo_key ||
-      construirOperativoKeyEstable(franjaSeleccionada)
-    );
-
-    try {
-      const estado = await buscarOperativoEstadoParaInformeWsp({
-        guardia_fecha: getGuardiaFechaISO(),
-        operativo_key: operativoKey,
-      });
-
-      if (estado && !estadoEsFinalizadoInformeWsp(estado)) {
-        const normal = normalizarInicioGuardado({
-          ...estado,
-          horario: estado.horario_inicio || normalizarHorarioEstadoInformeWsp(estado),
-          lugar: estado.lugar_inicio || estado.lugar || "",
-          tipo_corto: estado.tipo_operativo_inicio_texto || estado.tipo_operativo || "",
-          tipo_operativo_inicio_texto: estado.tipo_operativo_inicio_texto || "",
-          personal_inicio: estado.personal_inicio,
-          moviles_inicio: estado.moviles_inicio,
-          motos_inicio: estado.motos_inicio,
-          elementos_inicio: estado.elementos_inicio,
-          lugar_inicio: estado.lugar_inicio || estado.lugar || "",
-          horario_inicio: estado.horario_inicio || normalizarHorarioEstadoInformeWsp(estado),
-          inicio_updated_at: estado.inicio_updated_at || estado.updated_at || "",
-        });
-
-        if (normal) {
-          franjaSeleccionada.__inicioGuardadoPayload = normal;
-          franjaSeleccionada.__tipoOperativoInicioTexto = normal.tipo_operativo_inicio_texto || franjaSeleccionada.__tipoOperativoInicioTexto || "";
-          return normal;
-        }
-      }
-    } catch (e) {
-      console.warn("[WSP] No se pudo leer estado vigente del inicio para informe.", e);
-    }
-
-    return null;
-  }
-
   async function obtenerInicioParaInformeAlcoholemia() {
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
-
-    // Fuente principal: último estado vigente del INICIO en operativos_estado.
-    // No usar primero localStorage ni evento viejo porque el INICIO puede haberse actualizado.
-    return await obtenerInicioVigenteParaInformeWsp()
-      || franjaSeleccionada.__inicioGuardadoPayload
-      || await leerInicioDesdeSupabase(franjaSeleccionada)
-      || cargarInicioGuardadoCoincidente()
-      || cargarInicioLocal();
+    return await obtenerInicioVigenteParaInformeWsp(franjaSeleccionada);
   }
 
   async function refrescarContextoInformeAlcoholemia() {
@@ -6811,10 +6796,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       informeAlcoholemiaContexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
       return;
     }
-    const moviles = lineaDesdeArray(inicio.moviles, "/");
-    const motos = lineaDesdeArray(inicio.motos, "/");
+    const moviles = lineaDesdeArray(tomarArrayInicioPreferido(inicio.moviles_inicio, inicio.moviles), "/");
+    const motos = lineaDesdeArray(tomarArrayInicioPreferido(inicio.motos_inicio, inicio.motos), "/");
     const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar_inicio || inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
   }
 
   function setUIInformeAlcoholemiaActiva(activa) {
@@ -6945,13 +6930,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
       titulo: "ALCOHOLEMIA POSITIVA",
       ordenes_origen: ordenes,
-      personal: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-      moviles: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-      motos: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      personal: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+      moviles: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+      motos: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
       elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-      moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-      motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+      moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+      motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
       elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
       lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
       horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
@@ -6965,9 +6950,9 @@ ${bold(`Moviles ${organismo}:`)}`)
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
         tipo_informe: infAlco460?.checked ? "ALCOHOLEMIA_460" : "ALCOHOLEMIA_POSITIVA",
         tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-        personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-        moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-        motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+        personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+        moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+        motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
         elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
         lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
         horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
@@ -7018,10 +7003,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [
-      lineaDesdeArray(inicio?.moviles_inicio || inicio?.moviles, "/"),
-      lineaDesdeArray(inicio?.motos_inicio || inicio?.motos, "/"),
+      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles), "/"),
+      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos), "/"),
     ].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal).join("\n") || "/";
+    const personal = tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal).join("\n") || "/";
     const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
@@ -7068,7 +7053,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
-    const estadoId = String(resultadoHistorial.estado?.id || resultadoHistorial.evento?.operativo_estado_id || "");
+    const estadoId = String(resultadoHistorial.estado?.id || "");
     const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
@@ -7244,14 +7229,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeDecto460() {
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
-
-    // Fuente principal: último estado vigente del INICIO en operativos_estado.
-    // No usar primero localStorage ni evento viejo porque el INICIO puede haberse actualizado.
-    return await obtenerInicioVigenteParaInformeWsp()
-      || franjaSeleccionada.__inicioGuardadoPayload
-      || await leerInicioDesdeSupabase(franjaSeleccionada)
-      || cargarInicioGuardadoCoincidente()
-      || cargarInicioLocal();
+    return await obtenerInicioVigenteParaInformeWsp(franjaSeleccionada);
   }
 
   async function refrescarContextoInformeDecto460() {
@@ -7266,10 +7244,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       informeDecto460Contexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
       return;
     }
-    const moviles = lineaDesdeArray(inicio.moviles, "/");
-    const motos = lineaDesdeArray(inicio.motos, "/");
+    const moviles = lineaDesdeArray(tomarArrayInicioPreferido(inicio.moviles_inicio, inicio.moviles), "/");
+    const motos = lineaDesdeArray(tomarArrayInicioPreferido(inicio.motos_inicio, inicio.motos), "/");
     const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar_inicio || inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
   }
 
   function setUIInformeDecto460Activa(activa) {
@@ -7343,10 +7321,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
     const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
     const moviles = [
-      lineaDesdeArray(inicio?.moviles_inicio || inicio?.moviles, "/"),
-      lineaDesdeArray(inicio?.motos_inicio || inicio?.motos, "/"),
+      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles), "/"),
+      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos), "/"),
     ].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal).join("\n") || "/";
+    const personal = tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal).join("\n") || "/";
     const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
@@ -7414,13 +7392,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
       titulo: "DECTO 460/22",
       ordenes_origen: ordenes,
-      personal: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-      moviles: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-      motos: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      personal: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+      moviles: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+      motos: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
       elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-      moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-      motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+      personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+      moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+      motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
       elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
       lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
       horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
@@ -7434,9 +7412,9 @@ ${bold(`Moviles ${organismo}:`)}`)
         tipo_evento: "DECTO_460_22",
         tipo_informe: "DECTO_460_22",
         tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-        personal_inicio: normalizarArrayTexto(inicio?.personal_inicio || inicio?.personal),
-        moviles_inicio: normalizarArrayTexto(inicio?.moviles_inicio || inicio?.moviles),
-        motos_inicio: normalizarArrayTexto(inicio?.motos_inicio || inicio?.motos),
+        personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
+        moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
+        motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
         elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
         lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
         horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
@@ -7472,7 +7450,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
-    const estadoId = String(resultadoHistorial.estado?.id || resultadoHistorial.evento?.operativo_estado_id || "");
+    const estadoId = String(resultadoHistorial.estado?.id || "");
     const informeKey = limpiarTextoSimple(resultadoHistorial.evento.informe_key || resultadoHistorial.informe_key || resultadoHistorial.evento?.payload_completo?.informe_key || "");
     const operativoKey = limpiarTextoSimple(resultadoHistorial.evento.operativo_key || resultadoHistorial.estado?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada));
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
