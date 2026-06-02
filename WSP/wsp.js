@@ -5272,9 +5272,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       const limpio = limpiarMarcaOrigenVisualDetalle(visual);
       const item = normalizarLineaDetalle(limpio);
 
-      // Los procedimientos 460/22 no son detalles de infracción: no deben
-      // quedar en el cuadro Detalles. Su conteo vive en Resultados/Observaciones.
-      if (item?.tipo === "procedimiento460") return;
+      // Los procedimientos 460/22 no son detalles de infracción para la salida final,
+      // pero SÍ deben quedar visibles en el cuadro Detalles mientras se edita.
+      // Luego normalizarDetallesTexto() los retira de Detalles impresos y los pasa
+      // a Observaciones al generar/enviar el FINALIZADO.
+      if (item?.tipo === "procedimiento460") {
+        otras.push({ idx, texto: item.texto || linea, vacia: false });
+        return;
+      }
 
       if (!item || item.tipo !== "detalle") {
         otras.push({ idx, texto: linea, vacia: false });
