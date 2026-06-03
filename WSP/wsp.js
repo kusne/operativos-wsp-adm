@@ -4486,6 +4486,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
+    forzarVisibilidadFinalizadoNumeralesWsp();
 
     if (selTipo.value === "FINALIZA") {
       sincronizarInicioGuardadoSegunContexto();
@@ -4615,6 +4616,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
+    forzarVisibilidadFinalizadoNumeralesWsp();
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarInicioGuardadoSegunContexto();
@@ -4875,6 +4877,50 @@ ${bold(`Moviles ${organismo}:`)}`)
         return;
       }
     }
+
+    if (mostrarResultados) {
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
+    }
+  }
+
+
+
+  // Reparación defensiva: FINALIZA debe mostrar siempre el bloque de numerales
+  // cuando corresponde por tipo de operativo. Algunos modos de INFORMES/CONTROL
+  // dejan clases/hidden aplicadas; esta función restablece la UI normal de FINALIZA
+  // sin modificar el armado del texto ni la lógica de resultados.
+  function forzarVisibilidadFinalizadoNumeralesWsp() {
+    if (!selTipo || selTipo.value !== "FINALIZA") return;
+
+    try {
+      document.body.classList.remove(
+        "modo-control-superior",
+        "modo-informe-alcoholemia",
+        "modo-informe-decto460",
+        "modo-control-moviles",
+        "control-movil-seleccionado-activo"
+      );
+    } catch {}
+
+    setPersonalVisible(true);
+    setMovilidadVisible(true);
+    setElementosVisibles(true);
+    setObservacionesVisible(true);
+    setControlSuperiorVisible(false);
+    if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.add("hidden");
+    if (bloqueInformeDecto460) bloqueInformeDecto460.classList.add("hidden");
+    if (bloqueControlMoviles) bloqueControlMoviles.classList.add("hidden");
+
+    if (divFinaliza) divFinaliza.classList.remove("hidden");
+    if (divMismosElementos) divMismosElementos.classList.remove("hidden");
+
+    const mostrarResultados = debeIncluirResultadosFinaliza();
+    const mostrarDetalles = debeIncluirDetallesFinaliza();
+
+    if (tituloResultadosFinaliza) tituloResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
+    if (contenidoResultadosFinaliza) contenidoResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
+    if (divDetalles) divDetalles.classList.toggle("hidden", !mostrarDetalles);
 
     if (mostrarResultados) {
       sincronizarUIAlcoholimetro();
