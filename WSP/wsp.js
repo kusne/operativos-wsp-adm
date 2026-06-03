@@ -1945,19 +1945,60 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function cargarOperativosIniciadosParaFinaliza(valorSeleccionado = "") {
-    // FINALIZA debe trabajar sobre operativos ya INICIADOS/EN_CURSO,
-    // no sobre la grilla de operativos publicados. Si se usa la lista publicada,
-    // el cierre queda sin payload de inicio vivo y la UI puede quedar sin numerales.
-    const lista = await cargarOperativosIniciadosParaInformes(valorSeleccionado || "");
-    setTituloOperativosIniciados(true);
+    // FINALIZA usa su propio cargador. No debe heredar el comportamiento de INFORMES,
+    // porque INFORMES puede preseleccionar/bloquear el select cuando hay un solo operativo.
+    // En FINALIZA el usuario tiene que poder abrir el desplegable y elegir el operativo a cerrar.
+    if (!selHorario) return [];
 
-    // En FINALIZA el selector NO debe quedar bloqueado. Aunque haya un solo
-    // operativo iniciado, el usuario tiene que poder abrir/ver el input y confirmar
-    // cuál está cerrando; y si hay más de uno, poder cambiarlo sin que el foco lo cierre.
-    if (selHorario && Array.isArray(lista) && lista.length > 0) {
-      setSelectorHorarioDisabledWsp(false);
+    const requestId = ++informesSelectorRequestId;
+    setTituloOperativosIniciados(true);
+    setSelectorHorarioDisabledWsp(true);
+    selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
+    selHorario.value = "";
+
+    let inicios = [];
+    try {
+      inicios = await leerIniciosGuardiaDesdeSupabase();
+    } catch (e) {
+      console.warn("[WSP] No se pudieron cargar operativos iniciados para FINALIZA.", e);
+      inicios = [];
     }
-    return lista;
+
+    if (requestId !== informesSelectorRequestId) return operativosCache;
+
+    const candidatos = ordenarCandidatosInformeAlcoholemia(
+      (Array.isArray(inicios) ? inicios : []).map(construirFranjaInformeDesdeInicio).filter(Boolean)
+    );
+
+    operativosCache = [];
+    selHorario.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.text = candidatos.length ? "Seleccionar operativo iniciado a finalizar" : "No hay operativos iniciados";
+    selHorario.appendChild(placeholder);
+
+    candidatos.forEach((operativo) => {
+      operativosCache.push(operativo);
+      const option = document.createElement("option");
+      option.value = operativo.__key;
+      option.text = construirTextoOpcionHorario(operativo);
+      option.title = construirTextoOpcionHorario(operativo);
+      selHorario.appendChild(option);
+    });
+
+    if (valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
+      selHorario.value = valorSeleccionado;
+    } else {
+      // No preseleccionar. Así el usuario puede abrir el input y elegir aun cuando hay un solo operativo.
+      selHorario.value = "";
+    }
+
+    franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
+    ordenSeleccionada = null;
+    setSelectorHorarioDisabledWsp(candidatos.length === 0);
+    actualizarContadorOperativosWsp(candidatos.length);
+    return operativosCache;
   }
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
@@ -4635,7 +4676,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         actualizarVisibilidadBloquePresenciaActiva();
         actualizarVisibilidadResultadosFinaliza();
         forzarVisibilidadFinalizadoNumeralesWsp();
-        desactivarControlesMismos({ limpiar: true });
         sincronizarUIAlcoholimetro();
         sincronizarInicioGuardadoSegunContexto();
       });
@@ -4936,9 +4976,12 @@ ${bold(`Moviles ${organismo}:`)}`)
       );
     } catch {}
 
-    setPersonalVisible(true);
-    setMovilidadVisible(true);
-    setElementosVisibles(true);
+    // No tocar de manera ciega Personal/Móvil/Elementos: en FINALIZADO deben quedar
+    // ocultos cuando están marcados como "mismo del inicio". Esta función solo blinda
+    // numerales/finalizado y respeta el estado real de esos tres bloques.
+    setPersonalVisible(!(chkMismoPersonal && chkMismoPersonal.checked));
+    setMovilidadVisible(!(chkMismoMovil && chkMismoMovil.checked));
+    setElementosVisibles(!(chkMismosElementos && chkMismosElementos.checked));
     setObservacionesVisible(true);
     setControlSuperiorVisible(false);
     if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.add("hidden");
@@ -8479,7 +8522,13 @@ ${bold(`Moviles ${organismo}:`)}`)
     // a deshabilitar el select y el desplegable no abre. La lista ya se carga al
     // elegir FINALIZA o el informe concreto.
     if (selTipo?.value === "FINALIZA") {
-      if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
+      if (operativosCache.length > 0) {
+        setSelectorHorarioDisabledWsp(false);
+      } else {
+        cargarOperativosIniciadosParaFinaliza(selHorario?.value || "").then(() => {
+          if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
+        });
+      }
       return;
     }
 
@@ -8493,8 +8542,8 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function asegurarSelectorInformesAbiertoWsp() {
-    if (selTipo?.value === "FINALIZA" && operativosCache.length > 0) {
-      setSelectorHorarioDisabledWsp(false);
+    if (selTipo?.value === "FINALIZA") {
+      if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
       return;
     }
     if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
