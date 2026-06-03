@@ -5906,6 +5906,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     setPersonalVisible(false);
     setMovilidadVisible(false);
     setElementosVisibles(false);
+
+    // Al seleccionar un operativo iniciado, los bloques de personal/móviles/elementos
+    // pueden ocultarse por “mismos datos”, pero FINALIZA debe seguir visible para
+    // cargar numerales, detalles y observaciones.
+    forzarVisibilidadFinalizadoNumeralesWsp();
   }
 
   async function sincronizarInicioGuardadoSegunContexto() {
