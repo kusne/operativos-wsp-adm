@@ -4583,9 +4583,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setUIInformeDecto460Activa(false);
 
     if (controlSuperior) {
-      cargarOperativosDisponibles(selHorario?.value || "");
-      actualizarDatosFranja();
+      setUIInformeAlcoholemiaActiva(false);
+      setUIInformeDecto460Activa(false);
       setUIControlSuperiorActiva(true);
+      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+      });
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
       return;
@@ -5734,6 +5737,90 @@ ${bold(`Moviles ${organismo}:`)}`)
     return getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO;
   }
 
+
+  function asegurarModuloControlSuperiorFallbackWsp() {
+    if (window.ControlSuperior && typeof window.ControlSuperior.buildMessage === "function") return;
+
+    const qs = (id) => document.getElementById(id);
+    const rolSeleccionado = () => {
+      if (qs("controlSuperiorJefe")?.checked) return "JEFE";
+      if (qs("controlSuperiorSubjefe")?.checked) return "SUBJEFE";
+      if (qs("controlSuperiorOtros")?.checked) return "OTROS";
+      return "";
+    };
+    const nombreRol = (rol) => {
+      if (rol === "JEFE") return "SubCrio Choque Jose Maria";
+      if (rol === "SUBJEFE") return "Inspector Tramontini Ismael";
+      return limpiarTextoSimple(qs("controlSuperiorOtrosTexto")?.value || "otros");
+    };
+
+    window.ControlSuperior = {
+      ...(window.ControlSuperior || {}),
+      isActive: () => getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO,
+      reset: () => {
+        ["controlSuperiorJefe", "controlSuperiorSubjefe", "controlSuperiorOtros", "controlSuperiorConMovil", "controlSuperiorSeAcopla"].forEach((id) => {
+          const el = qs(id);
+          if (el) el.checked = false;
+        });
+        const otros = qs("controlSuperiorOtrosTexto");
+        if (otros) otros.value = "";
+      },
+      buildMessage: (ctx = {}) => {
+        const rol = rolSeleccionado();
+        if (!rol) return { ok: false, mensaje: "Debe seleccionar JEFE, SUBJEFE u OTROS en CONTROL SUPERIOR." };
+        const otrosTexto = limpiarTextoSimple(qs("controlSuperiorOtrosTexto")?.value || "");
+        if (rol === "OTROS" && !otrosTexto) return { ok: false, mensaje: "Debe completar el nombre en OTROS para CONTROL SUPERIOR." };
+
+        const inicio = ctx.inicio || {};
+        const franja = ctx.franja || {};
+        const b = typeof ctx.bold === "function" ? ctx.bold : bold;
+        const compactar = typeof ctx.compactarSaltos === "function" ? ctx.compactarSaltos : compactarSaltos;
+        const lugar = normalizarLugar(inicio.lugar || inicio.lugar_inicio || franja.lugar || "");
+        const fecha = new Date().toLocaleDateString("es-AR");
+        const hora = `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+        const personalTexto = normalizarArrayTexto(inicio.personal || inicio.personal_inicio).join("\n") || "/";
+        const moviles = lineaDesdeArray(normalizarArrayTexto(inicio.moviles || inicio.moviles_inicio), "/");
+        const motos = lineaDesdeArray(normalizarArrayTexto(inicio.motos || inicio.motos_inicio), "/");
+        const movilTexto = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
+        const conMovil = !!qs("controlSuperiorConMovil")?.checked;
+        const seAcopla = !!qs("controlSuperiorSeAcopla")?.checked;
+        const nombre = nombreRol(rol);
+        const articulo = rol === "JEFE" ? "el Jefe" : (rol === "SUBJEFE" ? "el Subjefe" : "");
+        let observacion = "";
+        if (rol === "OTROS") {
+          observacion = conMovil
+            ? `Siendo la hora al margen se hace presente ${nombre}, en móvil ${movilTexto}.`
+            : `Siendo la hora al margen se hace presente ${nombre}.`;
+        } else {
+          const tramoMovil = conMovil ? `, en móvil ${movilTexto},` : ",";
+          observacion = `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando el servicio,${seAcopla ? " acoplandose al mismo." : " acto seguido se retira sin novedad."}`;
+        }
+
+        return { ok: true, texto: compactar([
+          b("POLICIA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
+          b("BRIGADA MOTORIZADA ZONA CENTRO NORTE"),
+          b("TERCIO CHARLIE"),
+          "",
+          `${b("MOTIVO:")} CONTROL SUPERIOR`,
+          "",
+          `${b("LUGAR:")} ${lugar || "/"}`,
+          "",
+          `${b("HORA:")} ${hora} hs`,
+          "",
+          `${b("FECHA:")} ${fecha}`,
+          "",
+          `${b("MOVIL:")} ${movilTexto}`,
+          "",
+          b("PERSONAL:"),
+          personalTexto,
+          "",
+          b("OBSERVACIÓNES:"),
+          observacion,
+        ].join("\n")) };
+      },
+    };
+  }
+
   function setObservacionesVisible(visible) {
     if (labelObs) labelObs.classList.toggle("hidden", !visible);
     if (textareaObs) textareaObs.classList.toggle("hidden", !visible);
@@ -6396,7 +6483,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
     const estado = await buscarOperativoEstadoParaInformeWsp(data);
     if (!estado?.id) {
-      alert("No se encontró el operativo EN CURSO vinculado en Supabase. No se enviará por WhatsApp para evitar guardar un informe colgado o duplicado.");
+      console.warn("[WSP] No se encontró el operativo EN CURSO vinculado en Supabase. El WhatsApp ya fue enviado; se omite guardado del informe.");
       return false;
     }
     data.operativo_estado_id = estado.id;
@@ -6417,21 +6504,21 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!r.ok) {
         const txt = await r.text().catch(() => "");
         console.error("[WSP] No se pudo guardar/upsert informe:", r.status, txt);
-        alert(`No se pudo guardar el informe en Supabase. No se enviará por WhatsApp. Detalle: ${r.status} ${txt.slice(0, 220)}`);
+        console.warn(`[WSP] No se pudo guardar el informe en Supabase. WhatsApp no se bloquea. Detalle: ${r.status} ${txt.slice(0, 220)}`);
         return false;
       }
 
       const rows = await r.json().catch(() => []);
       const evento = Array.isArray(rows) ? rows[0] : rows;
       if (!evento?.id) {
-        alert("Supabase no devolvió el ID del informe guardado. No se enviará por WhatsApp para evitar perder fotos o duplicar datos.");
+        console.warn("[WSP] Supabase no devolvió el ID del informe guardado. WhatsApp no se bloquea; se omite carga de fotos.");
         return false;
       }
 
       return { evento, estado: null, informe_key: data.informe_key };
     } catch (e) {
       console.error("[WSP] Error guardando/upsert informe.", e);
-      alert("Error guardando el informe en Supabase. Revise conexión y vuelva a intentar.");
+      console.warn("[WSP] Error guardando el informe en Supabase. WhatsApp no se bloquea.");
       return false;
     }
   }
@@ -7126,21 +7213,22 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const payload = construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const fotos = fotosSeleccionadasInformeAlcoholemia();
+    const nroActaInforme = normalizarNumeroActaInforme(infAlcoActa?.value);
 
-    const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
-    if (!resultadoHistorial) return;
-    if (fotos.length) {
+    // WhatsApp primero: Supabase/fotos no deben bloquear el envío del informe.
+    resetUI();
+    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
+
+    Promise.resolve().then(async () => {
+      const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, nroActaInforme);
+      if (!resultadoHistorial || !fotos.length) return;
       try {
         await eliminarFotosPreviasInformeWsp(resultadoHistorial);
         await subirFotosInformeAlcoholemia(resultadoHistorial, fotos);
       } catch (e) {
         console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e);
-        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
       }
-    }
-
-    resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
+    }).catch((e) => console.warn("[WSP] Error posterior al envío de informe alcoholemia.", e));
   }
 
 
@@ -7515,19 +7603,21 @@ ${bold(`Moviles ${organismo}:`)}`)
     const textoFinal = construirTextoInformeDecto460({ inicio, fecha, hora, codigos });
     const payload = construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora });
     const fotos = fotosSeleccionadasInformeDecto460();
-    const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, normalizarNumeroActaInforme(inf460Acta?.value));
-    if (!resultadoHistorial) return;
-    if (fotos.length) {
+    const nroActaInforme = normalizarNumeroActaInforme(inf460Acta?.value);
+    // WhatsApp primero: Supabase/fotos no deben bloquear el envío del informe.
+    resetUI();
+    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
+
+    Promise.resolve().then(async () => {
+      const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, nroActaInforme);
+      if (!resultadoHistorial || !fotos.length) return;
       try {
         await eliminarFotosPreviasInformeWsp(resultadoHistorial);
         await subirFotosInformeDecto460(resultadoHistorial, fotos);
       } catch (e) {
         console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e);
-        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
       }
-    }
-    resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
+    }).catch((e) => console.warn("[WSP] Error posterior al envío de informe Decto 460/22.", e));
   }
 
   function valorAgregadoResultado(agregado, keys) {
@@ -7959,20 +8049,15 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function renderResumenInformesIntermediosFinalizado(agregado) {
-    // La información de informes intermedios NO debe mostrarse como resumen aparte.
-    // Debe impactar directamente en los campos existentes del FINALIZADO.
-    aplicarInformesIntermediosEnCamposFinalizado(agregado);
+    // Regla actual: 460/22, alcoholemias y graduaciones NO deben alimentar ni ensuciar el FINALIZADO.
+    // Se conserva la función por compatibilidad, pero ya no inyecta datos en campos de FINALIZA.
     ocultarResumenInformesIntermediosFinalizado();
+    return null;
   }
 
   async function refrescarResumenInformesIntermediosFinalizado() {
-    if (selTipo?.value !== "FINALIZA" || !franjaSeleccionada) {
-      ocultarResumenInformesIntermediosFinalizado();
-      return null;
-    }
-    const agregado = await cargarAgregadoInformesIntermediosWsp();
-    renderResumenInformesIntermediosFinalizado(agregado);
-    return agregado;
+    ocultarResumenInformesIntermediosFinalizado();
+    return null;
   }
 
   function construirLineasAlcoholimetroConAgregado(alcoholimetro, agregado) {
@@ -7994,6 +8079,22 @@ ${bold(`Moviles ${organismo}:`)}`)
     return lineas;
   }
 
+  function asegurarFranjaSeleccionadaParaEnviarWsp() {
+    if (franjaSeleccionada) return true;
+    try { actualizarDatosFranja(); } catch {}
+    if (franjaSeleccionada) return true;
+
+    if (Array.isArray(operativosCache) && operativosCache.length === 1 && selHorario) {
+      selHorario.value = operativosCache[0].__key || "";
+      franjaSeleccionada = operativosCache[0] || null;
+      ordenSeleccionada = null;
+      return !!franjaSeleccionada;
+    }
+
+    alert("Debe seleccionar un operativo antes de enviar.");
+    return false;
+  }
+
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (esControlMovilesActivo()) {
@@ -8001,7 +8102,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return;
     }
 
-    if (!franjaSeleccionada) return;
+    if (!asegurarFranjaSeleccionadaParaEnviarWsp()) return;
 
     if (esInformeAlcoholemiaActivo()) {
       await enviarInformeAlcoholemia();
@@ -8014,12 +8115,24 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
-      if (!inicioControlSuperior) {
-        alert("No hay datos de inicio guardados para este operativo.");
-        return;
-      }
+      const inicioControlSuperior = await obtenerInicioVigenteParaInformeWsp(franjaSeleccionada)
+        || await leerInicioDesdeSupabase(franjaSeleccionada)
+        || cargarInicioGuardadoCoincidente()
+        || cargarInicioLocal()
+        || normalizarInicioGuardado({
+          guardia_fecha: getGuardiaFechaISO(),
+          operativo_key: limpiarTextoSimple(franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada)),
+          horario: limpiarTextoSimple(franjaSeleccionada?.horario || ""),
+          lugar: limpiarTextoSimple(franjaSeleccionada?.lugar || ""),
+          tipo_corto: obtenerTipoCortoFranja(franjaSeleccionada),
+          tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme({}, franjaSeleccionada),
+          personal: [],
+          moviles: [],
+          motos: [],
+          elementos: {},
+        });
 
+      asegurarModuloControlSuperiorFallbackWsp();
       if (!window.ControlSuperior || typeof window.ControlSuperior.buildMessage !== "function") {
         alert("No se pudo cargar el módulo de CONTROL SUPERIOR.");
         return;
@@ -8047,8 +8160,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     const esFinaliza = selTipo.value === "FINALIZA";
-    const agregadoInformesLeidosFinalizado = esFinaliza ? await cargarAgregadoInformesIntermediosWsp() : null;
-    const agregadoYaAplicadoEnCampos = esFinaliza && informesIntermediosYaEstanAplicadosEnCampos(agregadoInformesLeidosFinalizado);
+    // Regla actual: informes 460/22 y alcoholemia NO alimentan el FINALIZADO.
+    // No se consulta Supabase antes de enviar para no bloquear WhatsApp.
+    const agregadoInformesLeidosFinalizado = null;
+    const agregadoYaAplicadoEnCampos = false;
     const agregadoInformesFinalizado = agregadoYaAplicadoEnCampos ? null : agregadoInformesLeidosFinalizado;
     const hayAgregadoInformesFinalizado = agregadoInformesTieneDatos(agregadoInformesFinalizado);
     const incluirResultadosFinaliza = esFinaliza && (debeIncluirResultadosFinaliza() || hayAgregadoInformesFinalizado);
@@ -8227,12 +8342,18 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (selTipo.value === "INICIA") {
       await guardarElementosDeInicio();
+      await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
+      resetUI();
+      abrirWhatsappYCerrarWspLuego(textoFinal);
+      return;
     }
 
-    await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
-
+    // FINALIZADO: WhatsApp primero. Supabase/historial no debe bloquear el envío.
     resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal);
+    Promise.resolve()
+      .then(() => guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial))
+      .catch((e) => console.warn("[WSP] No se pudo guardar historial luego de enviar FINALIZADO.", e));
   }
 
   function onFocusSelectorOperativosWsp() {
