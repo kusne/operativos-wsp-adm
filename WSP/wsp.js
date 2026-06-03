@@ -953,7 +953,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const seleccionActual = selHorario?.value || "";
     const ok = await syncOrdenesDesdeServidor();
     if (ok) {
-      if (selTipo?.value === "FINALIZA" || esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
+      if (selTipo?.value === "FINALIZA") {
+        await cargarOperativosIniciadosParaFinaliza(seleccionActual);
+      } else if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
         await cargarOperativosIniciadosParaInformes(seleccionActual);
       } else {
         cargarOperativosDisponibles(seleccionActual);
@@ -1948,7 +1950,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     // el cierre queda sin payload de inicio vivo y la UI puede quedar sin numerales.
     const lista = await cargarOperativosIniciadosParaInformes(valorSeleccionado || "");
     setTituloOperativosIniciados(true);
-    if (selHorario && Array.isArray(lista) && lista.length > 1) {
+
+    // En FINALIZA el selector NO debe quedar bloqueado. Aunque haya un solo
+    // operativo iniciado, el usuario tiene que poder abrir/ver el input y confirmar
+    // cuál está cerrando; y si hay más de uno, poder cambiarlo sin que el foco lo cierre.
+    if (selHorario && Array.isArray(lista) && lista.length > 0) {
       setSelectorHorarioDisabledWsp(false);
     }
     return lista;
@@ -8468,10 +8474,15 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function onFocusSelectorOperativosWsp() {
-    // En INICIA/FINALIZA sí corresponde sincronizar operativos publicados al enfocar.
-    // En INFORMES NO: al enfocar el select, syncAntesDeSeleccion recargaba el selector,
-    // lo deshabilitaba durante la consulta y cerraba el desplegable, impidiendo elegir
-    // entre dos operativos iniciados. Informes se carga al seleccionar el tipo de informe.
+    // Al enfocar el select NO se debe recargar si está en FINALIZA o INFORMES:
+    // una recarga async durante focus/pointerdown reemplaza las opciones, vuelve
+    // a deshabilitar el select y el desplegable no abre. La lista ya se carga al
+    // elegir FINALIZA o el informe concreto.
+    if (selTipo?.value === "FINALIZA") {
+      if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
+      return;
+    }
+
     if (estaEnMenuInformes()) {
       if (getTipoInformeActivo() && operativosCache.length > 1) {
         setSelectorHorarioDisabledWsp(false);
@@ -8482,6 +8493,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function asegurarSelectorInformesAbiertoWsp() {
+    if (selTipo?.value === "FINALIZA" && operativosCache.length > 0) {
+      setSelectorHorarioDisabledWsp(false);
+      return;
+    }
     if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
       setSelectorHorarioDisabledWsp(false);
     }
