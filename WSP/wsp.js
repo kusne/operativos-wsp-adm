@@ -1,6 +1,11 @@
 // ===== CONFIG SUPABASE WSP =====
-const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+var SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
+var SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+
+if (window.__WSP_MAIN_LOADED__) {
+  console.warn("[WSP] wsp.js ya estaba cargado. Se evita una segunda inicialización.");
+} else {
+  window.__WSP_MAIN_LOADED__ = true;
 
 (function () {
   // ===== DOM refs =====
@@ -8598,3 +8603,4 @@ ${bold(`Moviles ${organismo}:`)}`)
     cargarOperativosDisponibles();
   })();
 })();
+}
