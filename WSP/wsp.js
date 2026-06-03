@@ -1,11 +1,15 @@
 // ===== CONFIG SUPABASE WSP =====
-var SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
-var SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+// Usar var + guard evita que una carga duplicada accidental de wsp.js rompa toda la app
+// por redeclaración global de const. El index corregido igual carga este archivo una sola vez.
+var SUPABASE_URL = window.SUPABASE_URL || "https://ugeydxozfewzhldjbkat.supabase.co";
+var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
+window.SUPABASE_URL = SUPABASE_URL;
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 
-if (window.__WSP_MAIN_LOADED__) {
-  console.warn("[WSP] wsp.js ya estaba cargado. Se evita una segunda inicialización.");
+if (window.__WSP_APP_BMZCN_INICIALIZADO__) {
+  console.warn("[WSP] wsp.js ya estaba inicializado. Se evita segunda inicialización.");
 } else {
-  window.__WSP_MAIN_LOADED__ = true;
+window.__WSP_APP_BMZCN_INICIALIZADO__ = true;
 
 (function () {
   // ===== DOM refs =====
@@ -4815,18 +4819,19 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function debeIncluirResultadosFinaliza() {
+    // Regla operativa corregida: en FINALIZA los numerales/Resultados deben estar
+    // siempre disponibles para completar. El chip "Ver items" ya no bloquea
+    // la carga de numerales. Solo Presencia Activa por clima oculta el bloque
+    // porque imprime observación específica sin resultados.
     if (selTipo?.value !== "FINALIZA") return false;
     if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
-    if (esFinalizaSinResultados()) return false;
-    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
     return true;
   }
 
   function debeIncluirDetallesFinaliza() {
+    // Detalles debe acompañar a FINALIZA para permitir cargar códigos cuando corresponda.
     if (selTipo?.value !== "FINALIZA") return false;
     if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
-    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
-    if (esFinalizaSinResultados()) return true;
     return true;
   }
 
@@ -4855,7 +4860,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const mostrarDetalles = fin && debeIncluirDetallesFinaliza();
 
     if (bloqueMostrarResultadosFinaliza) {
-      bloqueMostrarResultadosFinaliza.classList.toggle("hidden", !resultadosOpcionales);
+      // Ya no se usa para habilitar numerales; se oculta para evitar confusión.
+      bloqueMostrarResultadosFinaliza.classList.add("hidden");
     }
 
     if (tituloResultadosFinaliza) {
