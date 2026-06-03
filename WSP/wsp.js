@@ -1,15 +1,6 @@
 // ===== CONFIG SUPABASE WSP =====
-// Usar var + guard evita que una carga duplicada accidental de wsp.js rompa toda la app
-// por redeclaración global de const. El index corregido igual carga este archivo una sola vez.
-var SUPABASE_URL = window.SUPABASE_URL || "https://ugeydxozfewzhldjbkat.supabase.co";
-var SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
-window.SUPABASE_URL = SUPABASE_URL;
-window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
-
-if (window.__WSP_APP_BMZCN_INICIALIZADO__) {
-  console.warn("[WSP] wsp.js ya estaba inicializado. Se evita segunda inicialización.");
-} else {
-window.__WSP_APP_BMZCN_INICIALIZADO__ = true;
+const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 (function () {
   // ===== DOM refs =====
@@ -962,7 +953,7 @@ window.__WSP_APP_BMZCN_INICIALIZADO__ = true;
     const seleccionActual = selHorario?.value || "";
     const ok = await syncOrdenesDesdeServidor();
     if (ok) {
-      if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
+      if (selTipo?.value === "FINALIZA" || esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
         await cargarOperativosIniciadosParaInformes(seleccionActual);
       } else {
         cargarOperativosDisponibles(seleccionActual);
@@ -1949,6 +1940,18 @@ window.__WSP_APP_BMZCN_INICIALIZADO__ = true;
 
     actualizarContadorOperativosWsp(operativosCache.length);
     return operativosCache;
+  }
+
+  async function cargarOperativosIniciadosParaFinaliza(valorSeleccionado = "") {
+    // FINALIZA debe trabajar sobre operativos ya INICIADOS/EN_CURSO,
+    // no sobre la grilla de operativos publicados. Si se usa la lista publicada,
+    // el cierre queda sin payload de inicio vivo y la UI puede quedar sin numerales.
+    const lista = await cargarOperativosIniciadosParaInformes(valorSeleccionado || "");
+    setTituloOperativosIniciados(true);
+    if (selHorario && Array.isArray(lista) && lista.length > 1) {
+      setSelectorHorarioDisabledWsp(false);
+    }
+    return lista;
   }
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
@@ -4604,31 +4607,46 @@ window.__WSP_APP_BMZCN_INICIALIZADO__ = true;
 
     setUIControlSuperiorActiva(false);
     setUIInformeAlcoholemiaActiva(false);
-    cargarOperativosDisponibles(selHorario?.value || "");
-    actualizarDatosFranja();
-    divFinaliza.classList.toggle("hidden", !fin);
 
-    if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
+    if (fin) {
+      // FINALIZA: fuente correcta = operativos INICIADOS/EN_CURSO.
+      // No se debe usar cargarOperativosDisponibles(), porque esa lista viene
+      // de operativos publicados y no trae el inicio vivo para cerrar.
+      if (divFinaliza) divFinaliza.classList.remove("hidden");
+      if (divMismosElementos) divMismosElementos.classList.remove("hidden");
+      setPersonalVisible(true);
+      setMovilidadVisible(true);
+      setElementosVisibles(true);
+      setObservacionesVisible(true);
 
-    if (!fin) {
-      if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
-      actualizarVisibilidadBloquePresenciaActiva();
-      actualizarVisibilidadResultadosFinaliza();
-      desactivarControlesMismos();
-      ocultarResumenInformesIntermediosFinalizado();
-      sincronizarUIAlcoholimetro();
+      cargarOperativosIniciadosParaFinaliza(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+        if (divFinaliza) divFinaliza.classList.remove("hidden");
+        if (divMismosElementos) divMismosElementos.classList.remove("hidden");
+        if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
+          chkMostrarResultadosFinaliza.checked = false;
+        }
+        actualizarVisibilidadBloquePresenciaActiva();
+        actualizarVisibilidadResultadosFinaliza();
+        forzarVisibilidadFinalizadoNumeralesWsp();
+        desactivarControlesMismos({ limpiar: true });
+        sincronizarUIAlcoholimetro();
+        sincronizarInicioGuardadoSegunContexto();
+      });
       return;
     }
 
-    if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
-      chkMostrarResultadosFinaliza.checked = false;
-    }
+    // INICIA y demás modos normales: fuente = operativos publicados.
+    cargarOperativosDisponibles(selHorario?.value || "");
+    actualizarDatosFranja();
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
-    forzarVisibilidadFinalizadoNumeralesWsp();
-    desactivarControlesMismos({ limpiar: true });
+    desactivarControlesMismos();
+    ocultarResumenInformesIntermediosFinalizado();
     sincronizarUIAlcoholimetro();
-    sincronizarInicioGuardadoSegunContexto();
   }
 
   // ======================================================
@@ -4819,19 +4837,18 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function debeIncluirResultadosFinaliza() {
-    // Regla operativa corregida: en FINALIZA los numerales/Resultados deben estar
-    // siempre disponibles para completar. El chip "Ver items" ya no bloquea
-    // la carga de numerales. Solo Presencia Activa por clima oculta el bloque
-    // porque imprime observación específica sin resultados.
     if (selTipo?.value !== "FINALIZA") return false;
     if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
+    if (esFinalizaSinResultados()) return false;
+    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
     return true;
   }
 
   function debeIncluirDetallesFinaliza() {
-    // Detalles debe acompañar a FINALIZA para permitir cargar códigos cuando corresponda.
     if (selTipo?.value !== "FINALIZA") return false;
     if (debeOcultarTodoPorPresenciaActivaFinaliza()) return false;
+    if (esFinalizaConResultadosOpcionales()) return !!chkMostrarResultadosFinaliza?.checked;
+    if (esFinalizaSinResultados()) return true;
     return true;
   }
 
@@ -4860,8 +4877,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const mostrarDetalles = fin && debeIncluirDetallesFinaliza();
 
     if (bloqueMostrarResultadosFinaliza) {
-      // Ya no se usa para habilitar numerales; se oculta para evitar confusión.
-      bloqueMostrarResultadosFinaliza.classList.add("hidden");
+      bloqueMostrarResultadosFinaliza.classList.toggle("hidden", !resultadosOpcionales);
     }
 
     if (tituloResultadosFinaliza) {
@@ -5905,7 +5921,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const remoto = await leerInicioDesdeSupabase(franjaSeleccionada);
     if (lookupId !== inicioGuardadoLookupId) return;
 
-    const payload = remoto || cargarInicioGuardadoCoincidente();
+    const payload = franjaSeleccionada?.__inicioGuardadoPayload || remoto || cargarInicioGuardadoCoincidente();
     aplicarInicioGuardadoAutomatico(payload);
     refrescarResumenInformesIntermediosFinalizado();
   }
@@ -8609,4 +8625,3 @@ ${bold(`Moviles ${organismo}:`)}`)
     cargarOperativosDisponibles();
   })();
 })();
-}
