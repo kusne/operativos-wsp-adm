@@ -55,11 +55,57 @@
     return null;
   }
 
+  function normalizarHoraToken(hhRaw, mmRaw = "00") {
+    const hh = parseInt(String(hhRaw || "").trim(), 10);
+    const mm = parseInt(String(mmRaw == null || mmRaw === "" ? "00" : mmRaw).trim(), 10);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "";
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return "";
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function extraerHoraTexto(value = "") {
+    const raw = clean(value).toUpperCase();
+    let m = raw.match(/(?:^|[^0-9])(\d{1,2})\s*[:.]\s*(\d{2})(?:\s*(?:HS?|H))?(?=$|[^0-9])/i);
+    if (m) return normalizarHoraToken(m[1], m[2]);
+    m = raw.match(/(?:^|[^0-9])(\d{1,2})(?:\s*(?:HS?|H))?(?=$|[^0-9])/i);
+    if (m) return normalizarHoraToken(m[1], "00");
+    return "";
+  }
+
   function horaPartesFromHorario(horario) {
-    const raw = clean(horario).toUpperCase();
-    const m = raw.match(/(\d{1,2}:\d{2})\s*A\s*((?:\d{1,2}:\d{2})|FINALIZAR)/i);
-    if (!m) return { desde: "", hasta: "" };
-    return { desde: clean(m[1]), hasta: clean(m[2]).toUpperCase() };
+    const raw = clean(horario).toUpperCase().replace(/[–—]/g, "-").replace(/\bFINALIZAR\b/g, "FINALIZAR");
+    const patronHora = "(?:\\d{1,2}(?:\\s*[:.]\\s*\\d{2})?\\s*(?:HS?|H)?)";
+    const re = new RegExp(`(${patronHora})\\s*(?:A|AL|HASTA|-)\\s*(${patronHora}|FINALIZAR)`, "i");
+    const m = raw.match(re);
+    if (!m) {
+      const unica = extraerHoraTexto(raw);
+      return unica ? { desde: unica, hasta: "" } : { desde: "", hasta: "" };
+    }
+    const desde = extraerHoraTexto(m[1]);
+    const hasta = /FINALIZAR/i.test(m[2]) ? "FINALIZAR" : extraerHoraTexto(m[2]);
+    return { desde: clean(desde), hasta: clean(hasta).toUpperCase() };
+  }
+
+  function sumarDiasISO(fechaIsoValue, dias) {
+    const iso = fechaIso(fechaIsoValue);
+    if (!iso) return null;
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + Number(dias || 0));
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  }
+
+  function fechaOperativoDesdePayload(payload, horarioPartes) {
+    const directa = fechaIso(payload?.fecha_operativo || payload?.fecha);
+    const guardia = fechaIso(payload?.guardia_fecha);
+    const desde = clean(payload?.hora_desde || horarioPartes?.desde || "");
+    const m = desde.match(/^(\d{1,2}):(\d{2})$/);
+
+    if (guardia && m && Number(m[1]) < 6 && (!directa || directa === guardia)) {
+      return sumarDiasISO(guardia, 1);
+    }
+
+    return directa || null;
   }
 
   function buildOperativoKey(payload) {
@@ -112,7 +158,7 @@
       operativo_key: operativoKey,
       operativo_publicado_id: payload?.operativo_publicado_id || null,
       guardia_fecha: fechaIso(payload?.guardia_fecha) || null,
-      fecha_operativo: fechaIso(payload?.fecha_operativo || payload?.fecha) || null,
+      fecha_operativo: fechaOperativoDesdePayload(payload, horarioPartes) || null,
       hora_desde: clean(payload?.hora_desde || horarioPartes.desde) || null,
       hora_hasta: clean(payload?.hora_hasta || horarioPartes.hasta) || null,
       lugar: clean(payload?.lugar) || null,
