@@ -5875,42 +5875,70 @@ ${bold(`Moviles ${organismo}:`)}`)
     return String(error?.message || "Error de validación operativa.").trim() || "Error de validación operativa.";
   }
 
+  function esEventoOperativoCriticoWsp(tipoEvento) {
+    const tipo = limpiarTextoSimple(tipoEvento).toUpperCase();
+    return tipo === "INICIO" || tipo === "FINALIZADO";
+  }
+
+  function resultadoGuardadoValidoWsp(resultado) {
+    return !!(
+      resultado &&
+      resultado.estado &&
+      resultado.evento &&
+      resultado.estado.id &&
+      resultado.evento.id
+    );
+  }
+
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
+    const tipo = limpiarTextoSimple(tipoEvento).toUpperCase();
+    const critico = esEventoOperativoCriticoWsp(tipo);
+
     try {
       const repo = window.BMZCN?.OperativosRepo;
-      if (repo) {
-        if (tipoEvento === "INICIO" && typeof repo.guardarInicio === "function") {
-          return await repo.guardarInicio(payload);
-        }
-        if (tipoEvento === "FINALIZADO" && typeof repo.guardarFinalizado === "function") {
-          return await repo.guardarFinalizado(payload);
-        }
-        if (typeof repo.guardarInforme === "function") {
-          return await repo.guardarInforme(tipoEvento, payload);
-        }
+      if (!repo) {
+        return {
+          ok: false,
+          motivo: "No se pudo guardar en Supabase: BMZCN.OperativosRepo no está cargado. No se enviará el informe porque Estadísticas no podría actualizarse."
+        };
       }
 
-      // Sin módulo fuente de verdad no se debe cerrar un operativo: no se puede validar el INICIO.
-      if (tipoEvento === "FINALIZADO") {
-        return { ok: false, motivo: "Debe iniciar el operativo antes de finalizarlo." };
+      let resultado = null;
+      if (tipo === "INICIO" && typeof repo.guardarInicio === "function") {
+        resultado = await repo.guardarInicio(payload);
+      } else if (tipo === "FINALIZADO" && typeof repo.guardarFinalizado === "function") {
+        resultado = await repo.guardarFinalizado(payload);
+      } else if (typeof repo.guardarInforme === "function") {
+        resultado = await repo.guardarInforme(tipo, payload);
+      } else {
+        return {
+          ok: false,
+          motivo: `No se pudo guardar en Supabase: función de guardado no disponible para ${tipo || "EVENTO"}.`
+        };
       }
 
-      // Respaldo de compatibilidad solo para INICIO/INFORMES no críticos. No es fuente principal.
-      if (window.WspHistorialOperativos) {
-        if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
-          return await window.WspHistorialOperativos.guardarInicio(payload);
-        }
-        if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
-          return await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
-        }
+      if (critico && !resultadoGuardadoValidoWsp(resultado)) {
+        return {
+          ok: false,
+          motivo: "No se confirmó el guardado en Supabase. No se enviará por WhatsApp porque Estadísticas no podría actualizarse."
+        };
       }
+
+      console.log("[WSP] Evento guardado en Supabase", tipo, resultado);
+      return resultado;
     } catch (e) {
       if (esErrorValidacionOperativaWsp(e)) {
         return { ok: false, motivo: mensajeErrorOperativoWsp(e), error: e };
       }
-      console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual salvo validación operativa.", e);
+      console.error("[WSP] Falló el guardado en Supabase.", e);
+      return {
+        ok: false,
+        motivo: critico
+          ? `No se pudo guardar ${tipo} en Supabase. No se enviará por WhatsApp porque Estadísticas no podría actualizarse. Detalle: ${mensajeErrorOperativoWsp(e)}`
+          : `No se pudo guardar el informe en Supabase. Detalle: ${mensajeErrorOperativoWsp(e)}`,
+        error: e
+      };
     }
-    return false;
   }
 
   function normalizarComponenteInformeKeyWsp(value) {
@@ -7902,7 +7930,11 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const resultadoHistorial = await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
     if (resultadoHistorial && resultadoHistorial.ok === false) {
-      alert(resultadoHistorial.motivo || "Debe iniciar el operativo antes de finalizarlo.");
+      alert(resultadoHistorial.motivo || "No se pudo guardar en Supabase.");
+      return;
+    }
+    if (!resultadoGuardadoValidoWsp(resultadoHistorial)) {
+      alert("No se confirmó el guardado en Supabase. No se enviará por WhatsApp porque Estadísticas no podría actualizarse.");
       return;
     }
 
