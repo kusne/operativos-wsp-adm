@@ -55,57 +55,11 @@
     return null;
   }
 
-  function normalizarHoraToken(hhRaw, mmRaw = "00") {
-    const hh = parseInt(String(hhRaw || "").trim(), 10);
-    const mm = parseInt(String(mmRaw == null || mmRaw === "" ? "00" : mmRaw).trim(), 10);
-    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "";
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return "";
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-  }
-
-  function extraerHoraTexto(value = "") {
-    const raw = clean(value).toUpperCase();
-    let m = raw.match(/(?:^|[^0-9])(\d{1,2})\s*[:.]\s*(\d{2})(?:\s*(?:HS?|H))?(?=$|[^0-9])/i);
-    if (m) return normalizarHoraToken(m[1], m[2]);
-    m = raw.match(/(?:^|[^0-9])(\d{1,2})(?:\s*(?:HS?|H))?(?=$|[^0-9])/i);
-    if (m) return normalizarHoraToken(m[1], "00");
-    return "";
-  }
-
   function horaPartesFromHorario(horario) {
-    const raw = clean(horario).toUpperCase().replace(/[–—]/g, "-").replace(/\bFINALIZAR\b/g, "FINALIZAR");
-    const patronHora = "(?:\\d{1,2}(?:\\s*[:.]\\s*\\d{2})?\\s*(?:HS?|H)?)";
-    const re = new RegExp(`(${patronHora})\\s*(?:A|AL|HASTA|-)\\s*(${patronHora}|FINALIZAR)`, "i");
-    const m = raw.match(re);
-    if (!m) {
-      const unica = extraerHoraTexto(raw);
-      return unica ? { desde: unica, hasta: "" } : { desde: "", hasta: "" };
-    }
-    const desde = extraerHoraTexto(m[1]);
-    const hasta = /FINALIZAR/i.test(m[2]) ? "FINALIZAR" : extraerHoraTexto(m[2]);
-    return { desde: clean(desde), hasta: clean(hasta).toUpperCase() };
-  }
-
-  function sumarDiasISO(fechaIsoValue, dias) {
-    const iso = fechaIso(fechaIsoValue);
-    if (!iso) return null;
-    const [y, m, d] = iso.split("-").map(Number);
-    const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() + Number(dias || 0));
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  }
-
-  function fechaOperativoDesdePayload(payload, horarioPartes) {
-    const directa = fechaIso(payload?.fecha_operativo || payload?.fecha);
-    const guardia = fechaIso(payload?.guardia_fecha);
-    const desde = clean(payload?.hora_desde || horarioPartes?.desde || "");
-    const m = desde.match(/^(\d{1,2}):(\d{2})$/);
-
-    if (guardia && m && Number(m[1]) < 6 && (!directa || directa === guardia)) {
-      return sumarDiasISO(guardia, 1);
-    }
-
-    return directa || null;
+    const raw = clean(horario).toUpperCase();
+    const m = raw.match(/(\d{1,2}:\d{2})\s*A\s*((?:\d{1,2}:\d{2})|FINALIZAR)/i);
+    if (!m) return { desde: "", hasta: "" };
+    return { desde: clean(m[1]), hasta: clean(m[2]).toUpperCase() };
   }
 
   function buildOperativoKey(payload) {
@@ -158,20 +112,12 @@
       operativo_key: operativoKey,
       operativo_publicado_id: payload?.operativo_publicado_id || null,
       guardia_fecha: fechaIso(payload?.guardia_fecha) || null,
-      fecha_operativo: fechaOperativoDesdePayload(payload, horarioPartes) || null,
+      fecha_operativo: fechaIso(payload?.fecha_operativo || payload?.fecha) || null,
       hora_desde: clean(payload?.hora_desde || horarioPartes.desde) || null,
       hora_hasta: clean(payload?.hora_hasta || horarioPartes.hasta) || null,
       lugar: clean(payload?.lugar) || null,
       lugar_normalizado: clean(payload?.lugar_normalizado || payload?.lugar) || null,
       tipo_operativo: clean(payload?.tipo_operativo) || null,
-      tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo) || null,
-      personal_inicio: jsonArray(payload?.personal_inicio || payload?.personal),
-      moviles_inicio: jsonArray(payload?.moviles_inicio || payload?.moviles),
-      motos_inicio: jsonArray(payload?.motos_inicio || payload?.motos),
-      elementos_inicio: jsonObject(payload?.elementos_inicio || payload?.elementos),
-      lugar_inicio: clean(payload?.lugar_inicio || payload?.lugar) || null,
-      horario_inicio: clean(payload?.horario_inicio || payload?.horario) || null,
-      inicio_updated_at: clean(payload?.inicio_updated_at) || new Date().toISOString(),
       ordenes_origen: jsonArray(payload?.ordenes_origen),
       estado,
       fuente_creacion: clean(payload?.fuente || "WSP") || "WSP",
@@ -180,93 +126,37 @@
         titulo: clean(payload?.titulo),
         horario: clean(payload?.horario),
         operativo_publicado_id: payload?.operativo_publicado_id || null,
-        tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo),
-        inicio_updated_at: clean(payload?.inicio_updated_at) || new Date().toISOString(),
       },
       updated_at: new Date().toISOString(),
     };
   }
 
   function buildEventoPayload(estadoRow, tipoEvento, payload) {
-    const tipo = clean(tipoEvento).toUpperCase();
     const horarioPartes = horaPartesFromHorario(payload?.horario);
     const operativoKey = estadoRow?.operativo_key || buildOperativoKey(payload);
-    const guardiaFecha = fechaIso(payload?.guardia_fecha) || fechaIso(estadoRow?.guardia_fecha) || null;
-    const fechaOperativo = fechaOperativoDesdePayload(payload, horarioPartes) || fechaIso(estadoRow?.fecha_operativo) || null;
-    const resultados = jsonObject(payload?.resultados);
-    const medidas = jsonObject(payload?.medidas_cautelares);
-    const esFinalizadoOperativo = tipo === "FINALIZADO";
-    const alimentaEstadisticas = esFinalizadoOperativo;
-    // Compatibilidad con Estadísticas: algunas versiones miran alimenta_estadisticas
-    // y otras miran alimenta_finalizado para decidir si recalculan Salida/contadores.
-    const alimentaFinalizado = esFinalizadoOperativo;
 
     return {
       operativo_estado_id: estadoRow.id,
       operativo_key: operativoKey,
-      tipo_evento: tipo,
+      tipo_evento: tipoEvento,
       fuente: clean(payload?.fuente || "WSP") || "WSP",
-
-      // CRÍTICO PARA ESTADÍSTICAS: la Salida en tiempo real filtra por guardia
-      // operativa 06:00→06:00. Si el evento queda sin guardia_fecha, el
-      // realtime puede llegar pero el acumulador lo descarta al recalcular.
-      guardia_fecha: guardiaFecha,
-      fecha_operativo: fechaOperativo,
       fecha: clean(payload?.fecha) || null,
       horario: clean(payload?.horario) || null,
       hora_desde: clean(payload?.hora_desde || horarioPartes.desde) || null,
       hora_hasta: clean(payload?.hora_hasta || horarioPartes.hasta) || null,
       lugar: clean(payload?.lugar) || null,
       tipo_operativo: clean(payload?.tipo_operativo) || null,
-      tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo) || null,
-      personal_inicio: jsonArray(payload?.personal_inicio || payload?.personal),
-      moviles_inicio: jsonArray(payload?.moviles_inicio || payload?.moviles),
-      motos_inicio: jsonArray(payload?.motos_inicio || payload?.motos),
-      elementos_inicio: jsonObject(payload?.elementos_inicio || payload?.elementos),
-      lugar_inicio: clean(payload?.lugar_inicio || payload?.lugar) || null,
-      horario_inicio: clean(payload?.horario_inicio || payload?.horario) || null,
-      inicio_updated_at: clean(payload?.inicio_updated_at) || new Date().toISOString(),
       ordenes_origen: jsonArray(payload?.ordenes_origen),
       personal: jsonArray(payload?.personal),
       moviles: jsonArray(payload?.moviles),
       motos: jsonArray(payload?.motos),
       elementos: jsonObject(payload?.elementos),
-      resultados,
-      medidas_cautelares: medidas,
+      resultados: jsonObject(payload?.resultados),
+      medidas_cautelares: jsonObject(payload?.medidas_cautelares),
       detalles: Array.isArray(payload?.detalles) ? payload.detalles : jsonArray(payload?.detalles),
       observaciones: clean(payload?.observaciones) || null,
       texto_generado: String(payload?.texto_generado || ""),
-
-      categoria_evento: "OPERATIVO",
-      subtipo_evento: tipo,
-      area_interes: [],
-      requiere_fiscalia: false,
-      requiere_traslado_comisaria: false,
-      requiere_word_semanal: false,
-      informe_word_destino: [],
-      alimenta_finalizado: alimentaFinalizado,
-      alimenta_estadisticas: alimentaEstadisticas,
-      contador_circular: false,
-
-      payload_completo: {
-        ...jsonObject(payload?.payload_completo),
-        guardia_fecha: guardiaFecha,
-        fecha_operativo: fechaOperativo,
-        tipo_evento: tipo,
-        resultados,
-        medidas_cautelares: medidas,
-        alimenta_finalizado: alimentaFinalizado,
-        alimenta_estadisticas: alimentaEstadisticas,
-        contador_circular: false,
-        tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo),
-        personal_inicio: jsonArray(payload?.personal_inicio || payload?.personal),
-        moviles_inicio: jsonArray(payload?.moviles_inicio || payload?.moviles),
-        motos_inicio: jsonArray(payload?.motos_inicio || payload?.motos),
-        elementos_inicio: jsonObject(payload?.elementos_inicio || payload?.elementos),
-        lugar_inicio: clean(payload?.lugar_inicio || payload?.lugar) || null,
-        horario_inicio: clean(payload?.horario_inicio || payload?.horario) || null,
-        inicio_updated_at: clean(payload?.inicio_updated_at) || new Date().toISOString(),
-      },
+      payload_completo: jsonObject(payload?.payload_completo),
     };
   }
 
