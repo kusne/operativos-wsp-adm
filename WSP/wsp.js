@@ -639,21 +639,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function guardarOrdenesSeguro(arr) {
+    // Fuente de verdad: Supabase. Esta cache vive solo en memoria de la pantalla actual.
+    // No se persiste en localStorage ni en StorageApp.
     ordenesCache = Array.isArray(arr) ? arr : [];
-    try {
-      StorageApp && StorageApp.guardarOrdenes && StorageApp.guardarOrdenes(ordenesCache);
-    } catch (e) {
-      console.warn("[WSP] No se pudo guardar en StorageApp, uso cache en memoria.", e);
-    }
   }
 
   function cargarOrdenesSeguro() {
-    try {
-      const arr = StorageApp && StorageApp.cargarOrdenes && StorageApp.cargarOrdenes();
-      if (Array.isArray(arr)) return arr;
-    } catch (e) {
-      console.warn("[WSP] No se pudo leer de StorageApp, uso cache en memoria.", e);
-    }
+    // Fuente de verdad: Supabase. Respaldo únicamente en memoria mientras la pantalla está abierta.
     return Array.isArray(ordenesCache) ? ordenesCache : [];
   }
 
@@ -1098,11 +1090,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function parseVigenciaFlexible(v) {
-    try {
-      const d = Dates?.parseVigenciaToDate?.(v);
-      if (d instanceof Date && !isNaN(d)) return d;
-    } catch {}
-
     const iso = String(v || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
 
@@ -1341,47 +1328,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function guardarInicioLocal(payload) {
+    // Sin localStorage. Se conserva solo en memoria mientras la pantalla está abierta.
     const data = normalizarInicioGuardado(payload);
-    if (!data) return;
-
-    try {
-      if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
-        StorageApp.guardarElementosInicio(data.elementos);
-      }
-    } catch (e) {
-      console.warn("[WSP] Error guardando elementos en StorageApp.", e);
-    }
-
-    try {
-      localStorage.setItem("elementos_inicio", JSON.stringify(data.elementos));
-      localStorage.setItem("wsp_inicio_actual", JSON.stringify(data));
-    } catch (e) {
-      console.warn("[WSP] No se pudo guardar inicio en localStorage.", e);
-    }
+    inicioGuardadoActual = data || null;
   }
 
   function cargarInicioLocal() {
-    try {
-      const raw = localStorage.getItem("wsp_inicio_actual");
-      if (raw) {
-        const parsed = normalizarInicioGuardado(JSON.parse(raw));
-        if (parsed) return parsed;
-      }
-    } catch (e) {
-      console.warn("[WSP] No se pudo leer wsp_inicio_actual de localStorage.", e);
-    }
-
-    try {
-      const storageAppPayload = StorageApp?.cargarElementosInicio?.();
-      if (storageAppPayload) return normalizarInicioGuardado({ elementos: storageAppPayload });
-    } catch {}
-
-    try {
-      const legacy = JSON.parse(localStorage.getItem("elementos_inicio") || "null");
-      if (legacy) return normalizarInicioGuardado({ elementos: legacy });
-    } catch {}
-
-    return null;
+    // Sin localStorage. La fuente persistente es Supabase mediante leerInicioDesdeSupabase().
+    return normalizarInicioGuardado(inicioGuardadoActual);
   }
 
   function coincideInicioConFranja(payload, franja = franjaSeleccionada) {
@@ -1410,104 +1364,65 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function guardarInicioEnSupabase(payload) {
-    const data = normalizarInicioGuardado(payload);
-    if (!data) return false;
-    const { ts, ...dataParaSupabase } = data;
+    // La persistencia real de INICIO se realiza al enviar el WhatsApp con
+    // guardarHistorialOperativoWsp() -> BMZCN.OperativosRepo.guardarInicio().
+    // Esta función queda como no-op para no duplicar eventos incompletos.
+    guardarInicioLocal(payload);
+    return true;
+  }
 
-    try {
-      const url = `${SUPABASE_URL}/rest/v1/wsp_inicios?on_conflict=guardia_fecha,operativo_key`;
-      const r = await fetch(url, {
-        method: "POST",
-        headers: headersSupabase({
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=minimal",
-        }),
-        body: JSON.stringify(dataParaSupabase),
-      });
-
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo guardar inicio en Supabase:", r.status, await r.text());
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      console.warn("[WSP] Error guardando inicio en Supabase.", e);
-      return false;
-    }
+  function normalizarInicioDesdeVistaGuardiaWsp(row) {
+    if (!row) return null;
+    const metadataEstado = parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
+    const horario = limpiarTextoSimple(row?.hora_desde && row?.hora_hasta ? `${row.hora_desde} A ${row.hora_hasta}` : row?.horario || metadataEstado?.horario || "");
+    return normalizarInicioGuardado({
+      guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
+      operativo_estado_id: row?.operativo_estado_id || row?.id || "",
+      operativo_key: row?.operativo_key || "",
+      orden_num: normalizarArrayJsonWsp(row?.ordenes_origen).join(" / ") || limpiarTextoSimple(metadataEstado?.orden_num || metadataEstado?.orden || ""),
+      texto_ref: limpiarTextoSimple(metadataEstado?.texto_ref || metadataEstado?.titulo || metadataEstado?.archivo || "Operativo en curso"),
+      horario,
+      lugar: row?.lugar || "",
+      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
+      personal: row?.inicio_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || metadataEstado?.elementos || {},
+      ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
+    });
   }
 
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
-
-    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
-    const fechasBusqueda = getFechasBusquedaInicio();
-    const keysPosibles = construirOperativoKeysPosibles(franja);
+    const keysPosibles = new Set(construirOperativoKeysPosibles(franja).map((v) => limpiarTextoSimple(v)).filter(Boolean));
+    const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
+    if (keyDirecta) keysPosibles.add(keyDirecta);
 
     try {
-      for (const fechaBusqueda of fechasBusqueda) {
-        for (const keyPosible of keysPosibles) {
-          const paramsExactos = new URLSearchParams({
-            select: selectCols,
-            guardia_fecha: `eq.${fechaBusqueda}`,
-            operativo_key: `eq.${keyPosible}`,
-            order: "id.desc",
-            limit: "1",
-          });
-
-          const rExacto = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsExactos.toString()}`, {
-            headers: headersSupabase({ Accept: "application/json" }),
-          });
-
-          if (!rExacto.ok) {
-            console.warn("[WSP] No se pudo leer inicio exacto desde Supabase:", rExacto.status, await rExacto.text());
-          } else {
-            const dataExacta = await rExacto.json();
-            const rowExacta = Array.isArray(dataExacta) ? dataExacta[0] : null;
-            if (rowExacta) return normalizarInicioGuardado(rowExacta);
+      if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
+        const rows = await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: getGuardiaFechaISO(), limit: 500 });
+        let mejor = null;
+        let mejorPuntaje = -1;
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const estadoReal = limpiarTextoSimple(row?.estado_real || row?.estado || "").toUpperCase();
+          if (!["EN_CURSO", "FINALIZADO"].includes(estadoReal)) return;
+          const rowKey = limpiarTextoSimple(row?.operativo_key || "");
+          const payload = normalizarInicioDesdeVistaGuardiaWsp(row);
+          if (!payload) return;
+          const puntaje = keysPosibles.has(rowKey) ? 100 : puntuarCoincidenciaInicio(payload, franja);
+          if (puntaje > mejorPuntaje) {
+            mejor = payload;
+            mejorPuntaje = puntaje;
           }
-        }
-      }
-
-      let filas = [];
-      for (const fechaBusqueda of fechasBusqueda) {
-        const paramsFallback = new URLSearchParams({
-          select: selectCols,
-          guardia_fecha: `eq.${fechaBusqueda}`,
-          order: "id.desc",
-          limit: "300",
         });
-
-        const rFallback = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${paramsFallback.toString()}`, {
-          headers: headersSupabase({ Accept: "application/json" }),
-        });
-
-        if (!rFallback.ok) {
-          console.warn("[WSP] No se pudo leer inicio fallback desde Supabase:", rFallback.status, await rFallback.text());
-          continue;
-        }
-
-        const dataFallback = await rFallback.json();
-        if (Array.isArray(dataFallback)) {
-          filas = filas.concat(dataFallback.map(normalizarInicioGuardado).filter(Boolean));
-        }
+        if (mejor && mejorPuntaje >= 90) return mejor;
       }
-
-      let mejor = null;
-      let mejorPuntaje = -1;
-      filas.forEach((fila) => {
-        const puntaje = puntuarCoincidenciaInicio(fila, franja);
-        if (puntaje > mejorPuntaje) {
-          mejor = fila;
-          mejorPuntaje = puntaje;
-        }
-      });
-
-      return mejorPuntaje >= 90 ? mejor : null;
     } catch (e) {
-      console.warn("[WSP] Error leyendo inicio desde Supabase.", e);
-      return null;
+      console.warn("[WSP] No se pudo leer INICIO desde vistas canónicas Supabase.", e);
     }
+
+    // Respaldo final: si el selector de informes ya trajo el snapshot canónico.
+    return normalizarInicioGuardado(franja?.__inicioGuardadoPayload) || null;
   }
 
   function estadoOperativoEsEnCursoWsp(row) {
@@ -1672,25 +1587,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerIniciosGuardiaDesdeSupabase() {
-    // Fuente principal para INFORMES/EVENTOS: operativos_estado EN_CURSO.
-    // Respaldo: wsp_inicios de la guardia actual, filtrado contra FINALIZADOS.
-    // Esto mantiene el selector usable aunque operativos_estado, RLS o alguna columna
-    // nueva de historial todavía no estén perfectos en Supabase.
-    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
-    const fallback = await leerIniciosGuardiaDesdeWspIniciosFallback();
-    const filas = [];
-
-    const local = normalizarInicioGuardado(cargarInicioLocal());
-    if (local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
-      filas.push(local);
+    // Fuente única para INFORMES: Supabase canónico.
+    // No usa localStorage, no usa wsp_inicios y no mezcla caches viejas.
+    try {
+      if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
+        const rows = await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: getGuardiaFechaISO(), limit: 500 });
+        const inicios = (Array.isArray(rows) ? rows : [])
+          .filter((row) => limpiarTextoSimple(row?.estado_real || row?.estado || "").toUpperCase() === "EN_CURSO")
+          .map(normalizarInicioDesdeVistaGuardiaWsp)
+          .filter((item) => item && item.operativo_key);
+        return deduplicarIniciosInformeWsp(inicios);
+      }
+    } catch (e) {
+      console.warn("[WSP] Error leyendo operativos EN CURSO desde OperativosRepo.", e);
     }
 
-    // Primero fallback/local porque suele tener el snapshot vivo de personal/móviles/elementos.
-    // Luego estado EN_CURSO como fuente canónica para no perder operativos de otros dispositivos.
-    if (Array.isArray(fallback)) filas.push(...fallback);
-    if (Array.isArray(enCurso)) filas.push(...enCurso);
-
-    return deduplicarIniciosInformeWsp(filas);
+    // Respaldo directo a vista en curso si el repo no está cargado. Sigue siendo Supabase.
+    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
+    return deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
   }
 
   function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
@@ -2450,12 +2364,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerOwnerIdControlMoviles() {
+    // Identificador técnico de sesión para locks de Control de Móviles.
+    // No es fuente de verdad operativa y no usa localStorage.
     const key = "wsp_control_moviles_owner_id";
     try {
-      const actual = window.localStorage?.getItem(key);
+      const actual = window.sessionStorage?.getItem(key);
       if (actual) return actual;
       const nuevo = crearIdControlMoviles("owner");
-      window.localStorage?.setItem(key, nuevo);
+      window.sessionStorage?.setItem(key, nuevo);
       return nuevo;
     } catch {
       return crearIdControlMoviles("owner");
@@ -2662,12 +2578,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 
   function obtenerDeviceIdControlMoviles() {
+    // Identificador técnico de sesión/dispositivo para auditoría WSP.
+    // No es fuente de verdad operativa y no usa localStorage.
     const key = "wsp_control_moviles_device_id";
     try {
-      const actual = window.localStorage?.getItem(key);
+      const actual = window.sessionStorage?.getItem(key);
       if (actual) return actual;
       const nuevo = crearIdControlMoviles("device");
-      window.localStorage?.setItem(key, nuevo);
+      window.sessionStorage?.setItem(key, nuevo);
       return nuevo;
     } catch {
       return crearIdControlMoviles("device");
@@ -5923,15 +5841,30 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
     try {
-      if (!window.WspHistorialOperativos) return false;
-      if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
-        return await window.WspHistorialOperativos.guardarInicio(payload);
+      const repo = window.BMZCN?.OperativosRepo;
+      if (repo) {
+        if (tipoEvento === "INICIO" && typeof repo.guardarInicio === "function") {
+          return await repo.guardarInicio(payload);
+        }
+        if (tipoEvento === "FINALIZADO" && typeof repo.guardarFinalizado === "function") {
+          return await repo.guardarFinalizado(payload);
+        }
+        if (typeof repo.guardarInforme === "function") {
+          return await repo.guardarInforme(tipoEvento, payload);
+        }
       }
-      if (tipoEvento === "FINALIZADO" && typeof window.WspHistorialOperativos.guardarFinalizado === "function") {
-        return await window.WspHistorialOperativos.guardarFinalizado(payload);
-      }
-      if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
-        return await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
+
+      // Respaldo de compatibilidad si el módulo nuevo no cargó. No es fuente principal.
+      if (window.WspHistorialOperativos) {
+        if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
+          return await window.WspHistorialOperativos.guardarInicio(payload);
+        }
+        if (tipoEvento === "FINALIZADO" && typeof window.WspHistorialOperativos.guardarFinalizado === "function") {
+          return await window.WspHistorialOperativos.guardarFinalizado(payload);
+        }
+        if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
+          return await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
+        }
       }
     } catch (e) {
       console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual.", e);
@@ -6110,9 +6043,28 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function guardarInformeEventoWsp(tipoEvento, payload, nroActa) {
     const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
+
+    try {
+      const repo = window.BMZCN?.OperativosRepo;
+      if (repo?.guardarInforme) {
+        const resultado = await repo.guardarInforme(tipoEvento, {
+          ...data,
+          nro_acta: nroActa,
+          acta: nroActa,
+          operativo_estado_id: franjaSeleccionada?.__inicioGuardadoPayload?.operativo_estado_id || data.operativo_estado_id || null,
+        });
+        return { ...resultado, supabase_ok: true };
+      }
+    } catch (e) {
+      console.error("[WSP] Error guardando informe mediante OperativosRepo.", e);
+      alert("Error guardando el informe en Supabase. Se enviará igual por WhatsApp; revise conexión/RLS/bucket para archivar fotos.");
+      return resultadoInformeSinSupabaseWsp(data, String(e?.message || e || "error"));
+    }
+
+    // Respaldo directo REST si OperativosRepo no está cargado. No usa localStorage.
     const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
     try {
-      const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=guardia_fecha,informe_key`;
+      const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=informe_key`;
       const r = await fetch(url, {
         method: "POST",
         headers: headersSupabase({
@@ -7370,8 +7322,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     // Clave crítica: el informe intermedio suele guardarse con la key real del INICIO.
     // El FINALIZADO a veces trae una franja reconstruida/publicada con otra key.
     // Por eso se agregan también las keys del INICIO local/remoto y luego hay fallback por franja.
-    const inicioLocal = cargarInicioGuardadoCoincidente();
-    agregarKeyUnicaInformes(keys, inicioLocal?.operativo_key);
     const inicioRemoto = await leerInicioDesdeSupabase(franjaSeleccionada);
     agregarKeyUnicaInformes(keys, inicioRemoto?.operativo_key);
 
@@ -8050,7 +8000,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     sincronizarUIQrzDominio();
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
-    console.log("[WSP] Órdenes en memoria/Storage:", Array.isArray(_tmp) ? _tmp.length : _tmp);
+    console.log("[WSP] Órdenes en memoria de pantalla:", Array.isArray(_tmp) ? _tmp.length : _tmp);
     cargarOperativosDisponibles();
   })();
 })();
