@@ -46,6 +46,7 @@
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
+      <option value="INFORMES">INFORMES</option>
       <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
@@ -57,6 +58,194 @@
       <select id="horario" class="obligatorio">
         <option value="">Seleccionar Operativo</option>
       </select>
+    </div>
+
+
+    <!-- INFORMES: selector interno y formularios vinculados al operativo EN CURSO -->
+    <div id="bloqueInformeSelector" class="bloque-informe-selector section hidden destacado">
+      <label class="top-label" for="tipoInforme">INFORMES</label>
+      <select id="tipoInforme" class="obligatorio">
+        <option value="">Seleccionar informe</option>
+        <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
+        <option value="INFORME ALCOHOLEMIA">ALCOHOLEMIA POSITIVA</option>
+        <option value="INFORME DECTO 460/22">DECTO 460/22</option>
+      </select>
+    </div>
+
+    <div id="bloqueInformeAlcoholemia" class="section hidden destacado informe-alcoholemia-section">
+      <div class="informe-alcohol-head">
+        <div>
+          <span class="informe-alcohol-title">INFORME - ALCOHOLEMIA</span>
+          <div id="informeAlcoholemiaContexto" class="informe-alcohol-contexto">Seleccione un operativo iniciado.</div>
+        </div>
+        <label class="informe-alcohol-switch">
+          <span>460/22</span>
+          <input type="checkbox" id="infAlco460">
+        </label>
+      </div>
+
+      <div class="informe-alcohol-grid informe-alcohol-grid-4 informe-alcohol-compact">
+        <div class="informe-field campo-tipo-vehiculo">
+          <label for="infAlcoTipoVehiculo">Tipo de vehículo</label>
+          <select id="infAlcoTipoVehiculo">
+            <option value="">Seleccionar</option>
+            <option value="moto">Moto / motovehículo</option>
+            <option value="camion">Camión</option>
+            <option value="transporte pasajeros">Transporte de pasajeros</option>
+            <option value="chasis con cabina">Chasis con cabina</option>
+            <option value="chasis sin cabina">Chasis sin cabina</option>
+            <option value="tractor de carretera">Tractor de carretera</option>
+            <option value="carreton">Carretón</option>
+            <option value="auto">Auto</option>
+            <option value="sedan">Sedán</option>
+            <option value="pick up">Pick up</option>
+            <option value="camioneta">Camioneta</option>
+            <option value="furgon">Furgón</option>
+            <option value="furgoneta">Furgoneta</option>
+            <option value="otros">Otros</option>
+          </select>
+        </div>
+
+        <div id="wrapInfAlcoTipoOtro" class="informe-field campo-otro-tipo hidden">
+          <label for="infAlcoTipoOtro">Otro tipo</label>
+          <input type="text" id="infAlcoTipoOtro" class="upper-input" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-marca">
+          <label for="infAlcoMarca">Marca</label>
+          <input type="text" id="infAlcoMarca" class="upper-input" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-dominio">
+          <label for="infAlcoDominio">Dominio</label>
+          <input type="text" id="infAlcoDominio" class="upper-input" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-modelo">
+          <label for="infAlcoModelo">Modelo</label>
+          <input type="text" id="infAlcoModelo" class="upper-input" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-conductor">
+          <label for="infAlcoConductor">Conductor</label>
+          <input type="text" id="infAlcoConductor" class="upper-input" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-graduacion">
+          <label for="infAlcoGraduacion">Graduación g/l</label>
+          <input type="text" id="infAlcoGraduacion" inputmode="decimal" placeholder="0,51" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-licencia">
+          <label for="infAlcoLicenciaClase">Licencia Clase / DNI</label>
+          <input type="text" id="infAlcoLicenciaClase" class="upper-input" autocomplete="off" placeholder="B1 o DNI si no posee">
+        </div>
+
+        <label class="informe-check-inline campo-digital">
+          <span>Digital</span>
+          <input type="checkbox" id="infAlcoLicenciaDigital">
+        </label>
+
+        <div class="informe-field campo-acta">
+          <label for="infAlcoActa">N° de acta</label>
+          <input type="text" id="infAlcoActa" inputmode="numeric" autocomplete="off">
+        </div>
+
+        <div class="informe-field campo-otros-codigos informe-field-wide">
+          <label for="infAlcoOtrosCodigos">Otros códigos</label>
+          <input type="text" id="infAlcoOtrosCodigos" autocomplete="off" placeholder="Ej: 9119 / 13018">
+        </div>
+      </div>
+
+      <div class="informe-medidas-box">
+        <span class="informe-medidas-title">Medidas cautelares</span>
+        <div class="informe-medidas-grid">
+          <label class="informe-check-inline"><span>Prohibición</span><input type="checkbox" id="infAlcoMedProhibicion"></label>
+          <label class="informe-check-inline"><span>Cesión</span><input type="checkbox" id="infAlcoMedCesion"></label>
+          <label class="informe-check-inline"><span>Remisión</span><input type="checkbox" id="infAlcoMedRemision"></label>
+          <label class="informe-check-inline"><span>Retención</span><input type="checkbox" id="infAlcoMedRetencion"></label>
+        </div>
+      </div>
+
+      <div id="bloqueAlcoRemisionDestino" class="informe-remision-destino hidden">
+        <div class="informe-alcohol-grid informe-alcohol-grid-3">
+          <div class="informe-field">
+            <label for="infAlcoDependenciaRemite">Dependencia que remite</label>
+            <input type="text" id="infAlcoDependenciaRemite" class="upper-input" autocomplete="off" placeholder="BMZCN">
+          </div>
+          <div class="informe-field">
+            <label for="infAlcoCorralon">Destino / corralón</label>
+            <input type="text" id="infAlcoCorralon" class="upper-input" autocomplete="off" placeholder="RINCÓN / RECREO">
+          </div>
+          <label class="informe-check-inline">
+            <span>Inventario</span>
+            <input type="checkbox" id="infAlcoInventario">
+          </label>
+        </div>
+      </div>
+
+      <div class="informe-field" style="margin-top:8px;">
+        <label for="infAlcoObservacionExtra">Observación extra</label>
+        <textarea id="infAlcoObservacionExtra" class="upper-input" rows="2"></textarea>
+      </div>
+
+      <div id="infAlcoResultadoAuto" class="informe-alcohol-resultado">Complete tipo de vehículo y graduación mayor a cero.</div>
+
+      <div class="informe-fotos-grid">
+        <input type="file" id="infAlcoFoto1" accept="image/*" capture="environment">
+        <input type="file" id="infAlcoFoto2" accept="image/*" capture="environment">
+        <input type="file" id="infAlcoFoto3" accept="image/*" capture="environment">
+        <input type="file" id="infAlcoFoto4" accept="image/*" capture="environment">
+      </div>
+    </div>
+
+    <div id="bloqueInformeDecto460" class="section hidden destacado informe-decto460-section">
+      <div class="informe-alcohol-head">
+        <div>
+          <span class="informe-alcohol-title">INFORME - DECTO 460/22</span>
+          <div id="informeDecto460Contexto" class="informe-alcohol-contexto">Seleccione un operativo iniciado.</div>
+        </div>
+      </div>
+
+      <div class="informe-alcohol-grid informe-alcohol-grid-4">
+        <div class="informe-field">
+          <label for="inf460Marca">Marca</label>
+          <input type="text" id="inf460Marca" class="upper-input" autocomplete="off">
+        </div>
+        <div class="informe-field">
+          <label for="inf460Modelo">Modelo</label>
+          <input type="text" id="inf460Modelo" class="upper-input" autocomplete="off">
+        </div>
+        <div class="informe-field">
+          <label for="inf460Dominio">Dominio</label>
+          <input type="text" id="inf460Dominio" class="upper-input" autocomplete="off">
+        </div>
+        <div class="informe-field">
+          <label for="inf460Acta">N° de acta</label>
+          <input type="text" id="inf460Acta" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="informe-field informe-field-wide">
+          <label for="inf460OtrosCodigos">Código/s de infracción</label>
+          <input type="text" id="inf460OtrosCodigos" autocomplete="off" placeholder="Ej: 13018 / 9119">
+        </div>
+        <div class="informe-field">
+          <label for="inf460Corralon">Destino / corralón</label>
+          <input type="text" id="inf460Corralon" class="upper-input" autocomplete="off" placeholder="RINCÓN / RECREO">
+        </div>
+        <label class="informe-check-inline">
+          <span>Inventario</span>
+          <input type="checkbox" id="inf460Inventario">
+        </label>
+      </div>
+
+      <div id="inf460ResultadoAuto" class="informe-alcohol-resultado">El informe queda guardado como evento. No carga numerales automáticamente en el FINALIZADO.</div>
+
+      <div class="informe-fotos-grid">
+        <input type="file" id="inf460Foto1" accept="image/*" capture="environment">
+        <input type="file" id="inf460Foto2" accept="image/*" capture="environment">
+        <input type="file" id="inf460Foto3" accept="image/*" capture="environment">
+        <input type="file" id="inf460Foto4" accept="image/*" capture="environment">
+      </div>
     </div>
 
 
@@ -456,7 +645,6 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <script src="./wsp.js?v=control-reparado-final-20260521-0300" defer></script>
 </body>
 </html>
-
 
 
 
