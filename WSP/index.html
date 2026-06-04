@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <link rel="icon" href="/operativos-wsp-adm/favicon.ico">
+  <link rel="icon" href="./favicon.ico">
   <meta charset="UTF-8" />
   <title>Informes WhatsApp</title>
 
@@ -20,7 +20,7 @@
         <div class="brand-sub">Brigada Motorizada Zona Centro Norte</div>
       </div>
 
-      <img src="/operativos-wsp-adm/WSP/logo_fondo_transparente.png" alt="Sello" class="brand-logo">
+      <img src="./logo_fondo_transparente.png" alt="Sello" class="brand-logo">
     </div>
 
     <div id="bloquePresenciaActiva" class="control-opcion hidden">
@@ -630,22 +630,22 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   </div>
 
-  <!-- shared -->
-  <script src="../SHARED/JS/storage.js" defer></script>
-  <script src="../SHARED/JS/dom.js" defer></script>
-  <script src="../SHARED/JS/uiValidation.js" defer></script>
-  <script src="../SHARED/JS/dates.js" defer></script>
-  <script src="../SHARED/JS/ordersSync.js" defer></script>
-
-  <!-- wsp -->
-  <script src="./nomenclador.js" defer></script>
-  <script src="./historialOperativos.js"></script>
-  <script src="./controlsuperior.js" defer></script>
+  <!-- SHARED NUEVO - fuente de verdad Supabase / sin localStorage operativo -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="./wsp.js?v=informes-selector-supabase-robusto-20260604" defer></script>
+  <script src="../SHARED/JS/supabaseClient.js" defer></script>
+  <script src="../SHARED/JS/normalizadores.js" defer></script>
+  <script src="../SHARED/JS/guardia.js" defer></script>
+  <script src="../SHARED/JS/operativosRepo.js" defer></script>
+  <script src="../SHARED/JS/nomencladorRepo.js" defer></script>
+  <script src="../SHARED/JS/realtimeBus.js" defer></script>
+
+  <!-- WSP -->
+  <script src="./nomenclador.js" defer></script>
+  <script src="./historialOperativos.js" defer></script>
+  <script src="./controlsuperior.js" defer></script>
+  <script src="./wsp.js?v=fuente-verdad-shared-20260604" defer></script>
 </body>
 </html>
-
 
 
 
