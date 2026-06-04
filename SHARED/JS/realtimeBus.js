@@ -1,7 +1,7 @@
 // ======================================================
-// BMZCN - Realtime Bus
-// Tiempo real real por Supabase Realtime. Sin setInterval. Sin localStorage.
-// Requiere cargar antes: https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
+// BMZCN - Realtime Bus robusto
+// Supabase Realtime como disparador principal. Sin polling.
+// Requiere: @supabase/supabase-js v2 y SHARED/JS/supabaseClient.js
 // ======================================================
 (function () {
   'use strict';
@@ -9,8 +9,12 @@
   const root = window.BMZCN = window.BMZCN || {};
 
   let client = null;
-  const channels = new Map();
-  const listeners = new Map();
+  const channels = new Map();      // key -> channel
+  const definitions = new Map();   // key -> config
+  const listeners = new Map();     // eventName -> Set(fn)
+
+  function log(...args) { console.log('[BMZCN RealtimeBus]', ...args); }
+  function warn(...args) { console.warn('[BMZCN RealtimeBus]', ...args); }
 
   function ensureClient() {
     if (client) return client;
@@ -32,14 +36,37 @@
     const all = listeners.get('*') || new Set();
     [...specific, ...all].forEach((fn) => {
       try { fn(payload, eventName); }
-      catch (e) { console.error('[BMZCN Realtime] Error en listener', eventName, e); }
+      catch (e) { console.error('[BMZCN RealtimeBus] Error en listener', eventName, e); }
     });
   }
 
-  function subscribeTable({ table, event = '*', schema = 'public', filter = '', channelName = '' }) {
+  function makeKey({ table, event = '*', schema = 'public', filter = '', channelName = '' }) {
+    return channelName || `${schema}:${table}:${event}:${filter || 'all'}`;
+  }
+
+  async function removeChannelByKey(key) {
+    if (!channels.has(key)) return;
     const sb = ensureClient();
-    const key = channelName || `${schema}:${table}:${event}:${filter || 'all'}`;
+    const channel = channels.get(key);
+    channels.delete(key);
+    try { await sb.removeChannel(channel); }
+    catch (e) { warn('No se pudo remover canal', key, e); }
+  }
+
+  function subscribeTable(config = {}) {
+    const sb = ensureClient();
+    const table = String(config.table || '').trim();
+    if (!table) throw new Error('subscribeTable requiere table.');
+
+    const schema = config.schema || 'public';
+    const event = config.event || '*';
+    const filter = config.filter || '';
+    const key = makeKey({ table, event, schema, filter, channelName: config.channelName || '' });
+
+    definitions.set(key, { table, event, schema, filter, channelName: key });
     if (channels.has(key)) return channels.get(key);
+
+    emit('subscription_status', { key, table, status: 'CREATING' });
 
     const channel = sb.channel(`bmzcn:${key}`)
       .on('postgres_changes', { event, schema, table, ...(filter ? { filter } : {}) }, (payload) => {
@@ -47,10 +74,11 @@
         emit(`${table}:${payload.eventType}`, payload);
         emit('db_change', { table, payload });
       })
-      .subscribe((status) => {
-        emit('subscription_status', { key, table, status });
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[BMZCN Realtime] Estado de canal', key, status);
+      .subscribe((status, err) => {
+        emit('subscription_status', { key, table, status, error: err || null });
+        if (status === 'SUBSCRIBED') log('SUBSCRIBED', key);
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          warn('Estado de canal', key, status, err || '');
         }
       });
 
@@ -58,10 +86,16 @@
     return channel;
   }
 
+  async function resubscribeAll() {
+    const defs = Array.from(definitions.entries());
+    for (const [key] of defs) await removeChannelByKey(key);
+    defs.forEach(([, cfg]) => subscribeTable(cfg));
+    emit('resubscribed', { count: defs.length });
+  }
+
   function subscribeOperativos({ guardiaFecha = '' } = {}) {
     const filterEstado = guardiaFecha ? `guardia_fecha=eq.${guardiaFecha}` : '';
     const filterEventos = guardiaFecha ? `guardia_fecha=eq.${guardiaFecha}` : '';
-
     return [
       subscribeTable({ table: 'operativos_estado', filter: filterEstado, channelName: `operativos_estado:${guardiaFecha || 'all'}` }),
       subscribeTable({ table: 'operativos_eventos', filter: filterEventos, channelName: `operativos_eventos:${guardiaFecha || 'all'}` }),
@@ -70,19 +104,21 @@
   }
 
   function subscribeEstadisticas({ guardiaFecha = '' } = {}) {
-    const channelsList = subscribeOperativos({ guardiaFecha });
-    channelsList.push(subscribeTable({ table: 'estadisticas_reportes_generados', channelName: 'estadisticas_reportes_generados:all' }));
-    return channelsList;
+    const list = subscribeOperativos({ guardiaFecha });
+    list.push(subscribeTable({ table: 'estadisticas_reportes_generados', channelName: 'estadisticas_reportes_generados:all' }));
+    return list;
   }
 
   async function unsubscribeAll() {
-    if (!client) return;
-    for (const [key, channel] of channels.entries()) {
-      try { await client.removeChannel(channel); }
-      catch (e) { console.warn('[BMZCN Realtime] No se pudo remover canal', key, e); }
-    }
-    channels.clear();
+    const keys = Array.from(channels.keys());
+    for (const key of keys) await removeChannelByKey(key);
   }
+
+  // No es polling. Solo reengancha si el navegador recupera conexión/foco.
+  window.addEventListener('online', () => resubscribeAll().catch(e => warn('resubscribe online', e)));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resubscribeAll().catch(e => warn('resubscribe visible', e));
+  });
 
   root.RealtimeBus = {
     on,
@@ -90,7 +126,9 @@
     subscribeTable,
     subscribeOperativos,
     subscribeEstadisticas,
+    resubscribeAll,
     unsubscribeAll,
-    getClient: ensureClient
+    getClient: ensureClient,
+    getChannels: () => Array.from(channels.keys())
   };
 })();
