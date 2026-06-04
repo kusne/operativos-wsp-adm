@@ -942,20 +942,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   async function syncAntesDeSeleccion() {
     if (syncingOrdenes) return;
-    syncingOrdenes = true;
 
-    const seleccionActual = selHorario?.value || "";
-    const ok = await syncOrdenesDesdeServidor();
-    if (ok) {
-      if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
-        await cargarOperativosIniciadosParaInformes(seleccionActual);
-      } else {
-        cargarOperativosDisponibles(seleccionActual);
+    // INFORMES usa como fuente los operativos realmente iniciados/en curso.
+    // No recargar el selector cada vez que recibe foco: en celulares/Chrome eso
+    // desarma el desplegable justo cuando el usuario intenta elegir otro operativo.
+    if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
+      const tieneOpciones = Array.from(selHorario?.options || []).some((opt) => limpiarTextoSimple(opt?.value || ""));
+      if (tieneOpciones && operativosCache.length) return;
+
+      syncingOrdenes = true;
+      try {
+        await cargarOperativosIniciadosParaInformes(selHorario?.value || "");
+        actualizarDatosFranja();
+      } finally {
+        syncingOrdenes = false;
       }
-      actualizarDatosFranja();
+      return;
     }
 
-    syncingOrdenes = false;
+    syncingOrdenes = true;
+    try {
+      const seleccionActual = selHorario?.value || "";
+      const ok = await syncOrdenesDesdeServidor();
+      if (ok) {
+        cargarOperativosDisponibles(seleccionActual);
+        actualizarDatosFranja();
+      }
+    } finally {
+      syncingOrdenes = false;
+    }
   }
 
   // ===== UI =====
@@ -1624,17 +1639,56 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
+  async function leerIniciosGuardiaDesdeWspIniciosFallback() {
+    const guardiaFecha = getGuardiaFechaISO();
+    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
+
+    try {
+      const params = new URLSearchParams({
+        select: selectCols,
+        guardia_fecha: `eq.${guardiaFecha}`,
+        order: "id.desc",
+        limit: "300",
+      });
+
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/wsp_inicios?${params.toString()}`, {
+        headers: headersSupabase({ Accept: "application/json" }),
+      });
+
+      if (!r.ok) {
+        console.warn("[WSP] No se pudo leer fallback wsp_inicios para INFORMES:", r.status, await r.text().catch(() => ""));
+        return [];
+      }
+
+      const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase();
+      const data = await r.json();
+      return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
+        .map(normalizarInicioGuardado)
+        .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
+    } catch (e) {
+      console.warn("[WSP] Error leyendo fallback wsp_inicios para INFORMES.", e);
+      return [];
+    }
+  }
+
   async function leerIniciosGuardiaDesdeSupabase() {
-    // Fuente canónica para INFORMES/EVENTOS: operativos_estado EN_CURSO.
-    // No se usa wsp_inicios como listado, porque es historial de inicios y puede
-    // contener pruebas, registros viejos o finalizados. Así evitamos contadores inflados.
+    // Fuente principal para INFORMES/EVENTOS: operativos_estado EN_CURSO.
+    // Respaldo: wsp_inicios de la guardia actual, filtrado contra FINALIZADOS.
+    // Esto mantiene el selector usable aunque operativos_estado, RLS o alguna columna
+    // nueva de historial todavía no estén perfectos en Supabase.
     const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
-    const filas = Array.isArray(enCurso) ? enCurso.slice() : [];
+    const fallback = await leerIniciosGuardiaDesdeWspIniciosFallback();
+    const filas = [];
 
     const local = normalizarInicioGuardado(cargarInicioLocal());
     if (local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
-      filas.unshift(local);
+      filas.push(local);
     }
+
+    // Primero fallback/local porque suele tener el snapshot vivo de personal/móviles/elementos.
+    // Luego estado EN_CURSO como fuente canónica para no perder operativos de otros dispositivos.
+    if (Array.isArray(fallback)) filas.push(...fallback);
+    if (Array.isArray(enCurso)) filas.push(...enCurso);
 
     return deduplicarIniciosInformeWsp(filas);
   }
@@ -6037,6 +6091,23 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
+  function resultadoInformeSinSupabaseWsp(data, motivo = "") {
+    return {
+      evento: {
+        id: null,
+        operativo_key: data?.operativo_key || "",
+        guardia_fecha: data?.guardia_fecha || getGuardiaFechaISO(),
+        informe_key: data?.informe_key || "",
+        tipo_evento: data?.tipo_evento || "INFORME",
+        payload_completo: data?.payload_completo || {},
+      },
+      estado: null,
+      informe_key: data?.informe_key || "",
+      supabase_ok: false,
+      motivo_error: motivo,
+    };
+  }
+
   async function guardarInformeEventoWsp(tipoEvento, payload, nroActa) {
     const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
     const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
@@ -6055,22 +6126,23 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!r.ok) {
         const txt = await r.text().catch(() => "");
         console.error("[WSP] No se pudo guardar/upsert informe:", r.status, txt);
-        alert("No se pudo guardar el informe en Supabase. No se enviará por WhatsApp para evitar perder el registro o duplicar datos.");
-        return false;
+        alert("No se pudo guardar el informe en Supabase. Se enviará igual por WhatsApp; las fotos no quedarán archivadas hasta corregir Supabase.");
+        return resultadoInformeSinSupabaseWsp(data, `HTTP ${r.status} ${txt}`);
       }
 
       const rows = await r.json().catch(() => []);
       const evento = Array.isArray(rows) ? rows[0] : rows;
       if (!evento?.id) {
-        alert("Supabase no devolvió el ID del informe guardado. No se enviará por WhatsApp para evitar perder fotos o duplicar datos.");
-        return false;
+        console.warn("[WSP] Supabase guardó/respondió sin ID de evento para el informe.", rows);
+        alert("Supabase no devolvió el ID del informe. Se enviará igual por WhatsApp; las fotos no quedarán archivadas.");
+        return resultadoInformeSinSupabaseWsp(data, "sin_id_evento");
       }
 
-      return { evento, estado: null, informe_key: data.informe_key };
+      return { evento, estado: null, informe_key: data.informe_key, supabase_ok: true };
     } catch (e) {
       console.error("[WSP] Error guardando/upsert informe.", e);
-      alert("Error guardando el informe en Supabase. Revise conexión y vuelva a intentar.");
-      return false;
+      alert("Error guardando el informe en Supabase. Se enviará igual por WhatsApp; revise conexión/RLS/bucket para archivar fotos.");
+      return resultadoInformeSinSupabaseWsp(data, String(e?.message || e || "error"));
     }
   }
 
@@ -6748,15 +6820,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     const fotos = fotosSeleccionadasInformeAlcoholemia();
 
     const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
-    if (!resultadoHistorial) return;
-    if (fotos.length) {
+    if (fotos.length && resultadoHistorial?.supabase_ok && resultadoHistorial?.evento?.id) {
       try {
         await eliminarFotosPreviasInformeWsp(resultadoHistorial);
         await subirFotosInformeAlcoholemia(resultadoHistorial, fotos);
       } catch (e) {
         console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e);
-        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+        alert("El informe se enviará por WhatsApp, pero alguna foto no pudo archivarse en Supabase.");
       }
+    } else if (fotos.length && !resultadoHistorial?.supabase_ok) {
+      console.warn("[WSP] Se omite archivo de fotos en Supabase porque el informe no quedó guardado con ID. WhatsApp continúa igual.", resultadoHistorial?.motivo_error || "");
     }
 
     resetUI();
@@ -7121,15 +7194,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     const payload = construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora });
     const fotos = fotosSeleccionadasInformeDecto460();
     const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, normalizarNumeroActaInforme(inf460Acta?.value));
-    if (!resultadoHistorial) return;
-    if (fotos.length) {
+    if (fotos.length && resultadoHistorial?.supabase_ok && resultadoHistorial?.evento?.id) {
       try {
         await eliminarFotosPreviasInformeWsp(resultadoHistorial);
         await subirFotosInformeDecto460(resultadoHistorial, fotos);
       } catch (e) {
         console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e);
-        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+        alert("El informe se enviará por WhatsApp, pero alguna foto no pudo archivarse en Supabase.");
       }
+    } else if (fotos.length && !resultadoHistorial?.supabase_ok) {
+      console.warn("[WSP] Se omite archivo de fotos en Supabase porque el informe no quedó guardado con ID. WhatsApp continúa igual.", resultadoHistorial?.motivo_error || "");
     }
     resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
