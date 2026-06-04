@@ -47,6 +47,7 @@
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
       <option value="INFORMES">INFORMES</option>
+      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
     <div class="operativos-title-row">
@@ -65,7 +66,8 @@
       <label class="top-label" for="tipoInforme">INFORMES</label>
       <select id="tipoInforme" class="obligatorio">
         <option value="">Seleccionar informe</option>
-          <option value="INFORME ALCOHOLEMIA">ALCOHOLEMIA POSITIVA</option>
+        <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
+        <option value="INFORME ALCOHOLEMIA">ALCOHOLEMIA POSITIVA</option>
         <option value="INFORME DECTO 460/22">DECTO 460/22</option>
       </select>
     </div>
@@ -630,17 +632,17 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   <!-- SHARED NUEVO - fuente de verdad Supabase / sin localStorage operativo -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="../SHARED/JS/supabaseClient.js" defer></script>
-  <script src="../SHARED/JS/normalizadores.js" defer></script>
-  <script src="../SHARED/JS/guardia.js" defer></script>
-  <script src="../SHARED/JS/operativosRepo.js" defer></script>
-  <script src="../SHARED/JS/nomencladorRepo.js" defer></script>
-  <script src="../SHARED/JS/realtimeBus.js" defer></script>
+  <script src="../SHARED/JS/supabaseClient.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <script src="../SHARED/JS/normalizadores.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <script src="../SHARED/JS/guardia.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <script src="../SHARED/JS/operativosRepo.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <script src="../SHARED/JS/nomencladorRepo.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <script src="../SHARED/JS/realtimeBus.js?v=paso7-sin-on-conflict-20260604" defer></script>
 
   <!-- WSP -->
   <script src="./nomenclador.js" defer></script>
   <script src="./controlsuperior.js" defer></script>
-  <script src="./wsp.js?v=paso4-finaliza-informes-realtime-20260604" defer></script>
+  <script src="./wsp.js?v=paso7-sin-on-conflict-20260604" defer></script>
 </body>
 </html>
 
