@@ -175,10 +175,16 @@
   async function guardarInicio(input = {}) {
     const estado = await upsertEstado(input, 'EN_CURSO');
     const evento = await upsertEvento(estado, 'INICIO', input);
+
+    // El INICIO puede actualizarse aun cuando ya exista un FINALIZADO válido.
+    // En ese caso se actualiza el snapshot del inicio, pero NO se borra el finalizado
+    // ni se vuelve el operativo a EN_CURSO. Borrar FINALIZADO desde Estadísticas sí
+    // dejará finalizado_evento_id en null y entonces el mismo INICIO queda EN_CURSO.
+    const finalizadoVigente = estado.finalizado_evento_id || null;
     const estadoActualizado = await patchEstado(estado.id, {
-      estado: 'EN_CURSO',
+      estado: finalizadoVigente ? 'FINALIZADO' : 'EN_CURSO',
       inicio_evento_id: evento.id,
-      finalizado_evento_id: null
+      finalizado_evento_id: finalizadoVigente
     });
     return { estado: estadoActualizado || estado, evento };
   }
