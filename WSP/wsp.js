@@ -938,7 +938,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     // INFORMES usa como fuente los operativos realmente iniciados/en curso.
     // No recargar el selector cada vez que recibe foco: en celulares/Chrome eso
     // desarma el desplegable justo cuando el usuario intenta elegir otro operativo.
-    if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
+    if (selTipo?.value === "FINALIZA" || esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
       const tieneOpciones = Array.from(selHorario?.options || []).some((opt) => limpiarTextoSimple(opt?.value || ""));
       if (tieneOpciones && operativosCache.length) return;
 
@@ -1286,6 +1286,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
+      operativo_estado_id: String(payload.operativo_estado_id || payload.id || ""),
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
@@ -4259,6 +4260,28 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     setUIControlMovilesActiva(false);
 
+    if (fin) {
+      // FINALIZA debe trabajar sobre la misma fuente real que INFORMES:
+      // operativos iniciados/en curso desde Supabase, nunca operativos publicados ni cache vieja.
+      setUIControlSuperiorActiva(false);
+      setUIInformeAlcoholemiaActiva(false);
+      setUIInformeDecto460Activa(false);
+      setSelectorInformesVisible(false);
+      setTituloOperativosIniciados(true);
+      if (divFinaliza) divFinaliza.classList.remove("hidden");
+      if (divMismosElementos) divMismosElementos.classList.remove("hidden");
+      actualizarVisibilidadBloquePresenciaActiva();
+      actualizarVisibilidadResultadosFinaliza();
+      desactivarControlesMismos({ limpiar: true });
+      sincronizarUIAlcoholimetro();
+      sincronizarUIQrzDominio();
+      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+        actualizarDatosFranja();
+        sincronizarInicioGuardadoSegunContexto();
+      });
+      return;
+    }
+
     if (enInformes && !getTipoInformeActivo()) {
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
@@ -5451,12 +5474,15 @@ ${bold(`Moviles ${organismo}:`)}`)
 
 
   function esControlSuperiorActivo() {
+    // CONTROL SUPERIOR ya no vive como opción principal: debe ejecutarse dentro de INFORMES.
+    // Se mantiene compatibilidad si algún HTML viejo todavía trae CONTROL SUPERIOR en el selector principal.
+    if (getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO) return true;
     try {
       if (window.ControlSuperior && typeof window.ControlSuperior.isActive === "function") {
         return !!window.ControlSuperior.isActive();
       }
     } catch {}
-    return getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO;
+    return false;
   }
 
   function setObservacionesVisible(visible) {
@@ -7689,11 +7715,12 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     let inicioCompartido = null;
     if (usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
-      inicioCompartido = cargarInicioGuardadoCoincidente();
+      inicioCompartido = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
       if (!inicioCompartido) {
         alert("No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA.");
         return;
       }
+      inicioGuardadoActual = inicioCompartido;
     }
 
     const personalTexto = usarMismoPersonal
