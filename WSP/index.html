@@ -41,24 +41,14 @@
       </div>
     </div>
 
-    <label class="top-label" for="tipo">INICIA / FINALIZA / INFORMES</label>
+    <label class="top-label" for="tipo">INICIA/FINALIZA</label>
     <select id="tipo" class="obligatorio">
       <option value="">Seleccionar</option>
       <option value="INICIA" selected>INICIA</option>
       <option value="FINALIZA">FINALIZA</option>
-      <option value="INFORMES">INFORMES</option>
+      <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
-
-    <div id="bloqueInformeSelector" class="section hidden bloque-informe-selector">
-      <label class="top-label" for="tipoInforme">INFORME</label>
-      <select id="tipoInforme">
-        <option value="">Seleccionar informe</option>
-        <option value="CONTROL SUPERIOR">Control Superior</option>
-        <option value="INFORME ALCOHOLEMIA">Alcoholemia</option>
-        <option value="INFORME DECTO 460/22">Decto 460/22</option>
-      </select>
-    </div>
     <div class="operativos-title-row">
       <label class="top-label operativos-title-label">OPERATIVOS</label>
       <span id="contadorOperativosWsp" class="contador-operativos-wsp" title="Cantidad de operativos disponibles">0</span>
@@ -101,174 +91,6 @@
           <input type="checkbox" id="controlSuperiorSeAcopla">
         </label>
       </div>
-    </div>
-
-    <!-- INFORME: ALCOHOLEMIA POSITIVA -->
-    <div id="bloqueInformeAlcoholemia" class="section hidden destacado informe-alcoholemia-section">
-      <div class="informe-alcohol-head">
-        <div>
-          <label class="informe-alcohol-title">INFORME - ALCOHOLEMIA POSITIVA</label>
-          <div id="informeAlcoholemiaContexto" class="informe-alcohol-contexto">Seleccione un operativo en curso.</div>
-        </div>
-        <label class="check informe-alcohol-switch">
-          <span>Alcoholemia y 460/22</span>
-          <input type="checkbox" id="infAlco460">
-        </label>
-      </div>
-
-      <div id="informeAlcoCampos" class="informe-alcohol-grid informe-alcohol-grid-2 informe-alcohol-compact">
-        <div class="informe-field campo-tipo-vehiculo">
-          <label for="infAlcoTipoVehiculo">Tipo de vehículo</label>
-          <select id="infAlcoTipoVehiculo">
-            <option value="">Seleccionar</option>
-            <option value="moto">Moto / Motovehículo</option>
-            <option value="camion">Camión</option>
-            <option value="transporte_pasajeros">Transporte de pasajeros</option>
-            <option value="chasis_con_cabina">Chasis con cabina</option>
-            <option value="chasis_sin_cabina">Chasis sin cabina</option>
-            <option value="tractor_carretera">Tractor de carretera</option>
-            <option value="carreton">Carretón</option>
-            <option value="auto">Auto</option>
-            <option value="sedan">Sedán</option>
-            <option value="pick_up">Pick up</option>
-            <option value="camioneta">Camioneta</option>
-            <option value="furgon">Furgón</option>
-            <option value="furgoneta">Furgoneta</option>
-            <option value="otros">Otros</option>
-          </select>
-        </div>
-
-        <div class="informe-field hidden campo-otro-tipo" id="wrapInfAlcoTipoOtro">
-          <label for="infAlcoTipoOtro">Otro tipo</label>
-          <input type="text" id="infAlcoTipoOtro" class="upper-input" placeholder="TIPO">
-        </div>
-
-        <div class="informe-field campo-marca">
-          <label for="infAlcoMarca">Marca</label>
-          <input type="text" id="infAlcoMarca" class="upper-input" placeholder="MARCA">
-        </div>
-
-        <div class="informe-field campo-dominio">
-          <label for="infAlcoDominio">Dominio</label>
-          <input type="text" id="infAlcoDominio" class="upper-input" placeholder="DOMINIO">
-        </div>
-
-        <div class="informe-field campo-modelo">
-          <label for="infAlcoModelo">Modelo</label>
-          <input type="text" id="infAlcoModelo" class="upper-input" placeholder="MODELO">
-        </div>
-
-        <div class="informe-field campo-conductor">
-          <label for="infAlcoConductor">Conductor</label>
-          <input type="text" id="infAlcoConductor" class="upper-input" placeholder="APELLIDO Y NOMBRE">
-        </div>
-
-        <div class="informe-field campo-graduacion">
-          <label for="infAlcoGraduacion">Graduación [g/l]</label>
-          <input type="text" id="infAlcoGraduacion" inputmode="decimal" placeholder="0.51 / 0,51">
-        </div>
-
-        <div class="informe-field campo-licencia">
-          <label for="infAlcoLicenciaClase">Licencia Clase</label>
-          <input type="text" id="infAlcoLicenciaClase" class="upper-input" placeholder="A/B/C...">
-        </div>
-
-        <label class="check check-chip informe-check-inline campo-digital">
-          <span>Digital</span>
-          <input type="checkbox" id="infAlcoLicenciaDigital">
-        </label>
-
-        <div class="informe-field campo-acta">
-          <label for="infAlcoActa">N° de acta</label>
-          <input type="text" id="infAlcoActa" inputmode="numeric" pattern="[0-9]*" placeholder="SOLO NÚMEROS">
-        </div>
-
-        <div class="informe-field campo-otros-codigos">
-          <label for="infAlcoOtrosCodigos">Otros códigos</label>
-          <input type="text" id="infAlcoOtrosCodigos" placeholder="5011/4084">
-        </div>
-      </div>
-
-      <div class="informe-medidas-box">
-        <label class="informe-medidas-title">Medidas cautelares</label>
-        <div class="informe-medidas-grid">
-          <label class="check check-chip informe-check-inline"><span>Prohibición</span><input type="checkbox" id="infAlcoMedProhibicion"></label>
-          <label class="check check-chip informe-check-inline"><span>Cesión</span><input type="checkbox" id="infAlcoMedCesion"></label>
-          <label class="check check-chip informe-check-inline"><span>Remisión</span><input type="checkbox" id="infAlcoMedRemision"></label>
-          <label class="check check-chip informe-check-inline"><span>Retención</span><input type="checkbox" id="infAlcoMedRetencion"></label>
-        </div>
-      </div>
-
-      <div id="bloqueAlcoRemisionDestino" class="informe-alcohol-grid informe-alcohol-grid-2 informe-remision-destino hidden">
-        <input type="hidden" id="infAlcoDependenciaRemite" value="PERSONAL MUNICIPAL">
-        <div class="informe-field">
-          <label for="infAlcoCorralon">Corralón</label>
-          <input type="text" id="infAlcoCorralon" class="upper-input" placeholder="RINCON / RECREO / SANTA FE">
-        </div>
-        <label class="check check-chip informe-check-inline">
-          <span>Inventario</span>
-          <input type="checkbox" id="infAlcoInventario">
-        </label>
-      </div>
-
-      <div class="informe-fotos-grid">
-        <div class="informe-field"><label for="infAlcoFoto1">Foto 1</label><input type="file" id="infAlcoFoto1" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="infAlcoFoto2">Foto 2</label><input type="file" id="infAlcoFoto2" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="infAlcoFoto3">Foto 3</label><input type="file" id="infAlcoFoto3" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="infAlcoFoto4">Foto 4</label><input type="file" id="infAlcoFoto4" accept="image/*" capture="environment"></div>
-      </div>
-
-      <div id="infAlcoResultadoAuto" class="informe-alcohol-resultado">Complete tipo de vehículo y graduación.</div>
-    </div>
-
-    <!-- INFORME: DECTO 460/22 -->
-    <div id="bloqueInformeDecto460" class="section hidden destacado informe-alcoholemia-section informe-decto460-section">
-      <div class="informe-alcohol-head">
-        <div>
-          <label class="informe-alcohol-title">INFORME - DECTO 460/22</label>
-          <div id="informeDecto460Contexto" class="informe-alcohol-contexto">Seleccione un operativo en curso.</div>
-        </div>
-      </div>
-
-      <div class="informe-alcohol-grid informe-alcohol-grid-2 informe-decto460-grid">
-        <div class="informe-field">
-          <label for="inf460Marca">Marca</label>
-          <input type="text" id="inf460Marca" class="upper-input" placeholder="MARCA">
-        </div>
-        <div class="informe-field">
-          <label for="inf460Modelo">Modelo</label>
-          <input type="text" id="inf460Modelo" class="upper-input" placeholder="MODELO">
-        </div>
-        <div class="informe-field">
-          <label for="inf460Dominio">Dominio</label>
-          <input type="text" id="inf460Dominio" class="upper-input" placeholder="DOMINIO">
-        </div>
-        <div class="informe-field">
-          <label for="inf460Acta">N° de acta</label>
-          <input type="text" id="inf460Acta" inputmode="numeric" pattern="[0-9]*" placeholder="SOLO NÚMEROS">
-        </div>
-        <div class="informe-field">
-          <label for="inf460OtrosCodigos">Otros códigos</label>
-          <input type="text" id="inf460OtrosCodigos" class="upper-input" placeholder="4084/9078">
-        </div>
-        <div class="informe-field">
-          <label for="inf460Corralon">Corralón</label>
-          <input type="text" id="inf460Corralon" class="upper-input" placeholder="RINCON / RECREO / SANTA FE">
-        </div>
-        <label class="check check-chip informe-check-inline">
-          <span>Inventario</span>
-          <input type="checkbox" id="inf460Inventario">
-        </label>
-      </div>
-
-      <div class="informe-fotos-grid">
-        <div class="informe-field"><label for="inf460Foto1">Foto 1</label><input type="file" id="inf460Foto1" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="inf460Foto2">Foto 2</label><input type="file" id="inf460Foto2" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="inf460Foto3">Foto 3</label><input type="file" id="inf460Foto3" accept="image/*" capture="environment"></div>
-        <div class="informe-field"><label for="inf460Foto4">Foto 4</label><input type="file" id="inf460Foto4" accept="image/*" capture="environment"></div>
-      </div>
-
-      <div id="inf460ResultadoAuto" class="informe-alcohol-resultado">Decto 460/22 suma remisión, acta, procedimiento y detalles al finalizado.</div>
     </div>
 
     <!-- CONTROL DE MÓVILES -->
@@ -342,27 +164,17 @@
     <!-- PERSONAL -->
     <div class="section obligatorio destacado" id="bloquePersonal">
       <label>Personal Policial</label>
+
       <div class="grid-personal">
-        <label class="check check-chip">
-          <span>JEFE</span>
-          <input type="checkbox" class="personal" value="SubCrio. Choque J.M.">
-        </label>
-
-        <label class="check check-chip">
-          <span>SUBJEFE.</span>
-          <input type="checkbox" class="personal" value="Inspector Tramontini I.">
-        </label>
-
         <label class="check check-chip">
           <span>Subinspector Mariaux A.</span>
           <input type="checkbox" class="personal" value="Subinspector Mariaux A.">
         </label>
-
+        
         <label class="check check-chip">
           <span>Subinspector Fernandez M.</span>
           <input type="checkbox" class="personal" value="Subinspector Fernandez M.">
         </label>
-
         <label class="check check-chip">
           <span>Oficial Merlo D.</span>
           <input type="checkbox" class="personal" value="Oficial Merlo D.">
@@ -377,7 +189,7 @@
           <span>Suboficial Aquino F.</span>
           <input type="checkbox" class="personal" value="Suboficial Aquino F.">
         </label>
-
+        
         <label class="check check-chip">
           <span>Suboficial Delgado Y.</span>
           <input type="checkbox" class="personal" value="Suboficial Delgado Y.">
@@ -387,6 +199,7 @@
           <span>Suboficial Benavidez.</span>
           <input type="checkbox" class="personal" value="Suboficial Benavidez.">
         </label>
+
       </div>
     </div>
 
@@ -637,14 +450,13 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   <!-- wsp -->
   <script src="./nomenclador.js" defer></script>
-  
+  <script src="./historialOperativos.js"></script>
+  <script src="./controlsuperior.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  
-  <script src="./historialOperativos.js?v=20260604-salida-realtime-hard-02" defer></script>
-  <script src="./controlsuperior.js?v=20260603-finaliza-selector-finaliza-04" defer></script>
-  <script src="./wsp.js?v=20260604-salida-realtime-hard-02" defer></script>
+  <script src="./wsp.js?v=control-reparado-final-20260521-0300" defer></script>
 </body>
 </html>
+
 
 
 
