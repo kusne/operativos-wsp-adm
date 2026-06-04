@@ -5865,6 +5865,16 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
+  function esErrorValidacionOperativaWsp(error) {
+    const code = String(error?.code || "").toUpperCase();
+    const msg = String(error?.message || "").toUpperCase();
+    return !!error?.esValidacionOperativa || code.startsWith("VALIDACION_") || msg.includes("DEBE INICIAR EL OPERATIVO");
+  }
+
+  function mensajeErrorOperativoWsp(error) {
+    return String(error?.message || "Error de validación operativa.").trim() || "Error de validación operativa.";
+  }
+
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
     try {
       const repo = window.BMZCN?.OperativosRepo;
@@ -5880,20 +5890,25 @@ ${bold(`Moviles ${organismo}:`)}`)
         }
       }
 
-      // Respaldo de compatibilidad si el módulo nuevo no cargó. No es fuente principal.
+      // Sin módulo fuente de verdad no se debe cerrar un operativo: no se puede validar el INICIO.
+      if (tipoEvento === "FINALIZADO") {
+        return { ok: false, motivo: "Debe iniciar el operativo antes de finalizarlo." };
+      }
+
+      // Respaldo de compatibilidad solo para INICIO/INFORMES no críticos. No es fuente principal.
       if (window.WspHistorialOperativos) {
         if (tipoEvento === "INICIO" && typeof window.WspHistorialOperativos.guardarInicio === "function") {
           return await window.WspHistorialOperativos.guardarInicio(payload);
-        }
-        if (tipoEvento === "FINALIZADO" && typeof window.WspHistorialOperativos.guardarFinalizado === "function") {
-          return await window.WspHistorialOperativos.guardarFinalizado(payload);
         }
         if (typeof window.WspHistorialOperativos.guardarEvento === "function") {
           return await window.WspHistorialOperativos.guardarEvento(tipoEvento, payload);
         }
       }
     } catch (e) {
-      console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual.", e);
+      if (esErrorValidacionOperativaWsp(e)) {
+        return { ok: false, motivo: mensajeErrorOperativoWsp(e), error: e };
+      }
+      console.warn("[WSP] No se pudo guardar historial operativo. El informe se enviará igual salvo validación operativa.", e);
     }
     return false;
   }
@@ -7885,7 +7900,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       await guardarElementosDeInicio();
     }
 
-    await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
+    const resultadoHistorial = await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
+    if (resultadoHistorial && resultadoHistorial.ok === false) {
+      alert(resultadoHistorial.motivo || "Debe iniciar el operativo antes de finalizarlo.");
+      return;
+    }
 
     resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal);
