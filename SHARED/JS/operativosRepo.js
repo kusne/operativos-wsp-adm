@@ -148,19 +148,64 @@
   }
 
   async function upsertEstado(input = {}, estado = 'EN_CURSO') {
-    const { db } = deps();
+    // Upsert manual: NO usa on_conflict ni requiere constraint única en Supabase.
+    // La fuente de verdad es operativo_key + guardia_fecha. Si existe, actualiza; si no, inserta.
+    const { db, nf } = deps();
     const body = buildEstadoPayload(input, estado);
-    const rows = await db.upsert(TABLE_ESTADO, body, { onConflict: 'operativo_key', returning: true, merge: true });
+    const key = nf.clean(body.operativo_key);
+    const gf = nf.fechaIso(body.guardia_fecha);
+    if (!key) throw new Error('upsertEstado: operativo_key vacío.');
+
+    const params = {
+      select: '*',
+      operativo_key: `eq.${key}`,
+      order: 'updated_at.desc',
+      limit: '1'
+    };
+    if (gf) params.guardia_fecha = `eq.${gf}`;
+
+    const existentes = await db.select(TABLE_ESTADO, params).catch(() => []);
+    const existente = Array.isArray(existentes) ? existentes[0] : existentes;
+
+    let rows;
+    if (existente?.id) {
+      rows = await db.update(TABLE_ESTADO, { id: `eq.${existente.id}` }, body, { returning: true });
+    } else {
+      rows = await db.insert(TABLE_ESTADO, body, { returning: true });
+    }
+
     const row = Array.isArray(rows) ? rows[0] : rows;
     if (!row?.id) throw new Error('No se pudo crear/actualizar operativos_estado.');
     return row;
   }
 
   async function upsertEvento(estadoRow, tipoEvento, input = {}) {
-    const { db } = deps();
+    // Upsert manual: NO usa on_conflict. Esto evita romper si la constraint/index
+    // de evento_key/informe_key no existe o quedó con otro nombre.
+    const { db, nf } = deps();
     const body = buildEventoPayload(estadoRow, tipoEvento, input);
-    const conflict = body.informe_key ? 'informe_key' : 'evento_key';
-    const rows = await db.upsert(TABLE_EVENTOS, body, { onConflict: conflict, returning: true, merge: true });
+    const informeKey = nf.clean(body.informe_key);
+    const eventoKey = nf.clean(body.evento_key);
+
+    const params = {
+      select: '*',
+      order: 'created_at.desc',
+      limit: '1'
+    };
+    if (informeKey) params.informe_key = `eq.${informeKey}`;
+    else if (eventoKey) params.evento_key = `eq.${eventoKey}`;
+    else throw new Error('upsertEvento: evento_key/informe_key vacío.');
+
+    const existentes = await db.select(TABLE_EVENTOS, params).catch(() => []);
+    const existente = Array.isArray(existentes) ? existentes[0] : existentes;
+
+    let rows;
+    if (existente?.id) {
+      rows = await db.update(TABLE_EVENTOS, { id: `eq.${existente.id}` }, body, { returning: true });
+    } else {
+      rows = await db.insert(TABLE_EVENTOS, body, { returning: true });
+    }
+
     const row = Array.isArray(rows) ? rows[0] : rows;
     if (!row?.id) throw new Error('No se pudo crear/actualizar operativos_eventos.');
     return row;
@@ -369,9 +414,13 @@
     const key = nf.clean(operativoKey);
     if (!key) throw new Error('borrarOperativo requiere operativo_key.');
     const rows = await db.update(TABLE_ESTADO, { operativo_key: `eq.${key}` }, {
-      estado: 'BORRADO',
+      // No usar estado BORRADO: algunas bases tienen CHECK antiguo.
+      // deleted_at es la marca canónica de baja lógica y las vistas deben excluirlo.
+      estado: 'EN_CURSO',
+      inicio_evento_id: null,
+      finalizado_evento_id: null,
       deleted_at: new Date().toISOString(),
-      metadata: { motivo_borrado: motivo }
+      metadata: { motivo_borrado: motivo, borrado_logico: true }
     }, { returning: true });
     return Array.isArray(rows) ? rows[0] || null : rows;
   }
@@ -399,7 +448,16 @@
       storage_path: path,
       public_url
     };
-    const rows = await db.upsert(TABLE_FOTOS, row, { onConflict: 'evento_id,foto_numero', returning: true, merge: true });
+    const existentes = await db.select(TABLE_FOTOS, {
+      select: '*',
+      evento_id: `eq.${evento.id}`,
+      foto_numero: `eq.${numero}`,
+      limit: '1'
+    }).catch(() => []);
+    const existente = Array.isArray(existentes) ? existentes[0] : existentes;
+    const rows = existente?.id
+      ? await db.update(TABLE_FOTOS, { id: `eq.${existente.id}` }, row, { returning: true })
+      : await db.insert(TABLE_FOTOS, row, { returning: true });
     return Array.isArray(rows) ? rows[0] : rows;
   }
 
