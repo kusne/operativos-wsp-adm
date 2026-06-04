@@ -195,7 +195,11 @@
     const fechaOperativo = fechaOperativoDesdePayload(payload, horarioPartes) || fechaIso(estadoRow?.fecha_operativo) || null;
     const resultados = jsonObject(payload?.resultados);
     const medidas = jsonObject(payload?.medidas_cautelares);
-    const alimentaEstadisticas = tipo === "FINALIZADO";
+    const esFinalizadoOperativo = tipo === "FINALIZADO";
+    const alimentaEstadisticas = esFinalizadoOperativo;
+    // Compatibilidad con Estadísticas: algunas versiones miran alimenta_estadisticas
+    // y otras miran alimenta_finalizado para decidir si recalculan Salida/contadores.
+    const alimentaFinalizado = esFinalizadoOperativo;
 
     return {
       operativo_estado_id: estadoRow.id,
@@ -240,7 +244,7 @@
       requiere_traslado_comisaria: false,
       requiere_word_semanal: false,
       informe_word_destino: [],
-      alimenta_finalizado: false,
+      alimenta_finalizado: alimentaFinalizado,
       alimenta_estadisticas: alimentaEstadisticas,
       contador_circular: false,
 
@@ -251,7 +255,9 @@
         tipo_evento: tipo,
         resultados,
         medidas_cautelares: medidas,
+        alimenta_finalizado: alimentaFinalizado,
         alimenta_estadisticas: alimentaEstadisticas,
+        contador_circular: false,
         tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo),
         personal_inicio: jsonArray(payload?.personal_inicio || payload?.personal),
         moviles_inicio: jsonArray(payload?.moviles_inicio || payload?.moviles),
