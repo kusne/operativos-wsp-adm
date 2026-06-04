@@ -1011,32 +1011,113 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return getVentanaOperativosWsp().desde;
   }
 
+  function normalizarHoraTokenWsp(hhRaw, mmRaw = "00") {
+    const hh = parseInt(String(hhRaw || "").trim(), 10);
+    const mm = parseInt(String(mmRaw == null || mmRaw === "" ? "00" : mmRaw).trim(), 10);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "";
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return "";
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function extraerHoraTextoWsp(value = "") {
+    const s = String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!s) return null;
+
+    let m = s.match(/(?:^|[^0-9])(\d{1,2})\s*[:.]\s*(\d{2})(?:\s*(?:hs?|h))?(?=$|[^0-9])/i);
+    if (m) {
+      const normal = normalizarHoraTokenWsp(m[1], m[2]);
+      if (normal) {
+        const [hh, mm] = normal.split(":").map((n) => parseInt(n, 10));
+        return { hh, mm, texto: normal };
+      }
+    }
+
+    // Acepta variantes reales de las órdenes: "23HS", "23 hs", "a las 01", "de 1 h".
+    m = s.match(/(?:^|[^0-9])(\d{1,2})(?:\s*(?:hs?|h))?(?=$|[^0-9])/i);
+    if (m) {
+      const normal = normalizarHoraTokenWsp(m[1], "00");
+      if (normal) {
+        const [hh, mm] = normal.split(":").map((n) => parseInt(n, 10));
+        return { hh, mm, texto: normal };
+      }
+    }
+
+    return null;
+  }
+
+  function extraerHorarioPartesFlexibleWsp(horario = "") {
+    const raw = String(horario || "")
+      .replace(/[–—]/g, "-")
+      .replace(/\bfinalizar\b/gi, "FINALIZAR")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!raw) return { desde: "", hasta: "" };
+
+    const patronHora = "(?:\\d{1,2}(?:\\s*[:.]\\s*\\d{2})?\\s*(?:hs?|h)?)";
+    const re = new RegExp(`(${patronHora})\\s*(?:A|AL|HASTA|-)\\s*(${patronHora}|FINALIZAR)`, "i");
+    const m = raw.match(re);
+    if (!m) {
+      const unica = extraerHoraTextoWsp(raw);
+      return unica ? { desde: unica.texto, hasta: "" } : { desde: "", hasta: "" };
+    }
+
+    const desde = extraerHoraTextoWsp(m[1]);
+    const hasta = /FINALIZAR/i.test(m[2]) ? { texto: "FINALIZAR" } : extraerHoraTextoWsp(m[2]);
+    return {
+      desde: desde?.texto || "",
+      hasta: hasta?.texto || "",
+    };
+  }
+
+  function construirFechaHoraDesdeFechaBaseWsp(fechaBase, horaInicio) {
+    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
+    if (!horaInicio) return null;
+
+    const candidato = new Date(
+      fechaBase.getFullYear(),
+      fechaBase.getMonth(),
+      fechaBase.getDate(),
+      horaInicio.hh,
+      horaInicio.mm,
+      0,
+      0
+    );
+
+    // Guardia 06:00→06:00: si la orden/lista guarda la fecha de guardia y el horario
+    // es 00:00–05:59, ese inicio pertenece a la madrugada del día siguiente.
+    const { desde, hasta } = getVentanaOperativosWsp();
+    if (candidato < desde && horaInicio.hh < 6) {
+      const ajustado = new Date(candidato);
+      ajustado.setDate(ajustado.getDate() + 1);
+      if (ajustado >= desde && ajustado < hasta) return ajustado;
+    }
+
+    return candidato;
+  }
+
+  function construirFechaHoraDesdeGuardiaYHoraWsp(guardiaFecha, horarioTexto) {
+    const fechaBase = parseVigenciaFlexible(guardiaFecha);
+    const horaInicio = extraerHoraInicioCompleta(horarioTexto || "");
+    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime()) || !horaInicio) return null;
+    const d = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate(), horaInicio.hh, horaInicio.mm, 0, 0);
+    if (horaInicio.hh < 6) d.setDate(d.getDate() + 1);
+    return d;
+  }
+
   function extraerHoraInicio(h) {
     const hora = extraerHoraInicioCompleta(h);
     return hora ? hora.hh : null;
   }
 
   function extraerHoraInicioCompleta(h) {
-    const s = String(h || "").toLowerCase();
-
-    let m = s.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
-    if (m) {
-      const hh = parseInt(m[1], 10);
-      const mm = parseInt(m[2], 10);
-      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return { hh, mm };
-    }
-
-    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})/);
-    if (m) {
-      const hh = parseInt(m[1], 10);
-      if (hh >= 0 && hh <= 23) return { hh, mm: 0 };
-    }
-
-    m = s.match(/(\d{1,2})/);
-    if (!m) return null;
-
-    const hh = parseInt(m[1], 10);
-    return hh >= 0 && hh <= 23 ? { hh, mm: 0 } : null;
+    return extraerHoraTextoWsp(h);
   }
 
   function franjaEnGuardia(h) {
@@ -1068,15 +1149,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
     if (!horaInicio) return null;
 
-    return new Date(
-      fechaBase.getFullYear(),
-      fechaBase.getMonth(),
-      fechaBase.getDate(),
-      horaInicio.hh,
-      horaInicio.mm,
-      0,
-      0
-    );
+    return construirFechaHoraDesdeFechaBaseWsp(fechaBase, horaInicio);
   }
 
   function franjaIniciaEnGuardiaActual(franja, orden) {
@@ -1842,7 +1915,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       __tipoPublicado: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
       __tipoOperativoInicioTexto: limpiarTextoSimple(data.tipo_operativo_inicio_texto || ""),
       __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
-      __inicioTs: Date.parse(`${data.guardia_fecha || getGuardiaFechaISO()}T${String(data.horario_inicio || data.horario || "00:00").slice(0,5)}:00`) || Date.now(),
+      __inicioTs: (construirFechaHoraDesdeGuardiaYHoraWsp(data.guardia_fecha || getGuardiaFechaISO(), data.horario_inicio || data.horario || "")?.getTime()) || Date.now(),
       titulo: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
       horario: limpiarTextoSimple(data.horario_inicio || data.horario || ""),
       lugar: limpiarTextoSimple(data.lugar_inicio || data.lugar || ""),
@@ -2055,16 +2128,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function extraerHorarioPartesWsp(horario = "") {
-    const m = String(horario || "").match(/(\d{1,2}:\d{2})\s*A\s*((?:\d{1,2}:\d{2})|FINALIZAR)/i);
-    if (!m) return { desde: "", hasta: "" };
-    return { desde: limpiarTextoSimple(m[1]), hasta: limpiarTextoSimple(m[2]).toUpperCase() };
+    return extraerHorarioPartesFlexibleWsp(horario);
   }
 
   function minutosDesdeHoraWsp(value = "") {
     if (/FINALIZAR/i.test(value)) return 24 * 60;
-    const m = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return Number.MAX_SAFE_INTEGER;
-    return (Number(m[1]) * 60) + Number(m[2]);
+    const hora = extraerHoraTextoWsp(value);
+    if (!hora) return Number.MAX_SAFE_INTEGER;
+    return (hora.hh * 60) + hora.mm;
   }
 
   function pushUnicoTextoWsp(out, value) {
@@ -4741,10 +4812,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function normalizarHorario(txt) {
     if (!txt) return "";
+    const partes = extraerHorarioPartesWsp(txt);
+    if (partes.desde && partes.hasta) return `${partes.desde} A ${partes.hasta === "FINALIZAR" ? "Finalizar" : partes.hasta}`;
+    if (partes.desde) return partes.desde;
 
-    let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
+    let t = String(txt || "").toLowerCase().replace(/\s+/g, " ").trim();
     t = t.replace(/\bfinalizar\b/g, "Finalizar");
-
     return t;
   }
 
@@ -5077,6 +5150,29 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function construirObservacionDecreto460(cantidad) {
     return "Se Realizo (" + formatearCantidad(cantidad || 1) + ") Procedimiento Policial por Dcto. 460/22.";
+  }
+
+  function extraerCantidadDecreto460DesdeTextoWsp(texto) {
+    const raw = String(texto || "");
+    if (!raw || !esReferenciaDecreto460(raw)) return 0;
+
+    let total = 0;
+    const regexObs = /\(\s*(\d{1,3})\s*\)\s*(?:proc\.?|procedimientos?|procedimiento\s+policial(?:es)?|procedimiento)/gi;
+    let m;
+    while ((m = regexObs.exec(raw))) {
+      const n = leerEnteroNoNegativo(m[1]);
+      if (n > 0) total += n;
+    }
+    if (total > 0) return total;
+
+    const regexParentesis = /\(\s*(\d{1,3})\s*\)/g;
+    while ((m = regexParentesis.exec(raw))) {
+      const n = leerEnteroNoNegativo(m[1]);
+      if (n > 0 && n !== 22 && n !== 460) total += n;
+    }
+    if (total > 0) return total;
+
+    return extraerNumeralDto460Resultado(raw);
   }
 
   function extraerNumeralResultadoFlexible(valor) {
@@ -5610,6 +5706,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         observaciones: [],
         cantidadValidos: 0,
         detalleItems: [],
+        procedimientos460: 0,
         tieneTexto: false,
       };
     }
@@ -5618,6 +5715,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const detallesSinCodigo = [];
     const observaciones = [];
     const detalleItems = [];
+    let procedimientos460 = 0;
 
     limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
@@ -5651,13 +5749,17 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       if (item.tipo === "procedimiento460") {
-        observaciones.push(item.observacion || construirObservacionDecreto460(item.cantidad));
+        procedimientos460 += Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
         detalleItems.push(item.texto);
         return;
       }
 
       observaciones.push(item.texto);
     });
+
+    if (procedimientos460 > 0) {
+      observaciones.push(construirObservacionDecreto460(procedimientos460));
+    }
 
     const detalles = [
       ...Array.from(detallesAgrupados.values()).map((grupo) => {
@@ -5672,6 +5774,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       observaciones,
       cantidadValidos: detalleItems.length,
       detalleItems,
+      procedimientos460,
       tieneTexto: true,
     };
   }
@@ -6153,6 +6256,8 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function fechaFranjaHistorialWsp(franja) {
+    const fechaHora = construirFechaHoraInicioFranja(franja, ordenSeleccionada);
+    if (fechaHora instanceof Date && !isNaN(fechaHora.getTime())) return toFechaISO(fechaHora);
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
   }
 
@@ -6197,6 +6302,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }) {
     const partesHorario = extraerHorarioPartesWsp(franjaSeleccionada?.horario || "");
     const mapas = extraerMapasResultadosHistorialWsp(lineasResultados || []);
+    const procedimientos460Detalles = Math.max(0, leerEnteroNoNegativo(detallesProcesados?.procedimientos460 || 0));
+    const procedimientos460Obs = extraerCantidadDecreto460DesdeTextoWsp(observacionesFinales || "");
+    const procedimientos460Total = Math.max(procedimientos460Detalles, procedimientos460Obs);
+    if (procedimientos460Total > 0) {
+      mapas.resultados["Decreto 460/22"] = procedimientos460Total;
+    }
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || "");
     const personalInicioArr = String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean);
     const movilesInicioArr = arrayDesdeLineaHistorialWsp(mov);
@@ -6258,6 +6369,8 @@ ${bold(`Moviles ${organismo}:`)}`)
         lugar_inicio: lugarInicioTexto,
         horario_inicio: horarioInicioTexto,
         inicio_updated_at: inicioUpdatedAt,
+        procedimientos_460: procedimientos460Total,
+        contador_460: procedimientos460Total,
       },
       metadata: {
         tipo_evento: tipoEvento,
@@ -6505,7 +6618,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       detalles: Array.isArray(data.detalles) ? data.detalles : [],
       observaciones: data.observaciones || "",
       texto_generado: data.texto_generado || "",
-      payload_completo: data.payload_completo || {},
+      payload_completo: {
+        ...(data.payload_completo || {}),
+        procedimientos_460: data.procedimientos_460 || data.payload_completo?.procedimientos_460 || 0,
+        contador_460: data.contador_460 || data.payload_completo?.contador_460 || 0,
+        remisiones_460: data.remisiones_460 || data.payload_completo?.remisiones_460 || 0,
+        inventarios_460: data.inventarios_460 || data.payload_completo?.inventarios_460 || 0,
+      },
 
       categoria_evento: data.categoria_evento,
       subtipo_evento: data.subtipo_evento,
@@ -7078,6 +7197,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       medidas_cautelares: medidasPayload,
       detalles,
       observaciones: "",
+      procedimientos_460: esAlco460 ? 1 : 0,
+      contador_460: esAlco460 ? 1 : 0,
+      remisiones_460: esAlco460 && medidas.remision ? 1 : 0,
+      inventarios_460: esAlco460 && infAlcoInventario?.checked ? 1 : 0,
       texto_generado: textoFinal,
       payload_completo: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
@@ -7114,6 +7237,8 @@ ${bold(`Moviles ${organismo}:`)}`)
         graduaciones_no_sancionables: calc.noSancionable ? [grad] : [],
         detalle_origen_visual: infAlco460?.checked ? "460/22" : "alcoholemia",
         detalles_readonly: detalles.map((texto) => ({ texto, origen: infAlco460?.checked ? "460/22" : "alcoholemia", readonly: true })),
+        procedimientos_460: infAlco460?.checked ? 1 : 0,
+        contador_460: infAlco460?.checked ? 1 : 0,
         remisiones_460: infAlco460?.checked && medidas.remision ? 1 : 0,
         inventarios_460: infAlco460?.checked && infAlcoInventario?.checked ? 1 : 0,
         corralon_460: infAlco460?.checked ? normalizarClaveCorralonInforme(infAlcoCorralon?.value) : "",
@@ -7542,6 +7667,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       medidas_cautelares: medidasPayload,
       detalles,
       observaciones: "",
+      procedimientos_460: 1,
+      contador_460: 1,
+      remisiones_460: 1,
+      inventarios_460: tieneInventario ? 1 : 0,
       texto_generado: textoFinal,
       payload_completo: {
         tipo_evento: "DECTO_460_22",
@@ -7566,6 +7695,8 @@ ${bold(`Moviles ${organismo}:`)}`)
           acta_inventario: tieneInventario,
           inventarios_460: tieneInventario ? 1 : 0,
         },
+        procedimientos_460: 1,
+        contador_460: 1,
         remisiones_460: 1,
         inventarios_460: tieneInventario ? 1 : 0,
         corralon_460: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
