@@ -188,14 +188,26 @@
   }
 
   function buildEventoPayload(estadoRow, tipoEvento, payload) {
+    const tipo = clean(tipoEvento).toUpperCase();
     const horarioPartes = horaPartesFromHorario(payload?.horario);
     const operativoKey = estadoRow?.operativo_key || buildOperativoKey(payload);
+    const guardiaFecha = fechaIso(payload?.guardia_fecha) || fechaIso(estadoRow?.guardia_fecha) || null;
+    const fechaOperativo = fechaOperativoDesdePayload(payload, horarioPartes) || fechaIso(estadoRow?.fecha_operativo) || null;
+    const resultados = jsonObject(payload?.resultados);
+    const medidas = jsonObject(payload?.medidas_cautelares);
+    const alimentaEstadisticas = tipo === "FINALIZADO";
 
     return {
       operativo_estado_id: estadoRow.id,
       operativo_key: operativoKey,
-      tipo_evento: tipoEvento,
+      tipo_evento: tipo,
       fuente: clean(payload?.fuente || "WSP") || "WSP",
+
+      // CRÍTICO PARA ESTADÍSTICAS: la Salida en tiempo real filtra por guardia
+      // operativa 06:00→06:00. Si el evento queda sin guardia_fecha, el
+      // realtime puede llegar pero el acumulador lo descarta al recalcular.
+      guardia_fecha: guardiaFecha,
+      fecha_operativo: fechaOperativo,
       fecha: clean(payload?.fecha) || null,
       horario: clean(payload?.horario) || null,
       hora_desde: clean(payload?.hora_desde || horarioPartes.desde) || null,
@@ -215,13 +227,31 @@
       moviles: jsonArray(payload?.moviles),
       motos: jsonArray(payload?.motos),
       elementos: jsonObject(payload?.elementos),
-      resultados: jsonObject(payload?.resultados),
-      medidas_cautelares: jsonObject(payload?.medidas_cautelares),
+      resultados,
+      medidas_cautelares: medidas,
       detalles: Array.isArray(payload?.detalles) ? payload.detalles : jsonArray(payload?.detalles),
       observaciones: clean(payload?.observaciones) || null,
       texto_generado: String(payload?.texto_generado || ""),
+
+      categoria_evento: "OPERATIVO",
+      subtipo_evento: tipo,
+      area_interes: [],
+      requiere_fiscalia: false,
+      requiere_traslado_comisaria: false,
+      requiere_word_semanal: false,
+      informe_word_destino: [],
+      alimenta_finalizado: false,
+      alimenta_estadisticas: alimentaEstadisticas,
+      contador_circular: false,
+
       payload_completo: {
         ...jsonObject(payload?.payload_completo),
+        guardia_fecha: guardiaFecha,
+        fecha_operativo: fechaOperativo,
+        tipo_evento: tipo,
+        resultados,
+        medidas_cautelares: medidas,
+        alimenta_estadisticas: alimentaEstadisticas,
         tipo_operativo_inicio_texto: clean(payload?.tipo_operativo_inicio_texto || payload?.tipo_operativo),
         personal_inicio: jsonArray(payload?.personal_inicio || payload?.personal),
         moviles_inicio: jsonArray(payload?.moviles_inicio || payload?.moviles),
