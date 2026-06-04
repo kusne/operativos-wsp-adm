@@ -117,7 +117,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
   let firmaInformesIntermediosAplicadosFinalizado = "";
-  let informesSelectorRequestId = 0;
 
 
   let controlMovilesCache = [];
@@ -136,13 +135,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
-  // INICIO / FINALIZADO / historial operativo
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
-
-  // INFORMES intermedios: fotos separadas del historial de INICIO/FINALIZADO
-  const INFORMES_FOTOS_BUCKET = "operativos-informes-fotos";
-  const INFORMES_FOTOS_TABLE = "operativos_informes_fotos";
 
   const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
   let autoCierreWspTimer = null;
@@ -953,9 +947,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const seleccionActual = selHorario?.value || "";
     const ok = await syncOrdenesDesdeServidor();
     if (ok) {
-      if (selTipo?.value === "FINALIZA") {
-        await cargarOperativosIniciadosParaFinaliza(seleccionActual);
-      } else if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
+      if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo()) {
         await cargarOperativosIniciadosParaInformes(seleccionActual);
       } else {
         cargarOperativosDisponibles(seleccionActual);
@@ -1011,113 +1003,32 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return getVentanaOperativosWsp().desde;
   }
 
-  function normalizarHoraTokenWsp(hhRaw, mmRaw = "00") {
-    const hh = parseInt(String(hhRaw || "").trim(), 10);
-    const mm = parseInt(String(mmRaw == null || mmRaw === "" ? "00" : mmRaw).trim(), 10);
-    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "";
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return "";
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-  }
-
-  function extraerHoraTextoWsp(value = "") {
-    const s = String(value || "")
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!s) return null;
-
-    let m = s.match(/(?:^|[^0-9])(\d{1,2})\s*[:.]\s*(\d{2})(?:\s*(?:hs?|h))?(?=$|[^0-9])/i);
-    if (m) {
-      const normal = normalizarHoraTokenWsp(m[1], m[2]);
-      if (normal) {
-        const [hh, mm] = normal.split(":").map((n) => parseInt(n, 10));
-        return { hh, mm, texto: normal };
-      }
-    }
-
-    // Acepta variantes reales de las órdenes: "23HS", "23 hs", "a las 01", "de 1 h".
-    m = s.match(/(?:^|[^0-9])(\d{1,2})(?:\s*(?:hs?|h))?(?=$|[^0-9])/i);
-    if (m) {
-      const normal = normalizarHoraTokenWsp(m[1], "00");
-      if (normal) {
-        const [hh, mm] = normal.split(":").map((n) => parseInt(n, 10));
-        return { hh, mm, texto: normal };
-      }
-    }
-
-    return null;
-  }
-
-  function extraerHorarioPartesFlexibleWsp(horario = "") {
-    const raw = String(horario || "")
-      .replace(/[–—]/g, "-")
-      .replace(/\bfinalizar\b/gi, "FINALIZAR")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!raw) return { desde: "", hasta: "" };
-
-    const patronHora = "(?:\\d{1,2}(?:\\s*[:.]\\s*\\d{2})?\\s*(?:hs?|h)?)";
-    const re = new RegExp(`(${patronHora})\\s*(?:A|AL|HASTA|-)\\s*(${patronHora}|FINALIZAR)`, "i");
-    const m = raw.match(re);
-    if (!m) {
-      const unica = extraerHoraTextoWsp(raw);
-      return unica ? { desde: unica.texto, hasta: "" } : { desde: "", hasta: "" };
-    }
-
-    const desde = extraerHoraTextoWsp(m[1]);
-    const hasta = /FINALIZAR/i.test(m[2]) ? { texto: "FINALIZAR" } : extraerHoraTextoWsp(m[2]);
-    return {
-      desde: desde?.texto || "",
-      hasta: hasta?.texto || "",
-    };
-  }
-
-  function construirFechaHoraDesdeFechaBaseWsp(fechaBase, horaInicio) {
-    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
-    if (!horaInicio) return null;
-
-    const candidato = new Date(
-      fechaBase.getFullYear(),
-      fechaBase.getMonth(),
-      fechaBase.getDate(),
-      horaInicio.hh,
-      horaInicio.mm,
-      0,
-      0
-    );
-
-    // Guardia 06:00→06:00: si la orden/lista guarda la fecha de guardia y el horario
-    // es 00:00–05:59, ese inicio pertenece a la madrugada del día siguiente.
-    const { desde, hasta } = getVentanaOperativosWsp();
-    if (candidato < desde && horaInicio.hh < 6) {
-      const ajustado = new Date(candidato);
-      ajustado.setDate(ajustado.getDate() + 1);
-      if (ajustado >= desde && ajustado < hasta) return ajustado;
-    }
-
-    return candidato;
-  }
-
-  function construirFechaHoraDesdeGuardiaYHoraWsp(guardiaFecha, horarioTexto) {
-    const fechaBase = parseVigenciaFlexible(guardiaFecha);
-    const horaInicio = extraerHoraInicioCompleta(horarioTexto || "");
-    if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime()) || !horaInicio) return null;
-    const d = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), fechaBase.getDate(), horaInicio.hh, horaInicio.mm, 0, 0);
-    if (horaInicio.hh < 6) d.setDate(d.getDate() + 1);
-    return d;
-  }
-
   function extraerHoraInicio(h) {
     const hora = extraerHoraInicioCompleta(h);
     return hora ? hora.hh : null;
   }
 
   function extraerHoraInicioCompleta(h) {
-    return extraerHoraTextoWsp(h);
+    const s = String(h || "").toLowerCase();
+
+    let m = s.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
+    if (m) {
+      const hh = parseInt(m[1], 10);
+      const mm = parseInt(m[2], 10);
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) return { hh, mm };
+    }
+
+    m = s.match(/(?:^|desde|de|horario|hs|h|a\s+las)\s*(\d{1,2})/);
+    if (m) {
+      const hh = parseInt(m[1], 10);
+      if (hh >= 0 && hh <= 23) return { hh, mm: 0 };
+    }
+
+    m = s.match(/(\d{1,2})/);
+    if (!m) return null;
+
+    const hh = parseInt(m[1], 10);
+    return hh >= 0 && hh <= 23 ? { hh, mm: 0 } : null;
   }
 
   function franjaEnGuardia(h) {
@@ -1149,7 +1060,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!(fechaBase instanceof Date) || isNaN(fechaBase.getTime())) return null;
     if (!horaInicio) return null;
 
-    return construirFechaHoraDesdeFechaBaseWsp(fechaBase, horaInicio);
+    return new Date(
+      fechaBase.getFullYear(),
+      fechaBase.getMonth(),
+      fechaBase.getDate(),
+      horaInicio.hh,
+      horaInicio.mm,
+      0,
+      0
+    );
   }
 
   function franjaIniciaEnGuardiaActual(franja, orden) {
@@ -1224,46 +1143,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return [ordenNum, textoRef, horario, lugar, tipo].join("|");
   }
 
-  function obtenerTipoOperativoInicioTextoActual(franja = franjaSeleccionada) {
-    const tituloNormalizado = limpiarTextoSimple(normalizarTituloOperativo(franja?.titulo || ""));
-    if (tituloNormalizado) return tituloNormalizado;
-
-    const publicado = limpiarTextoSimple(franja?.__tipoPublicado || "");
-    if (publicado && !/^control$/i.test(publicado) && !/^rango$/i.test(publicado)) return publicado;
-
-    const tipoCorto = limpiarTextoSimple(obtenerTipoCortoFranja(franja) || "");
-    if (tipoCorto && !/^control$/i.test(tipoCorto) && !/^rango$/i.test(tipoCorto)) return tipoCorto;
-
-    return "Operativo";
-  }
-
-  function limpiarTipoOperativoInicioTextoInforme(value) {
-    const raw = limpiarTextoSimple(value || "");
-    if (!raw) return "";
-    if (/^(control|rango)$/i.test(raw)) return "";
-    return raw.replace(/\bRANGO\b/gi, "").replace(/\s{2,}/g, " ").trim();
-  }
-
-  function obtenerTipoOperativoInicioTextoInforme(inicio = {}, franja = franjaSeleccionada) {
-    const candidatos = [
-      inicio?.tipo_operativo_inicio_texto,
-      inicio?.tipo_operativo_mostrar,
-      franja?.__inicioGuardadoPayload?.tipo_operativo_inicio_texto,
-      franja?.__tipoOperativoInicioTexto,
-      franja?.titulo,
-      inicio?.tipo_corto,
-      inicio?.tipo_operativo,
-      franja?.__tipoPublicado,
-    ];
-
-    for (const candidato of candidatos) {
-      const limpio = limpiarTipoOperativoInicioTextoInforme(candidato);
-      if (limpio) return limpio;
-    }
-
-    return "Operativo";
-  }
-
   function construirOperativoKeysPosibles(franja) {
     if (!franja) return [];
 
@@ -1286,35 +1165,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarArrayTexto(arr) {
-    if (Array.isArray(arr)) return arr.map((v) => limpiarTextoSimple(v)).filter(Boolean);
-    if (arr == null) return [];
-    if (typeof arr === "string") {
-      const raw = arr.trim();
-      if (!raw || raw === "/") return [];
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.map((v) => limpiarTextoSimple(v)).filter(Boolean);
-      } catch {}
-      return raw.split(/[\n/]+/).map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
-    }
-    return [];
-  }
-
-  function tomarArrayInicioPreferido(...valores) {
-    for (const valor of valores) {
-      const arr = normalizarArrayTexto(valor);
-      if (arr.length) return arr;
-    }
-    return [];
-  }
-
-  function tomarObjetoInicioPreferido(...valores) {
-    for (const valor of valores) {
-      const obj = normalizarPayloadElementos(valor);
-      if (obj && Object.values(obj).some((arr) => Array.isArray(arr) && arr.length)) return obj;
-      if (valor && typeof valor === "object" && !Array.isArray(valor) && Object.keys(valor).length && !valor.elementos) return valor;
-    }
-    return normalizarPayloadElementos({});
+    return (Array.isArray(arr) ? arr : []).map((v) => limpiarTextoSimple(v)).filter(Boolean);
   }
 
   function construirPayloadElementosActual() {
@@ -1430,45 +1281,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!payload) return null;
 
     const derivado = extraerPartesDeOperativoKey(payload.operativo_key || "");
-    const pc = parseJsonObjectWsp(payload?.payload_completo) || {};
-    const pcPayload = parseJsonObjectWsp(pc?.payload) || pc;
-
-    const personalInicio = tomarArrayInicioPreferido(payload.personal_inicio, pc.personal_inicio, pcPayload.personal_inicio, payload.personal);
-    const movilesInicio = tomarArrayInicioPreferido(payload.moviles_inicio, pc.moviles_inicio, pcPayload.moviles_inicio, payload.moviles);
-    const motosInicio = tomarArrayInicioPreferido(payload.motos_inicio, pc.motos_inicio, pcPayload.motos_inicio, payload.motos);
-    const elementosInicio = tomarObjetoInicioPreferido(payload.elementos_inicio, pc.elementos_inicio, pcPayload.elementos_inicio, payload.elementos);
-    const lugarInicio = limpiarTextoSimple(payload.lugar_inicio || pc.lugar_inicio || pcPayload.lugar_inicio || payload.lugar || derivado.lugar || "");
-    const horarioInicio = limpiarTextoSimple(payload.horario_inicio || pc.horario_inicio || pcPayload.horario_inicio || payload.horario || derivado.horario || "");
-    const tipoInicioTexto = limpiarTextoSimple(
-      payload.tipo_operativo_inicio_texto ||
-      payload.tipo_operativo_mostrar ||
-      pc.tipo_operativo_inicio_texto ||
-      pc.tipo_operativo_mostrar ||
-      pcPayload.tipo_operativo_inicio_texto ||
-      pcPayload.tipo_operativo_mostrar ||
-      ""
-    );
 
     return {
       guardia_fecha: String(payload.guardia_fecha || ""),
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
-      horario: horarioInicio,
-      lugar: lugarInicio,
+      horario: limpiarTextoSimple(payload.horario || derivado.horario || ""),
+      lugar: limpiarTextoSimple(payload.lugar || derivado.lugar || ""),
       tipo_corto: limpiarTextoSimple(payload.tipo_corto || derivado.tipo_corto || ""),
-      tipo_operativo_inicio_texto: tipoInicioTexto,
-      personal_inicio: personalInicio,
-      moviles_inicio: movilesInicio,
-      motos_inicio: motosInicio,
-      elementos_inicio: elementosInicio,
-      lugar_inicio: lugarInicio,
-      horario_inicio: horarioInicio,
-      inicio_updated_at: limpiarTextoSimple(payload.inicio_updated_at || pc.inicio_updated_at || pcPayload.inicio_updated_at || new Date().toISOString()),
-      personal: personalInicio,
-      moviles: movilesInicio,
-      motos: motosInicio,
-      elementos: elementosInicio,
+      personal: normalizarArrayTexto(payload.personal),
+      moviles: normalizarArrayTexto(payload.moviles),
+      motos: normalizarArrayTexto(payload.motos),
+      elementos: normalizarPayloadElementos(payload),
       ts: payload?.ts || Date.now(),
     };
   }
@@ -1476,35 +1301,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function construirInicioGuardadoActual() {
     if (!franjaSeleccionada) return null;
 
-    const personalInicio = leerSeleccionPorClase("personal");
-    const movilesInicio = leerSeleccionPorClase("movil");
-    const motosInicio = leerSeleccionPorClase("moto");
-    const elementosInicio = construirPayloadElementosActual();
-    const lugarInicio = limpiarTextoSimple(franjaSeleccionada?.lugar || "");
-    const horarioInicio = limpiarTextoSimple(franjaSeleccionada?.horario || "");
-    const tipoInicioTexto = obtenerTipoOperativoInicioTextoActual(franjaSeleccionada);
-    const nowIso = new Date().toISOString();
-
     return normalizarInicioGuardado({
       guardia_fecha: getGuardiaFechaISO(),
       operativo_key: construirOperativoKeyEstable(franjaSeleccionada),
       orden_num: obtenerNumeroOrdenDeFranja(franjaSeleccionada),
       texto_ref: obtenerTextoRefOrdenDeFranja(franjaSeleccionada),
-      horario: horarioInicio,
-      lugar: lugarInicio,
+      horario: limpiarTextoSimple(franjaSeleccionada?.horario || ""),
+      lugar: limpiarTextoSimple(franjaSeleccionada?.lugar || ""),
       tipo_corto: obtenerTipoCortoFranja(franjaSeleccionada),
-      tipo_operativo_inicio_texto: tipoInicioTexto,
-      personal_inicio: personalInicio,
-      moviles_inicio: movilesInicio,
-      motos_inicio: motosInicio,
-      elementos_inicio: elementosInicio,
-      lugar_inicio: lugarInicio,
-      horario_inicio: horarioInicio,
-      inicio_updated_at: nowIso,
-      personal: personalInicio,
-      moviles: movilesInicio,
-      motos: motosInicio,
-      elementos: elementosInicio,
+      personal: leerSeleccionPorClase("personal"),
+      moviles: leerSeleccionPorClase("movil"),
+      motos: leerSeleccionPorClase("moto"),
+      elementos: construirPayloadElementosActual(),
       ts: Date.now(),
     });
   }
@@ -1617,7 +1425,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   async function leerInicioDesdeSupabase(franja) {
     if (!franja) return null;
 
-    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at";
+    const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
     const fechasBusqueda = getFechasBusquedaInicio();
     const keysPosibles = construirOperativoKeysPosibles(franja);
 
@@ -1687,84 +1495,56 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
   }
 
-  function claveVisualInicioInformeWsp(fila) {
-    const horario = normalizarParteClave(fila?.horario || "");
-    const lugar = normalizarParteClave(fila?.lugar || "");
-    const tipo = normalizarParteClave(fila?.tipo_corto || "");
-    const orden = normalizarParteClave(fila?.orden_num || "");
-    return [horario, lugar, tipo, orden].join("|");
+  function estadoOperativoEsEnCursoWsp(row) {
+    const estadoTxt = limpiarTextoSimple(row?.estado || "").toUpperCase().replace(/\s+/g, "_");
+    const tieneInicioReal = !!row?.inicio_evento_id;
+    const tieneFinalizado = !!row?.finalizado_evento_id || estadoTxt === "FINALIZADO" || estadoTxt === "CERRADO";
+    if (tieneFinalizado) return false;
+
+    // Blindaje: no alcanza con que exista en operativos_estado. Debe estar marcado
+    // como iniciado/en curso o tener evento de INICIO real. Esto evita que el selector
+    // de INFORMES muestre operativos publicados, futuros, viejos o pruebas.
+    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return true;
+    if (tieneInicioReal && !estadoTxt) return true;
+    return false;
   }
 
-  function estadoOperativoFinalizadoInformeWsp(row = {}) {
-    const estado = String(row?.estado || "").trim().toUpperCase();
-    return estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-  }
+  function normalizarEstadoOperativoEnCurso(row) {
+    if (!row || !estadoOperativoEsEnCursoWsp(row)) return null;
 
-  function estadoOperativoIniciadoInformeWsp(row = {}) {
-    if (!row || estadoOperativoFinalizadoInformeWsp(row)) return false;
-    const estado = String(row?.estado || "").trim().toUpperCase();
-
-    // Fuente de verdad para INFORMES: operativos_estado.
-    // Debe existir un operativo realmente abierto, no solo una fila vieja de wsp_inicios.
-    if (row?.inicio_evento_id) return true;
-    return ["EN_CURSO", "INICIADO", "ACTIVO"].includes(estado);
-  }
-
-  function normalizarHorarioEstadoInformeWsp(row = {}) {
-    const horario = limpiarTextoSimple(row?.horario || row?.rango_horario || "");
-    if (horario) return horario;
-    const desde = limpiarTextoSimple(row?.hora_desde || row?.desde || "");
-    const hasta = limpiarTextoSimple(row?.hora_hasta || row?.hasta || "");
-    if (desde && hasta) return `${desde} A ${hasta}`;
-    return desde || hasta || "";
-  }
-
-  function leerJsonObjetoSeguroWsp(value) {
-    if (!value) return null;
-    if (typeof value === "object" && !Array.isArray(value)) return value;
-    if (typeof value === "string") {
-      try {
-        const parsed = JSON.parse(value);
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
-      } catch {}
-    }
-    return null;
-  }
-
-  function normalizarEventoInicioParaInformeWsp(ev = {}) {
-    const pc = leerJsonObjetoSeguroWsp(ev?.payload_completo) || {};
-    const payload = leerJsonObjetoSeguroWsp(pc?.payload) || pc;
-    const inicio = leerJsonObjetoSeguroWsp(pc?.inicio) || payload;
+    const horaDesde = limpiarTextoSimple(row?.hora_desde || "");
+    const horaHasta = limpiarTextoSimple(row?.hora_hasta || "");
+    const horario = limpiarTextoSimple(row?.horario || (horaDesde && horaHasta ? `${horaDesde} A ${horaHasta}` : horaDesde || horaHasta));
+    const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
+    const meta = parseJsonObjectWsp(row?.metadata) || {};
 
     return normalizarInicioGuardado({
-      guardia_fecha: limpiarTextoSimple(ev?.guardia_fecha || inicio?.guardia_fecha || ""),
-      operativo_key: limpiarTextoSimple(ev?.operativo_key || inicio?.operativo_key || ""),
-      orden_num: limpiarTextoSimple(inicio?.orden_num || payload?.orden_num || ""),
-      texto_ref: limpiarTextoSimple(inicio?.texto_ref || payload?.texto_ref || ""),
-      horario: limpiarTextoSimple(ev?.horario_inicio || ev?.horario || inicio?.horario_inicio || inicio?.horario || payload?.horario_inicio || payload?.horario || ""),
-      lugar: limpiarTextoSimple(ev?.lugar_inicio || ev?.lugar || inicio?.lugar_inicio || inicio?.lugar || payload?.lugar_inicio || payload?.lugar || ""),
-      tipo_corto: limpiarTextoSimple(inicio?.tipo_corto || payload?.tipo_corto || ev?.tipo_operativo || inicio?.tipo_operativo || payload?.tipo_operativo || ""),
-      tipo_operativo_inicio_texto: limpiarTextoSimple(ev?.tipo_operativo_inicio_texto || inicio?.tipo_operativo_inicio_texto || payload?.tipo_operativo_inicio_texto || ""),
-      personal_inicio: ev?.personal_inicio || inicio?.personal_inicio || payload?.personal_inicio || ev?.personal || inicio?.personal || payload?.personal,
-      moviles_inicio: ev?.moviles_inicio || inicio?.moviles_inicio || payload?.moviles_inicio || ev?.moviles || inicio?.moviles || payload?.moviles,
-      motos_inicio: ev?.motos_inicio || inicio?.motos_inicio || payload?.motos_inicio || ev?.motos || inicio?.motos || payload?.motos,
-      elementos_inicio: ev?.elementos_inicio || inicio?.elementos_inicio || payload?.elementos_inicio || ev?.elementos || inicio?.elementos || payload?.elementos || {},
-      lugar_inicio: limpiarTextoSimple(ev?.lugar_inicio || inicio?.lugar_inicio || payload?.lugar_inicio || ev?.lugar || inicio?.lugar || payload?.lugar || ""),
-      horario_inicio: limpiarTextoSimple(ev?.horario_inicio || inicio?.horario_inicio || payload?.horario_inicio || ev?.horario || inicio?.horario || payload?.horario || ""),
-      inicio_updated_at: limpiarTextoSimple(ev?.inicio_updated_at || inicio?.inicio_updated_at || payload?.inicio_updated_at || ev?.created_at || ""),
-      ts: ev?.created_at ? Date.parse(ev.created_at) : Date.now(),
+      guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
+      operativo_estado_id: row?.id || row?.operativo_estado_id || "",
+      operativo_key: row?.operativo_key || "",
+      orden_num: ordenes.join(" / ") || limpiarTextoSimple(meta?.orden_num || meta?.orden || ""),
+      texto_ref: limpiarTextoSimple(meta?.texto_ref || meta?.archivo || "Operativo en curso"),
+      horario,
+      lugar: row?.lugar || "",
+      tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
+      personal: row?.personal || meta?.personal || [],
+      moviles: row?.moviles || meta?.moviles || [],
+      motos: row?.motos || meta?.motos || [],
+      elementos: row?.elementos || meta?.elementos || {},
+      ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
 
-  async function leerEventosInicioGuardiaParaInformesWsp(guardiaActual) {
-    const out = [];
+  async function leerOperativoKeysFinalizadosGuardiaSupabase() {
+    const guardiaFecha = getGuardiaFechaISO();
+    const out = new Set();
+
     try {
       const params = new URLSearchParams({
-        select: "id,operativo_estado_id,operativo_key,tipo_evento,guardia_fecha,horario,lugar,tipo_operativo,personal,moviles,motos,elementos,payload_completo,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at,created_at",
-        guardia_fecha: `eq.${guardiaActual}`,
-        tipo_evento: "eq.INICIO",
-        order: "created_at.desc",
-        limit: "300",
+        select: "operativo_key,payload_completo,guardia_fecha,tipo_evento",
+        guardia_fecha: `eq.${guardiaFecha}`,
+        tipo_evento: "eq.FINALIZADO",
+        limit: "1000",
       });
 
       const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
@@ -1772,27 +1552,55 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       if (!r.ok) {
-        console.warn("[WSP] No se pudieron leer eventos INICIO para selector de informes:", r.status, await r.text().catch(() => ""));
+        console.warn("[WSP] No se pudieron leer FINALIZADOS para filtrar operativos iniciados:", r.status, await r.text());
         return out;
       }
 
       const data = await r.json();
-      return Array.isArray(data) ? data : out;
+      (Array.isArray(data) ? data : []).forEach((row) => {
+        [
+          row?.operativo_key,
+          row?.payload_completo?.operativo_key,
+          row?.payload_completo?.franja?.__operativoKey,
+        ].forEach((key) => {
+          const clean = limpiarTextoSimple(key || "");
+          if (clean) out.add(clean);
+        });
+      });
     } catch (e) {
-      console.warn("[WSP] Error leyendo eventos INICIO para selector de informes.", e);
-      return out;
+      console.warn("[WSP] Error leyendo FINALIZADOS para filtrar operativos iniciados.", e);
     }
+
+    return out;
   }
 
-  async function leerIniciosGuardiaDesdeSupabase() {
-    const guardiaActual = getGuardiaFechaISO();
-    let estados = [];
+  function deduplicarIniciosInformeWsp(filas) {
+    const vistos = new Set();
+    const unicos = [];
+    (Array.isArray(filas) ? filas : []).forEach((fila) => {
+      const key = limpiarTextoSimple(fila?.operativo_key || construirOperativoKeyEstable({
+        __ordenNum: fila?.orden_num,
+        __ordenTextoRef: fila?.texto_ref,
+        horario: fila?.horario,
+        lugar: fila?.lugar,
+        titulo: fila?.tipo_corto,
+      }));
+      if (!key || vistos.has(key)) return;
+      vistos.add(key);
+      unicos.push(fila);
+    });
+    return unicos;
+  }
+
+  async function leerOperativosEnCursoDesdeEstadoSupabase() {
+    const guardiaFecha = getGuardiaFechaISO();
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
 
     try {
       const params = new URLSearchParams({
-        select: "*",
-        guardia_fecha: `eq.${guardiaActual}`,
-        order: "updated_at.desc",
+        select: selectCols,
+        guardia_fecha: `eq.${guardiaFecha}`,
+        order: "hora_desde.asc,updated_at.desc",
         limit: "300",
       });
 
@@ -1801,105 +1609,34 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       });
 
       if (!r.ok) {
-        console.warn("[WSP] No se pudieron leer operativos_estado para INFORMES:", r.status, await r.text().catch(() => ""));
-        return [];
+        console.warn("[WSP] No se pudieron leer operativos EN CURSO desde operativos_estado:", r.status, await r.text());
+        return null;
       }
 
+      const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase();
       const data = await r.json();
-      estados = Array.isArray(data) ? data.filter(estadoOperativoIniciadoInformeWsp) : [];
+      return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
+        .map(normalizarEstadoOperativoEnCurso)
+        .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
     } catch (e) {
-      console.warn("[WSP] Error leyendo operativos_estado para INFORMES.", e);
-      return [];
+      console.warn("[WSP] Error leyendo operativos EN CURSO desde operativos_estado.", e);
+      return null;
     }
-
-    if (!estados.length) return [];
-
-    const eventosInicio = await leerEventosInicioGuardiaParaInformesWsp(guardiaActual);
-    const inicioByEstadoId = new Map();
-    const inicioByKey = new Map();
-
-    eventosInicio.forEach((ev) => {
-      const normal = normalizarEventoInicioParaInformeWsp(ev);
-      const estadoId = limpiarTextoSimple(ev?.operativo_estado_id || "");
-      const key = limpiarTextoSimple(ev?.operativo_key || normal.operativo_key || "");
-      if (estadoId && !inicioByEstadoId.has(estadoId)) inicioByEstadoId.set(estadoId, normal);
-      if (key && !inicioByKey.has(key)) inicioByKey.set(key, normal);
-    });
-
-    const filas = estados.map((row) => {
-      const estadoId = limpiarTextoSimple(row?.id || "");
-      const key = limpiarTextoSimple(row?.operativo_key || "");
-      const inicio = inicioByEstadoId.get(estadoId) || inicioByKey.get(key) || {};
-
-      return normalizarInicioGuardado({
-        guardia_fecha: limpiarTextoSimple(row?.guardia_fecha || inicio.guardia_fecha || guardiaActual),
-        operativo_key: key || limpiarTextoSimple(inicio.operativo_key || ""),
-        orden_num: limpiarTextoSimple(row?.orden_num || row?.orden || inicio.orden_num || ""),
-        texto_ref: limpiarTextoSimple(row?.texto_ref || row?.archivo_nombre || inicio.texto_ref || ""),
-        horario: limpiarTextoSimple(row?.horario_inicio || normalizarHorarioEstadoInformeWsp(row) || inicio.horario_inicio || inicio.horario || ""),
-        lugar: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
-        tipo_corto: limpiarTextoSimple(inicio.tipo_corto || row?.tipo_operativo || row?.tipo || ""),
-        tipo_operativo_inicio_texto: limpiarTextoSimple(row?.tipo_operativo_inicio_texto || inicio.tipo_operativo_inicio_texto || ""),
-        personal_inicio: tomarArrayInicioPreferido(row?.personal_inicio, inicio.personal_inicio, inicio.personal, row?.personal),
-        moviles_inicio: tomarArrayInicioPreferido(row?.moviles_inicio, inicio.moviles_inicio, inicio.moviles, row?.moviles),
-        motos_inicio: tomarArrayInicioPreferido(row?.motos_inicio, inicio.motos_inicio, inicio.motos, row?.motos),
-        elementos_inicio: tomarObjetoInicioPreferido(row?.elementos_inicio, inicio.elementos_inicio, inicio.elementos, row?.elementos),
-        lugar_inicio: limpiarTextoSimple(row?.lugar_inicio || row?.lugar || inicio.lugar_inicio || inicio.lugar || ""),
-        horario_inicio: limpiarTextoSimple(row?.horario_inicio || normalizarHorarioEstadoInformeWsp(row) || inicio.horario_inicio || inicio.horario || ""),
-        inicio_updated_at: limpiarTextoSimple(row?.inicio_updated_at || inicio.inicio_updated_at || row?.updated_at || ""),
-        ts: inicio.ts || Date.now(),
-      });
-    }).filter(Boolean);
-
-    const vistosKey = new Set();
-    const vistosVisual = new Set();
-    const unicos = [];
-
-    filas.forEach((fila) => {
-      const key = limpiarTextoSimple(fila?.operativo_key || "");
-      const visualKey = claveVisualInicioInformeWsp(fila);
-      if ((!key && !visualKey) || (key && vistosKey.has(key)) || (visualKey && vistosVisual.has(visualKey))) return;
-      if (key) vistosKey.add(key);
-      if (visualKey) vistosVisual.add(visualKey);
-      unicos.push(fila);
-    });
-
-    return unicos;
   }
 
-  async function obtenerInicioVigenteParaInformeWsp(franja = franjaSeleccionada) {
-    if (!franja) return null;
+  async function leerIniciosGuardiaDesdeSupabase() {
+    // Fuente canónica para INFORMES/EVENTOS: operativos_estado EN_CURSO.
+    // No se usa wsp_inicios como listado, porque es historial de inicios y puede
+    // contener pruebas, registros viejos o finalizados. Así evitamos contadores inflados.
+    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
+    const filas = Array.isArray(enCurso) ? enCurso.slice() : [];
 
-    const keyActual = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
-
-    try {
-      const inicios = await leerIniciosGuardiaDesdeSupabase();
-      let mejor = null;
-      let mejorPuntaje = -1;
-
-      (Array.isArray(inicios) ? inicios : []).forEach((inicio) => {
-        const data = normalizarInicioGuardado(inicio);
-        if (!data) return;
-        let puntaje = puntuarCoincidenciaInicio(data, franja);
-        if (keyActual && limpiarTextoSimple(data.operativo_key) === keyActual) puntaje += 1000;
-        if (puntaje > mejorPuntaje) {
-          mejor = data;
-          mejorPuntaje = puntaje;
-        }
-      });
-
-      if (mejor && (mejorPuntaje >= 90 || (keyActual && limpiarTextoSimple(mejor.operativo_key) === keyActual))) {
-        return mejor;
-      }
-    } catch (e) {
-      console.warn("[WSP] No se pudo leer estado vigente del inicio para informe.", e);
+    const local = normalizarInicioGuardado(cargarInicioLocal());
+    if (local && local.operativo_key && local.guardia_fecha === getGuardiaFechaISO()) {
+      filas.unshift(local);
     }
 
-    // Respaldos solamente si falla la fuente viva. No deben pisar datos reales de operativos_estado.
-    return normalizarInicioGuardado(franja?.__inicioGuardadoPayload)
-      || await leerInicioDesdeSupabase(franja)
-      || cargarInicioGuardadoCoincidente()
-      || cargarInicioLocal();
+    return deduplicarIniciosInformeWsp(filas);
   }
 
   function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
@@ -1912,16 +1649,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       __operativoKey: key,
       __ordenNum: limpiarTextoSimple(data.orden_num || ""),
       __ordenTextoRef: limpiarTextoSimple(data.texto_ref || ""),
-      __tipoPublicado: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
-      __tipoOperativoInicioTexto: limpiarTextoSimple(data.tipo_operativo_inicio_texto || ""),
+      __tipoPublicado: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
       __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
-      __inicioTs: (construirFechaHoraDesdeGuardiaYHoraWsp(data.guardia_fecha || getGuardiaFechaISO(), data.horario_inicio || data.horario || "")?.getTime()) || Date.now(),
-      titulo: limpiarTextoSimple(data.tipo_operativo_inicio_texto || data.tipo_corto || "Operativo iniciado"),
-      horario: limpiarTextoSimple(data.horario_inicio || data.horario || ""),
-      lugar: limpiarTextoSimple(data.lugar_inicio || data.lugar || ""),
+      __inicioTs: Date.parse(`${data.guardia_fecha || getGuardiaFechaISO()}T${String(data.horario || "00:00").slice(0,5)}:00`) || Date.now(),
+      titulo: limpiarTextoSimple(data.tipo_corto || "Operativo iniciado"),
+      horario: limpiarTextoSimple(data.horario || ""),
+      lugar: limpiarTextoSimple(data.lugar || ""),
       fecha: limpiarTextoSimple(data.guardia_fecha || getGuardiaFechaISO()),
       __inicioGuardadoPayload: data,
-      __estadoVivoInicio: data,
     };
   }
 
@@ -1932,52 +1667,24 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     } catch {}
   }
 
-  function setSelectorHorarioDisabledWsp(disabled) {
-    if (!selHorario) return;
-    const valor = !!disabled;
-    selHorario.disabled = valor;
-    if (valor) {
-      selHorario.setAttribute("disabled", "disabled");
-      selHorario.setAttribute("aria-disabled", "true");
-    } else {
-      selHorario.removeAttribute("disabled");
-      selHorario.setAttribute("aria-disabled", "false");
-      // Blindaje: si quedó alguna clase visual de deshabilitado, la removemos
-      // para que el select vuelva a abrirse al pasar de INFORMES a INICIA/FINALIZA
-      // o al cargar dos o más operativos iniciados.
-      selHorario.classList.remove("disabled", "select-disabled", "input-disabled", "is-disabled");
-    }
-  }
-
-  async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "", opciones = {}) {
+  async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
     if (!selHorario) return [];
-    const requestId = ++informesSelectorRequestId;
     setTituloOperativosIniciados(true);
-    setSelectorHorarioDisabledWsp(true);
-    selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
+    selHorario.disabled = true;
+    selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
+    operativosCache = [];
+    franjaSeleccionada = null;
+    ordenSeleccionada = null;
+    actualizarContadorOperativosWsp(0);
 
     const inicios = await leerIniciosGuardiaDesdeSupabase();
-    if (requestId !== informesSelectorRequestId) return operativosCache;
-
     const candidatos = ordenarCandidatosInformeAlcoholemia(
       inicios.map(construirFranjaInformeDesdeInicio).filter(Boolean)
     );
 
-    operativosCache = [];
-    selHorario.innerHTML = "";
-
-    if (!candidatos.length) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.text = "No hay operativos iniciados";
-      selHorario.appendChild(option);
-      selHorario.value = "";
-      franjaSeleccionada = null;
-      ordenSeleccionada = null;
-      setSelectorHorarioDisabledWsp(true);
-      actualizarContadorOperativosWsp(0);
-      return operativosCache;
-    }
+    selHorario.innerHTML = candidatos.length
+      ? '<option value="">Seleccionar Operativo Iniciado</option>'
+      : '<option value="">No hay operativos iniciados</option>';
 
     candidatos.forEach((operativo) => {
       operativosCache.push(operativo);
@@ -1990,87 +1697,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     if (valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
       selHorario.value = valorSeleccionado;
+    } else if (operativosCache.length === 1) {
+      selHorario.value = operativosCache[0].__key;
+    } else if (operativosCache.length > 1) {
+      selHorario.value = ordenarCandidatosInformeAlcoholemia(operativosCache)[0].__key;
     } else {
-      selHorario.value = operativosCache[0].__key || "";
+      selHorario.value = "";
     }
 
     franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
     ordenSeleccionada = null;
-
-    // Si hay dos o más operativos en curso, el usuario debe poder abrir el desplegable
-    // y cambiar de operativo. Si hay uno solo, se deja preseleccionado y bloqueado.
-    const deshabilitarSelectorInforme = (opciones && opciones.soloResumen) ? true : operativosCache.length <= 1;
-    setSelectorHorarioDisabledWsp(deshabilitarSelectorInforme);
-
-    // Blindaje: el foco/click del selector no debe disparar una recarga que lo vuelva
-    // a deshabilitar justo cuando el usuario intenta abrirlo. Si hay más de un
-    // operativo iniciado y hay un informe concreto elegido, debe quedar habilitado.
-    if (!deshabilitarSelectorInforme) {
-      setTimeout(() => {
-        if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
-          setSelectorHorarioDisabledWsp(false);
-        }
-      }, 0);
-    }
-
+    selHorario.disabled = false;
     actualizarContadorOperativosWsp(operativosCache.length);
-    return operativosCache;
-  }
-
-  async function cargarOperativosIniciadosParaFinaliza(valorSeleccionado = "") {
-    // FINALIZA usa su propio cargador. No debe heredar el comportamiento de INFORMES,
-    // porque INFORMES puede preseleccionar/bloquear el select cuando hay un solo operativo.
-    // En FINALIZA el usuario tiene que poder abrir el desplegable y elegir el operativo a cerrar.
-    if (!selHorario) return [];
-
-    const requestId = ++informesSelectorRequestId;
-    setTituloOperativosIniciados(true);
-    setSelectorHorarioDisabledWsp(true);
-    selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
-    selHorario.value = "";
-
-    let inicios = [];
-    try {
-      inicios = await leerIniciosGuardiaDesdeSupabase();
-    } catch (e) {
-      console.warn("[WSP] No se pudieron cargar operativos iniciados para FINALIZA.", e);
-      inicios = [];
-    }
-
-    if (requestId !== informesSelectorRequestId) return operativosCache;
-
-    const candidatos = ordenarCandidatosInformeAlcoholemia(
-      (Array.isArray(inicios) ? inicios : []).map(construirFranjaInformeDesdeInicio).filter(Boolean)
-    );
-
-    operativosCache = [];
-    selHorario.innerHTML = "";
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.text = candidatos.length ? "Seleccionar operativo iniciado a finalizar" : "No hay operativos iniciados";
-    selHorario.appendChild(placeholder);
-
-    candidatos.forEach((operativo) => {
-      operativosCache.push(operativo);
-      const option = document.createElement("option");
-      option.value = operativo.__key;
-      option.text = construirTextoOpcionHorario(operativo);
-      option.title = construirTextoOpcionHorario(operativo);
-      selHorario.appendChild(option);
-    });
-
-    if (valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
-      selHorario.value = valorSeleccionado;
-    } else {
-      // No preseleccionar. Así el usuario puede abrir el input y elegir aun cuando hay un solo operativo.
-      selHorario.value = "";
-    }
-
-    franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
-    ordenSeleccionada = null;
-    setSelectorHorarioDisabledWsp(candidatos.length === 0);
-    actualizarContadorOperativosWsp(candidatos.length);
     return operativosCache;
   }
 
@@ -2128,14 +1766,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function extraerHorarioPartesWsp(horario = "") {
-    return extraerHorarioPartesFlexibleWsp(horario);
+    const m = String(horario || "").match(/(\d{1,2}:\d{2})\s*A\s*((?:\d{1,2}:\d{2})|FINALIZAR)/i);
+    if (!m) return { desde: "", hasta: "" };
+    return { desde: limpiarTextoSimple(m[1]), hasta: limpiarTextoSimple(m[2]).toUpperCase() };
   }
 
   function minutosDesdeHoraWsp(value = "") {
     if (/FINALIZAR/i.test(value)) return 24 * 60;
-    const hora = extraerHoraTextoWsp(value);
-    if (!hora) return Number.MAX_SAFE_INTEGER;
-    return (hora.hh * 60) + hora.mm;
+    const m = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return Number.MAX_SAFE_INTEGER;
+    return (Number(m[1]) * 60) + Number(m[2]);
   }
 
   function pushUnicoTextoWsp(out, value) {
@@ -2366,17 +2006,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
-    // Al volver desde INFORMES a INICIA/FINALIZA/otros modos normales,
-    // el selector pudo haber quedado deshabilitado porque no había operativos iniciados.
-    // Acá se invalida cualquier lectura async pendiente de INFORMES y se restablece
-    // el selector normal de operativos publicados.
-    informesSelectorRequestId += 1;
     setTituloOperativosIniciados(false);
     const ordenes = cargarOrdenesSeguro();
 
     operativosCache = [];
     if (selHorario) {
-      setSelectorHorarioDisabledWsp(false);
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
     }
 
@@ -4616,7 +4250,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
-    forzarVisibilidadFinalizadoNumeralesWsp();
 
     if (selTipo.value === "FINALIZA") {
       sincronizarInicioGuardadoSegunContexto();
@@ -4643,6 +4276,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (controlMoviles) {
+      setTituloOperativosIniciados(false);
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
       setUIControlMovilesActiva(true);
@@ -4654,9 +4288,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     setUIControlMovilesActiva(false);
 
     if (enInformes && !getTipoInformeActivo()) {
-      // Estado neutro de INFORMES: no debe conservar lecturas anteriores ni
-      // dejar que una consulta pendiente vuelva a escribir el selector.
-      informesSelectorRequestId += 1;
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
       setUIInformeDecto460Activa(false);
@@ -4664,23 +4295,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       setMovilidadVisible(false);
       setElementosVisibles(false);
       setObservacionesVisible(false);
-      if (divFinaliza) divFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
       setTituloOperativosIniciados(true);
       operativosCache = [];
       franjaSeleccionada = null;
       ordenSeleccionada = null;
       if (selHorario) {
-        selHorario.innerHTML = '<option value="">Cargando operativos iniciados...</option>';
+        selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
         selHorario.value = "";
-        setSelectorHorarioDisabledWsp(true);
       }
       actualizarContadorOperativosWsp(0);
-      cargarOperativosIniciadosParaInformes("", { soloResumen: true }).then(() => {
-        // En el estado general INFORMES solo mostramos el resumen/cantidad de
-        // operativos iniciados. La selección real se habilita cuando se elige
-        // un informe concreto (Alcoholemia, Decto 460/22, Control Superior, etc.).
-      });
+      if (divFinaliza) divFinaliza.classList.add("hidden");
+      if (divDetalles) divDetalles.classList.add("hidden");
       return;
     }
 
@@ -4725,45 +4350,31 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     setUIControlSuperiorActiva(false);
     setUIInformeAlcoholemiaActiva(false);
+    setTituloOperativosIniciados(false);
+    cargarOperativosDisponibles(selHorario?.value || "");
+    actualizarDatosFranja();
+    divFinaliza.classList.toggle("hidden", !fin);
 
-    if (fin) {
-      // FINALIZA: fuente correcta = operativos INICIADOS/EN_CURSO.
-      // No se debe usar cargarOperativosDisponibles(), porque esa lista viene
-      // de operativos publicados y no trae el inicio vivo para cerrar.
-      if (divFinaliza) divFinaliza.classList.remove("hidden");
-      if (divMismosElementos) divMismosElementos.classList.remove("hidden");
-      setPersonalVisible(true);
-      setMovilidadVisible(true);
-      setElementosVisibles(true);
-      setObservacionesVisible(true);
+    if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
 
-      cargarOperativosIniciadosParaFinaliza(selHorario?.value || "").then(() => {
-        actualizarDatosFranja();
-        if (divFinaliza) divFinaliza.classList.remove("hidden");
-        if (divMismosElementos) divMismosElementos.classList.remove("hidden");
-        if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
-          chkMostrarResultadosFinaliza.checked = false;
-        }
-        actualizarVisibilidadBloquePresenciaActiva();
-        actualizarVisibilidadResultadosFinaliza();
-        forzarVisibilidadFinalizadoNumeralesWsp();
-        sincronizarUIAlcoholimetro();
-        sincronizarInicioGuardadoSegunContexto();
-      });
+    if (!fin) {
+      if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+      actualizarVisibilidadBloquePresenciaActiva();
+      actualizarVisibilidadResultadosFinaliza();
+      desactivarControlesMismos();
+      ocultarResumenInformesIntermediosFinalizado();
+      sincronizarUIAlcoholimetro();
       return;
     }
 
-    // INICIA y demás modos normales: fuente = operativos publicados.
-    cargarOperativosDisponibles(selHorario?.value || "");
-    actualizarDatosFranja();
-    if (divFinaliza) divFinaliza.classList.add("hidden");
-    if (divMismosElementos) divMismosElementos.classList.add("hidden");
-    if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+    if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
+      chkMostrarResultadosFinaliza.checked = false;
+    }
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
-    desactivarControlesMismos();
-    ocultarResumenInformesIntermediosFinalizado();
+    desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
+    sincronizarInicioGuardadoSegunContexto();
   }
 
   // ======================================================
@@ -4812,12 +4423,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function normalizarHorario(txt) {
     if (!txt) return "";
-    const partes = extraerHorarioPartesWsp(txt);
-    if (partes.desde && partes.hasta) return `${partes.desde} A ${partes.hasta === "FINALIZAR" ? "Finalizar" : partes.hasta}`;
-    if (partes.desde) return partes.desde;
 
-    let t = String(txt || "").toLowerCase().replace(/\s+/g, " ").trim();
+    let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
     t = t.replace(/\bfinalizar\b/g, "Finalizar");
+
     return t;
   }
 
@@ -5030,53 +4639,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
   }
 
-
-
-  // Reparación defensiva: FINALIZA debe mostrar siempre el bloque de numerales
-  // cuando corresponde por tipo de operativo. Algunos modos de INFORMES/CONTROL
-  // dejan clases/hidden aplicadas; esta función restablece la UI normal de FINALIZA
-  // sin modificar el armado del texto ni la lógica de resultados.
-  function forzarVisibilidadFinalizadoNumeralesWsp() {
-    if (!selTipo || selTipo.value !== "FINALIZA") return;
-
-    try {
-      document.body.classList.remove(
-        "modo-control-superior",
-        "modo-informe-alcoholemia",
-        "modo-informe-decto460",
-        "modo-control-moviles",
-        "control-movil-seleccionado-activo"
-      );
-    } catch {}
-
-    // No tocar de manera ciega Personal/Móvil/Elementos: en FINALIZADO deben quedar
-    // ocultos cuando están marcados como "mismo del inicio". Esta función solo blinda
-    // numerales/finalizado y respeta el estado real de esos tres bloques.
-    setPersonalVisible(!(chkMismoPersonal && chkMismoPersonal.checked));
-    setMovilidadVisible(!(chkMismoMovil && chkMismoMovil.checked));
-    setElementosVisibles(!(chkMismosElementos && chkMismosElementos.checked));
-    setObservacionesVisible(true);
-    setControlSuperiorVisible(false);
-    if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.add("hidden");
-    if (bloqueInformeDecto460) bloqueInformeDecto460.classList.add("hidden");
-    if (bloqueControlMoviles) bloqueControlMoviles.classList.add("hidden");
-
-    if (divFinaliza) divFinaliza.classList.remove("hidden");
-    if (divMismosElementos) divMismosElementos.classList.remove("hidden");
-
-    const mostrarResultados = debeIncluirResultadosFinaliza();
-    const mostrarDetalles = debeIncluirDetallesFinaliza();
-
-    if (tituloResultadosFinaliza) tituloResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
-    if (contenidoResultadosFinaliza) contenidoResultadosFinaliza.classList.toggle("hidden", !mostrarResultados);
-    if (divDetalles) divDetalles.classList.toggle("hidden", !mostrarDetalles);
-
-    if (mostrarResultados) {
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
-    }
-  }
-
   // ======================================================
   // ===== DETALLES ========================================
   // ======================================================
@@ -5150,29 +4712,6 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function construirObservacionDecreto460(cantidad) {
     return "Se Realizo (" + formatearCantidad(cantidad || 1) + ") Procedimiento Policial por Dcto. 460/22.";
-  }
-
-  function extraerCantidadDecreto460DesdeTextoWsp(texto) {
-    const raw = String(texto || "");
-    if (!raw || !esReferenciaDecreto460(raw)) return 0;
-
-    let total = 0;
-    const regexObs = /\(\s*(\d{1,3})\s*\)\s*(?:proc\.?|procedimientos?|procedimiento\s+policial(?:es)?|procedimiento)/gi;
-    let m;
-    while ((m = regexObs.exec(raw))) {
-      const n = leerEnteroNoNegativo(m[1]);
-      if (n > 0) total += n;
-    }
-    if (total > 0) return total;
-
-    const regexParentesis = /\(\s*(\d{1,3})\s*\)/g;
-    while ((m = regexParentesis.exec(raw))) {
-      const n = leerEnteroNoNegativo(m[1]);
-      if (n > 0 && n !== 22 && n !== 460) total += n;
-    }
-    if (total > 0) return total;
-
-    return extraerNumeralDto460Resultado(raw);
   }
 
   function extraerNumeralResultadoFlexible(valor) {
@@ -5491,14 +5030,9 @@ ${bold(`Moviles ${organismo}:`)}`)
       const limpio = limpiarMarcaOrigenVisualDetalle(visual);
       const item = normalizarLineaDetalle(limpio);
 
-      // Los procedimientos 460/22 no son detalles de infracción para la salida final,
-      // pero SÍ deben quedar visibles en el cuadro Detalles mientras se edita.
-      // Luego normalizarDetallesTexto() los retira de Detalles impresos y los pasa
-      // a Observaciones al generar/enviar el FINALIZADO.
-      if (item?.tipo === "procedimiento460") {
-        otras.push({ idx, texto: item.texto || linea, vacia: false });
-        return;
-      }
+      // Los procedimientos 460/22 no son detalles de infracción: no deben
+      // quedar en el cuadro Detalles. Su conteo vive en Resultados/Observaciones.
+      if (item?.tipo === "procedimiento460") return;
 
       if (!item || item.tipo !== "detalle") {
         otras.push({ idx, texto: linea, vacia: false });
@@ -5706,7 +5240,6 @@ ${bold(`Moviles ${organismo}:`)}`)
         observaciones: [],
         cantidadValidos: 0,
         detalleItems: [],
-        procedimientos460: 0,
         tieneTexto: false,
       };
     }
@@ -5715,7 +5248,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     const detallesSinCodigo = [];
     const observaciones = [];
     const detalleItems = [];
-    let procedimientos460 = 0;
 
     limpio.split("\n").forEach((linea) => {
       const item = normalizarLineaDetalle(linea);
@@ -5749,17 +5281,13 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       if (item.tipo === "procedimiento460") {
-        procedimientos460 += Math.max(1, leerEnteroNoNegativo(item.cantidad || 1));
+        observaciones.push(item.observacion || construirObservacionDecreto460(item.cantidad));
         detalleItems.push(item.texto);
         return;
       }
 
       observaciones.push(item.texto);
     });
-
-    if (procedimientos460 > 0) {
-      observaciones.push(construirObservacionDecreto460(procedimientos460));
-    }
 
     const detalles = [
       ...Array.from(detallesAgrupados.values()).map((grupo) => {
@@ -5774,7 +5302,6 @@ ${bold(`Moviles ${organismo}:`)}`)
       observaciones,
       cantidadValidos: detalleItems.length,
       detalleItems,
-      procedimientos460,
       tieneTexto: true,
     };
   }
@@ -6058,11 +5585,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     setPersonalVisible(false);
     setMovilidadVisible(false);
     setElementosVisibles(false);
-
-    // Al seleccionar un operativo iniciado, los bloques de personal/móviles/elementos
-    // pueden ocultarse por “mismos datos”, pero FINALIZA debe seguir visible para
-    // cargar numerales, detalles y observaciones.
-    forzarVisibilidadFinalizadoNumeralesWsp();
   }
 
   async function sincronizarInicioGuardadoSegunContexto() {
@@ -6078,7 +5600,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const remoto = await leerInicioDesdeSupabase(franjaSeleccionada);
     if (lookupId !== inicioGuardadoLookupId) return;
 
-    const payload = franjaSeleccionada?.__inicioGuardadoPayload || remoto || cargarInicioGuardadoCoincidente();
+    const payload = remoto || cargarInicioGuardadoCoincidente();
     aplicarInicioGuardadoAutomatico(payload);
     refrescarResumenInformesIntermediosFinalizado();
   }
@@ -6256,8 +5778,6 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function fechaFranjaHistorialWsp(franja) {
-    const fechaHora = construirFechaHoraInicioFranja(franja, ordenSeleccionada);
-    if (fechaHora instanceof Date && !isNaN(fechaHora.getTime())) return toFechaISO(fechaHora);
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
   }
 
@@ -6302,28 +5822,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }) {
     const partesHorario = extraerHorarioPartesWsp(franjaSeleccionada?.horario || "");
     const mapas = extraerMapasResultadosHistorialWsp(lineasResultados || []);
-    const procedimientos460Detalles = Math.max(0, leerEnteroNoNegativo(detallesProcesados?.procedimientos460 || 0));
-    const procedimientos460Obs = extraerCantidadDecreto460DesdeTextoWsp(observacionesFinales || "");
-    const procedimientos460Total = Math.max(procedimientos460Detalles, procedimientos460Obs);
-    if (procedimientos460Total > 0) {
-      mapas.resultados["Decreto 460/22"] = procedimientos460Total;
-    }
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || "");
-    const personalInicioArr = String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean);
-    const movilesInicioArr = arrayDesdeLineaHistorialWsp(mov);
-    const motosInicioArr = arrayDesdeLineaHistorialWsp(mot);
-    const elementosInicioObj = {
-      ESCOPETA: arrayDesdeLineaHistorialWsp(escopetasTXT),
-      HT: arrayDesdeLineaHistorialWsp(htTXT),
-      PDA: arrayDesdeLineaHistorialWsp(pdaTXT),
-      IMPRESORA: arrayDesdeLineaHistorialWsp(impTXT),
-      Alometro: arrayDesdeLineaHistorialWsp(alomTXT),
-      Alcoholimetro: arrayDesdeLineaHistorialWsp(alcoTXT),
-    };
-    const lugarInicioTexto = normalizarLugar(franjaSeleccionada?.lugar || "");
-    const horarioInicioTexto = normalizarHorario(franjaSeleccionada?.horario || "");
-    const tipoInicioTexto = obtenerTipoOperativoInicioTextoActual(franjaSeleccionada);
-    const inicioUpdatedAt = new Date().toISOString();
 
     return {
       fuente: "WSP",
@@ -6337,21 +5836,20 @@ ${bold(`Moviles ${organismo}:`)}`)
       hora_hasta: partesHorario.hasta || "",
       lugar: normalizarLugar(franjaSeleccionada?.lugar || ""),
       lugar_normalizado: normalizarLugar(franjaSeleccionada?.lugar || ""),
-      tipo_operativo: tipoInicioTexto,
-      tipo_operativo_inicio_texto: tipoInicioTexto,
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
       titulo: limpiarTextoSimple(franjaSeleccionada?.titulo || ""),
       ordenes_origen: ordenes,
-      personal: personalInicioArr,
-      moviles: movilesInicioArr,
-      motos: motosInicioArr,
-      elementos: elementosInicioObj,
-      personal_inicio: personalInicioArr,
-      moviles_inicio: movilesInicioArr,
-      motos_inicio: motosInicioArr,
-      elementos_inicio: elementosInicioObj,
-      lugar_inicio: lugarInicioTexto,
-      horario_inicio: horarioInicioTexto,
-      inicio_updated_at: inicioUpdatedAt,
+      personal: String(personalTexto || "").split("\n").map((v) => limpiarTextoSimple(v)).filter(Boolean),
+      moviles: arrayDesdeLineaHistorialWsp(mov),
+      motos: arrayDesdeLineaHistorialWsp(mot),
+      elementos: {
+        ESCOPETA: arrayDesdeLineaHistorialWsp(escopetasTXT),
+        HT: arrayDesdeLineaHistorialWsp(htTXT),
+        PDA: arrayDesdeLineaHistorialWsp(pdaTXT),
+        IMPRESORA: arrayDesdeLineaHistorialWsp(impTXT),
+        Alometro: arrayDesdeLineaHistorialWsp(alomTXT),
+        Alcoholimetro: arrayDesdeLineaHistorialWsp(alcoTXT),
+      },
       resultados: mapas.resultados,
       medidas_cautelares: mapas.medidas,
       detalles: Array.isArray(detallesProcesados?.detalleItems) ? detallesProcesados.detalleItems : [],
@@ -6361,16 +5859,6 @@ ${bold(`Moviles ${organismo}:`)}`)
         tipo_evento: tipoEvento,
         franja: franjaSeleccionada,
         registro_original: franjaSeleccionada?.__registroOriginalPublicado || null,
-        tipo_operativo_inicio_texto: tipoInicioTexto,
-        personal_inicio: personalInicioArr,
-        moviles_inicio: movilesInicioArr,
-        motos_inicio: motosInicioArr,
-        elementos_inicio: elementosInicioObj,
-        lugar_inicio: lugarInicioTexto,
-        horario_inicio: horarioInicioTexto,
-        inicio_updated_at: inicioUpdatedAt,
-        procedimientos_460: procedimientos460Total,
-        contador_460: procedimientos460Total,
       },
       metadata: {
         tipo_evento: tipoEvento,
@@ -6516,87 +6004,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     };
   }
 
-  function estadoEsFinalizadoInformeWsp(row = {}) {
-    const estado = String(row?.estado || "").toUpperCase();
-    return estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-  }
-
-  function puntuarEstadoInformeWsp(row = {}, franja = franjaSeleccionada, operativoKey = "") {
-    if (!row || estadoEsFinalizadoInformeWsp(row)) return -1;
-    const keyRow = limpiarTextoSimple(row?.operativo_key || "");
-    const keyFranja = limpiarTextoSimple(operativoKey || franja?.__operativoKey || "");
-    if (keyRow && keyFranja && keyRow === keyFranja) return 1000;
-
-    let puntos = 0;
-    const partesHorario = extraerHorarioPartesWsp(franja?.horario || "");
-    if (valoresComparablesCoinciden(row?.hora_desde, partesHorario.desde)) puntos += 40;
-    if (valoresComparablesCoinciden(row?.hora_hasta, partesHorario.hasta)) puntos += 40;
-    if (valoresComparablesCoinciden(row?.lugar, franja?.lugar || "")) puntos += 35;
-    if (valoresComparablesCoinciden(row?.tipo_operativo, franja?.titulo || franja?.__tipoPublicado || "")) puntos += 10;
-    return puntos;
-  }
-
-  async function buscarOperativoEstadoParaInformeWsp(data) {
-    const guardiaFecha = limpiarTextoSimple(data?.guardia_fecha || getGuardiaFechaISO());
-    const operativoKey = limpiarTextoSimple(data?.operativo_key || franjaSeleccionada?.__operativoKey || "");
-    const selectCols = "id,operativo_key,guardia_fecha,hora_desde,hora_hasta,lugar,tipo_operativo,estado,inicio_evento_id,finalizado_evento_id,tipo_operativo_inicio_texto,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,lugar_inicio,horario_inicio,inicio_updated_at";
-
-    try {
-      if (operativoKey) {
-        const paramsExactos = new URLSearchParams({
-          select: selectCols,
-          guardia_fecha: `eq.${guardiaFecha}`,
-          operativo_key: `eq.${operativoKey}`,
-          limit: "1",
-        });
-        const rExacto = await fetch(`${SUPABASE_URL}/rest/v1/operativos_estado?${paramsExactos.toString()}`, {
-          headers: headersSupabase({ Accept: "application/json" }),
-        });
-        if (rExacto.ok) {
-          const rows = await rExacto.json();
-          const row = Array.isArray(rows) ? rows.find((x) => !estadoEsFinalizadoInformeWsp(x)) : null;
-          if (row?.id) return row;
-        } else {
-          console.warn("[WSP] No se pudo buscar estado exacto para informe:", rExacto.status, await rExacto.text().catch(() => ""));
-        }
-      }
-
-      const params = new URLSearchParams({
-        select: selectCols,
-        guardia_fecha: `eq.${guardiaFecha}`,
-        order: "created_at.desc",
-        limit: "500",
-      });
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_estado?${params.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-      if (!r.ok) {
-        console.warn("[WSP] No se pudo buscar estados para informe:", r.status, await r.text().catch(() => ""));
-        return null;
-      }
-      const rows = await r.json();
-      let mejor = null;
-      let mejorPuntaje = -1;
-      (Array.isArray(rows) ? rows : []).forEach((row) => {
-        const puntaje = puntuarEstadoInformeWsp(row, franjaSeleccionada, operativoKey);
-        if (puntaje > mejorPuntaje) {
-          mejor = row;
-          mejorPuntaje = puntaje;
-        }
-      });
-      return mejor && mejorPuntaje >= 70 ? mejor : null;
-    } catch (e) {
-      console.warn("[WSP] Error buscando operativo_estado para informe.", e);
-      return null;
-    }
-  }
-
   function payloadInformeEventoParaSupabaseWsp(data) {
     // Mantener el insert/upsert acotado a columnas usadas por la tabla de eventos.
     // El informe completo queda igualmente dentro de payload_completo y texto_generado.
     return {
       fuente: data.fuente || "WSP",
-      operativo_estado_id: data.operativo_estado_id || null,
       operativo_key: data.operativo_key || "",
       tipo_evento: data.tipo_evento,
       guardia_fecha: data.guardia_fecha,
@@ -6605,26 +6017,12 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: data.horario || "",
       lugar: data.lugar || "",
       tipo_operativo: data.tipo_operativo || "",
-      tipo_operativo_inicio_texto: data.tipo_operativo_inicio_texto || data.tipo_operativo || "",
-      personal_inicio: Array.isArray(data.personal_inicio) ? data.personal_inicio : (Array.isArray(data.personal) ? data.personal : []),
-      moviles_inicio: Array.isArray(data.moviles_inicio) ? data.moviles_inicio : (Array.isArray(data.moviles) ? data.moviles : []),
-      motos_inicio: Array.isArray(data.motos_inicio) ? data.motos_inicio : (Array.isArray(data.motos) ? data.motos : []),
-      elementos_inicio: data.elementos_inicio || data.elementos || {},
-      lugar_inicio: data.lugar_inicio || data.lugar || "",
-      horario_inicio: data.horario_inicio || data.horario || "",
-      inicio_updated_at: data.inicio_updated_at || new Date().toISOString(),
       resultados: data.resultados || {},
       medidas_cautelares: data.medidas_cautelares || {},
       detalles: Array.isArray(data.detalles) ? data.detalles : [],
       observaciones: data.observaciones || "",
       texto_generado: data.texto_generado || "",
-      payload_completo: {
-        ...(data.payload_completo || {}),
-        procedimientos_460: data.procedimientos_460 || data.payload_completo?.procedimientos_460 || 0,
-        contador_460: data.contador_460 || data.payload_completo?.contador_460 || 0,
-        remisiones_460: data.remisiones_460 || data.payload_completo?.remisiones_460 || 0,
-        inventarios_460: data.inventarios_460 || data.payload_completo?.inventarios_460 || 0,
-      },
+      payload_completo: data.payload_completo || {},
 
       categoria_evento: data.categoria_evento,
       subtipo_evento: data.subtipo_evento,
@@ -6641,13 +6039,6 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function guardarInformeEventoWsp(tipoEvento, payload, nroActa) {
     const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
-    const estado = await buscarOperativoEstadoParaInformeWsp(data);
-    if (!estado?.id) {
-      alert("No se encontró el operativo EN CURSO vinculado en Supabase. No se enviará por WhatsApp para evitar guardar un informe colgado o duplicado.");
-      return false;
-    }
-    data.operativo_estado_id = estado.id;
-    if (estado.operativo_key) data.operativo_key = limpiarTextoSimple(estado.operativo_key);
     const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
     try {
       const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=guardia_fecha,informe_key`;
@@ -6664,7 +6055,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (!r.ok) {
         const txt = await r.text().catch(() => "");
         console.error("[WSP] No se pudo guardar/upsert informe:", r.status, txt);
-        alert(`No se pudo guardar el informe en Supabase. No se enviará por WhatsApp. Detalle: ${r.status} ${txt.slice(0, 220)}`);
+        alert("No se pudo guardar el informe en Supabase. No se enviará por WhatsApp para evitar perder el registro o duplicar datos.");
         return false;
       }
 
@@ -6695,7 +6086,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
 
     try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}?${filtros.toString()}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}?${filtros.toString()}`, {
         method: "DELETE",
         headers: headersSupabase({ Prefer: "return=minimal" }),
       });
@@ -7033,7 +6424,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeAlcoholemia() {
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
-    return await obtenerInicioVigenteParaInformeWsp(franjaSeleccionada);
+    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeAlcoholemia() {
@@ -7048,10 +6439,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       informeAlcoholemiaContexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
       return;
     }
-    const moviles = lineaDesdeArray(tomarArrayInicioPreferido(inicio.moviles_inicio, inicio.moviles), "/");
-    const motos = lineaDesdeArray(tomarArrayInicioPreferido(inicio.motos_inicio, inicio.motos), "/");
+    const moviles = lineaDesdeArray(inicio.moviles, "/");
+    const motos = lineaDesdeArray(inicio.motos, "/");
     const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar_inicio || inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
   }
 
   function setUIInformeAlcoholemiaActiva(activa) {
@@ -7176,43 +6567,23 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: hora,
       hora_desde: hora,
       hora_hasta: hora,
-      lugar: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      lugar_normalizado: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-      tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
       titulo: "ALCOHOLEMIA POSITIVA",
       ordenes_origen: ordenes,
-      personal: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-      moviles: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-      motos: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-      elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-      moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-      motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-      elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
-      inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
+      personal: normalizarArrayTexto(inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio),
       resultados,
       medidas_cautelares: medidasPayload,
       detalles,
       observaciones: "",
-      procedimientos_460: esAlco460 ? 1 : 0,
-      contador_460: esAlco460 ? 1 : 0,
-      remisiones_460: esAlco460 && medidas.remision ? 1 : 0,
-      inventarios_460: esAlco460 && infAlcoInventario?.checked ? 1 : 0,
       texto_generado: textoFinal,
       payload_completo: {
         tipo_evento: "ALCOHOLEMIA_POSITIVA",
         tipo_informe: infAlco460?.checked ? "ALCOHOLEMIA_460" : "ALCOHOLEMIA_POSITIVA",
-        tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-        personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-        moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-        motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-        elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-        lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-        horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
-        inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
         franja: franjaSeleccionada,
         datos_formulario: {
           tipo_vehiculo: tipoVehiculo,
@@ -7237,8 +6608,6 @@ ${bold(`Moviles ${organismo}:`)}`)
         graduaciones_no_sancionables: calc.noSancionable ? [grad] : [],
         detalle_origen_visual: infAlco460?.checked ? "460/22" : "alcoholemia",
         detalles_readonly: detalles.map((texto) => ({ texto, origen: infAlco460?.checked ? "460/22" : "alcoholemia", readonly: true })),
-        procedimientos_460: infAlco460?.checked ? 1 : 0,
-        contador_460: infAlco460?.checked ? 1 : 0,
         remisiones_460: infAlco460?.checked && medidas.remision ? 1 : 0,
         inventarios_460: infAlco460?.checked && infAlcoInventario?.checked ? 1 : 0,
         corralon_460: infAlco460?.checked ? normalizarClaveCorralonInforme(infAlcoCorralon?.value) : "",
@@ -7259,13 +6628,11 @@ ${bold(`Moviles ${organismo}:`)}`)
         : "REMISIÓN POR DECTO 460/22 Y ALCOHOLEMIA POSITIVA NO SANCIONABLE")
       : (calc.sancionable ? "ALCOHOLEMIA POSITIVA SANCIONABLE" : "ALCOHOLEMIA POSITIVA NO SANCIONABLE");
 
-    const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
-    const moviles = [
-      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles), "/"),
-      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos), "/"),
-    ].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal).join("\n") || "/";
-    const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
+    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
+    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
+    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
@@ -7281,7 +6648,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       : "";
     const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
     const obs = [
-      `En momentos que nos encontrábamos realizando ${tipoOp} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
+      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
@@ -7317,7 +6684,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/alcoholemia/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7327,7 +6694,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7336,11 +6703,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "ALCOHOLEMIA_POSITIVA",
       foto_numero: numero,
-      storage_bucket: INFORMES_FOTOS_BUCKET,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
@@ -7358,14 +6725,13 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function enviarInformeAlcoholemia() {
     aplicarMayusculasInputsInformeAlcoholemia();
-    if (!asegurarFranjaSeleccionadaParaEnviarWsp()) return;
+    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     actualizarReglasInformeAlcoholemia();
     if (!validarInformeAlcoholemia()) return;
 
-    // No esperar Supabase antes de abrir WhatsApp: si se espera, el navegador puede bloquear el envío.
-    const inicio = obtenerInicioRapidoParaEnvioWsp(franjaSeleccionada);
+    const inicio = await obtenerInicioParaInformeAlcoholemia();
     if (!inicio) {
-      alert("No hay datos mínimos del operativo para generar el informe.");
+      alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
       return;
     }
 
@@ -7377,25 +6743,24 @@ ${bold(`Moviles ${organismo}:`)}`)
     const calc = calcularAlcoholemiaInforme(tipoVehiculo, grad);
     const codigos = codigosInformeAlcoholemia(calc.codigo);
     const medidas = medidasSeleccionadasInformeAlcoholemia();
-    const nroActa = normalizarNumeroActaInforme(infAlcoActa?.value);
     const textoFinal = construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const payload = construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const fotos = fotosSeleccionadasInformeAlcoholemia();
 
-    // WhatsApp primero, siempre. Supabase/fotos después en segundo plano.
-    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
-    setTimeout(() => resetUI(), 80);
+    const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
+    if (!resultadoHistorial) return;
+    if (fotos.length) {
+      try {
+        await eliminarFotosPreviasInformeWsp(resultadoHistorial);
+        await subirFotosInformeAlcoholemia(resultadoHistorial, fotos);
+      } catch (e) {
+        console.warn("[WSP] No se pudieron cargar todas las fotos del informe.", e);
+        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+      }
+    }
 
-    Promise.resolve()
-      .then(async () => {
-        const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, nroActa);
-        if (!resultadoHistorial) return;
-        if (fotos.length) {
-          await eliminarFotosPreviasInformeWsp(resultadoHistorial);
-          await subirFotosInformeAlcoholemia(resultadoHistorial, fotos);
-        }
-      })
-      .catch((e) => console.warn("[WSP] Informe alcoholemia enviado por WhatsApp, pero no se pudo guardar/subir fotos.", e));
+    resetUI();
+    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
   }
 
 
@@ -7489,7 +6854,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function obtenerInicioParaInformeDecto460() {
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
-    return await obtenerInicioVigenteParaInformeWsp(franjaSeleccionada);
+    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
   }
 
   async function refrescarContextoInformeDecto460() {
@@ -7504,10 +6869,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       informeDecto460Contexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
       return;
     }
-    const moviles = lineaDesdeArray(tomarArrayInicioPreferido(inicio.moviles_inicio, inicio.moviles), "/");
-    const motos = lineaDesdeArray(tomarArrayInicioPreferido(inicio.motos_inicio, inicio.motos), "/");
+    const moviles = lineaDesdeArray(inicio.moviles, "/");
+    const motos = lineaDesdeArray(inicio.motos, "/");
     const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar_inicio || inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
   }
 
   function setUIInformeDecto460Activa(activa) {
@@ -7523,6 +6888,9 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (divMismosElementos) divMismosElementos.classList.add("hidden");
     if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
     if (activa) {
+      if (inf460ResultadoAuto) {
+        inf460ResultadoAuto.textContent = "El informe queda guardado como evento. No carga numerales automáticamente en el FINALIZADO.";
+      }
       completarDestinoDecto460SiVacio();
       refrescarContextoInformeDecto460();
     }
@@ -7579,13 +6947,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
-    const lugar = normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || "");
-    const moviles = [
-      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles), "/"),
-      lineaDesdeArray(tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos), "/"),
-    ].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal).join("\n") || "/";
-    const tipoOp = normalizarMayusInforme(obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada));
+    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
+    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
+    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
+    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
+    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
     const marca = normalizarMayusInforme(inf460Marca?.value);
     const modelo = normalizarMayusInforme(inf460Modelo?.value);
     const dominio = normalizarDominioInforme(inf460Dominio?.value);
@@ -7594,7 +6960,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const corralonTexto = textoCorralonInforme(corralon);
     const codigosTxt = codigos.join("/");
     const inventarioFrase = inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
+    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
 
     return compactarSaltos([
       bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
@@ -7646,43 +7012,23 @@ ${bold(`Moviles ${organismo}:`)}`)
       horario: hora,
       hora_desde: hora,
       hora_hasta: hora,
-      lugar: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      lugar_normalizado: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-      tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
+      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
+      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
       titulo: "DECTO 460/22",
       ordenes_origen: ordenes,
-      personal: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-      moviles: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-      motos: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-      elementos: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-      moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-      motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-      elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-      lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
-      inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
+      personal: normalizarArrayTexto(inicio?.personal),
+      moviles: normalizarArrayTexto(inicio?.moviles),
+      motos: normalizarArrayTexto(inicio?.motos),
+      elementos: normalizarPayloadElementos(inicio),
       resultados,
       medidas_cautelares: medidasPayload,
       detalles,
       observaciones: "",
-      procedimientos_460: 1,
-      contador_460: 1,
-      remisiones_460: 1,
-      inventarios_460: tieneInventario ? 1 : 0,
       texto_generado: textoFinal,
       payload_completo: {
         tipo_evento: "DECTO_460_22",
         tipo_informe: "DECTO_460_22",
-        tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme(inicio, franjaSeleccionada),
-        personal_inicio: tomarArrayInicioPreferido(inicio?.personal_inicio, inicio?.personal),
-        moviles_inicio: tomarArrayInicioPreferido(inicio?.moviles_inicio, inicio?.moviles),
-        motos_inicio: tomarArrayInicioPreferido(inicio?.motos_inicio, inicio?.motos),
-        elementos_inicio: normalizarPayloadElementos(inicio?.elementos_inicio || inicio?.elementos || inicio),
-        lugar_inicio: normalizarLugar(inicio?.lugar_inicio || inicio?.lugar || franjaSeleccionada?.lugar || ""),
-        horario_inicio: limpiarTextoSimple(inicio?.horario_inicio || inicio?.horario || franjaSeleccionada?.horario || ""),
-        inicio_updated_at: inicio?.inicio_updated_at || new Date().toISOString(),
         franja: franjaSeleccionada,
         datos_formulario: {
           marca: normalizarMayusInforme(inf460Marca?.value),
@@ -7695,8 +7041,6 @@ ${bold(`Moviles ${organismo}:`)}`)
           acta_inventario: tieneInventario,
           inventarios_460: tieneInventario ? 1 : 0,
         },
-        procedimientos_460: 1,
-        contador_460: 1,
         remisiones_460: 1,
         inventarios_460: tieneInventario ? 1 : 0,
         corralon_460: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
@@ -7722,7 +7066,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const safeKey = operativoKey.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").slice(0, 90) || "operativo";
     const safeInforme = normalizarComponenteInformeKeyWsp(informeKey || eventoId) || eventoId;
     const path = `informes/460/${getGuardiaFechaISO()}/${safeKey}/${safeInforme}/${Date.now()}_${numero}.jpg`;
-    const url = `${SUPABASE_URL}/storage/v1/object/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const url = `${SUPABASE_URL}/storage/v1/object/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const r = await fetch(url, {
       method: "POST",
       headers: headersSupabase({
@@ -7732,7 +7076,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       body: archivo,
     });
     if (!r.ok) throw new Error(`No se pudo subir foto ${numero}: ${r.status} ${await r.text().catch(() => "")}`);
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${INFORMES_FOTOS_BUCKET}/${path}`;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${HISTORIAL_FOTOS_BUCKET}/${path}`;
     const row = {
       evento_id: eventoId,
       operativo_estado_id: estadoId || null,
@@ -7741,11 +7085,11 @@ ${bold(`Moviles ${organismo}:`)}`)
       informe_key: informeKey || null,
       tipo_evento: "DECTO_460_22",
       foto_numero: numero,
-      storage_bucket: INFORMES_FOTOS_BUCKET,
+      storage_bucket: HISTORIAL_FOTOS_BUCKET,
       storage_path: path,
       public_url: publicUrl,
     };
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${INFORMES_FOTOS_TABLE}`, {
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/${HISTORIAL_FOTOS_TABLE}`, {
       method: "POST",
       headers: headersSupabase({ "Content-Type": "application/json", Prefer: "return=minimal" }),
       body: JSON.stringify(row),
@@ -7763,39 +7107,32 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function enviarInformeDecto460() {
     aplicarMayusculasInputsDecto460();
-    if (!asegurarFranjaSeleccionadaParaEnviarWsp()) return;
     if (!validarInformeDecto460()) return;
-
-    // No esperar Supabase antes de abrir WhatsApp.
-    const inicio = obtenerInicioRapidoParaEnvioWsp(franjaSeleccionada);
+    const inicio = await obtenerInicioParaInformeDecto460();
     if (!inicio) {
-      alert("No hay datos mínimos del operativo para generar el informe.");
+      alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
       return;
     }
-
     const now = new Date();
     const fecha = fmtFechaInforme(now);
     const hora = fmtHoraInforme(now);
     const codigos = codigosInformeDecto460();
-    const nroActa = normalizarNumeroActaInforme(inf460Acta?.value);
     const textoFinal = construirTextoInformeDecto460({ inicio, fecha, hora, codigos });
     const payload = construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora });
     const fotos = fotosSeleccionadasInformeDecto460();
-
-    // WhatsApp primero, siempre. Supabase/fotos después en segundo plano.
+    const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, normalizarNumeroActaInforme(inf460Acta?.value));
+    if (!resultadoHistorial) return;
+    if (fotos.length) {
+      try {
+        await eliminarFotosPreviasInformeWsp(resultadoHistorial);
+        await subirFotosInformeDecto460(resultadoHistorial, fotos);
+      } catch (e) {
+        console.warn("[WSP] No se pudieron cargar todas las fotos del informe Decto 460/22.", e);
+        alert("El informe se guardó, pero alguna foto no pudo cargarse. Revise conexión/Supabase.");
+      }
+    }
+    resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
-    setTimeout(() => resetUI(), 80);
-
-    Promise.resolve()
-      .then(async () => {
-        const resultadoHistorial = await guardarInformeEventoWsp("DECTO_460_22", payload, nroActa);
-        if (!resultadoHistorial) return;
-        if (fotos.length) {
-          await eliminarFotosPreviasInformeWsp(resultadoHistorial);
-          await subirFotosInformeDecto460(resultadoHistorial, fotos);
-        }
-      })
-      .catch((e) => console.warn("[WSP] Informe Decto 460/22 enviado por WhatsApp, pero no se pudo guardar/subir fotos.", e));
   }
 
   function valorAgregadoResultado(agregado, keys) {
@@ -8227,14 +7564,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function renderResumenInformesIntermediosFinalizado(agregado) {
-    // Regla actual: 460/22, alcoholemias y graduaciones NO alimentan ni ensucian el FINALIZADO.
+    // La información de informes intermedios NO debe mostrarse como resumen aparte.
+    // Debe impactar directamente en los campos existentes del FINALIZADO.
+    aplicarInformesIntermediosEnCamposFinalizado(agregado);
     ocultarResumenInformesIntermediosFinalizado();
-    return null;
   }
 
   async function refrescarResumenInformesIntermediosFinalizado() {
-    ocultarResumenInformesIntermediosFinalizado();
-    return null;
+    if (selTipo?.value !== "FINALIZA" || !franjaSeleccionada) {
+      ocultarResumenInformesIntermediosFinalizado();
+      return null;
+    }
+    const agregado = await cargarAgregadoInformesIntermediosWsp();
+    renderResumenInformesIntermediosFinalizado(agregado);
+    return agregado;
   }
 
   function construirLineasAlcoholimetroConAgregado(alcoholimetro, agregado) {
@@ -8256,154 +7599,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     return lineas;
   }
 
-
-  function construirInicioMinimoDesdeFranjaWsp(franja = franjaSeleccionada) {
-    if (!franja) return null;
-    return normalizarInicioGuardado({
-      guardia_fecha: getGuardiaFechaISO(),
-      operativo_key: limpiarTextoSimple(franja?.__operativoKey || construirOperativoKeyEstable(franja)),
-      orden_num: obtenerNumeroOrdenDeFranja(franja),
-      texto_ref: obtenerTextoRefOrdenDeFranja(franja),
-      horario: limpiarTextoSimple(franja?.horario || ""),
-      lugar: limpiarTextoSimple(franja?.lugar || ""),
-      tipo_corto: obtenerTipoCortoFranja(franja),
-      tipo_operativo_inicio_texto: obtenerTipoOperativoInicioTextoInforme({}, franja),
-      personal: [],
-      moviles: [],
-      motos: [],
-      elementos: {},
-      personal_inicio: [],
-      moviles_inicio: [],
-      motos_inicio: [],
-      elementos_inicio: {},
-      lugar_inicio: limpiarTextoSimple(franja?.lugar || ""),
-      horario_inicio: limpiarTextoSimple(franja?.horario || ""),
-      inicio_updated_at: new Date().toISOString(),
-    });
-  }
-
-  function obtenerInicioRapidoParaEnvioWsp(franja = franjaSeleccionada) {
-    return normalizarInicioGuardado(franja?.__inicioGuardadoPayload)
-      || cargarInicioGuardadoCoincidente()
-      || cargarInicioLocal()
-      || construirInicioMinimoDesdeFranjaWsp(franja);
-  }
-
-  function asegurarFranjaSeleccionadaParaEnviarWsp() {
-    if (franjaSeleccionada) return true;
-    try { actualizarDatosFranja(); } catch {}
-    if (franjaSeleccionada) return true;
-
-    if (Array.isArray(operativosCache) && operativosCache.length === 1 && selHorario) {
-      selHorario.value = operativosCache[0].__key || "";
-      franjaSeleccionada = operativosCache[0] || null;
-      ordenSeleccionada = null;
-      return !!franjaSeleccionada;
-    }
-
-    alert("Debe seleccionar un operativo antes de enviar.");
-    return false;
-  }
-
-  function guardarInicioLocalRapidoDesdePayloadWsp(payload) {
-    try {
-      const data = normalizarInicioGuardado(payload || construirInicioGuardadoActual());
-      if (!data) return null;
-      inicioGuardadoActual = data;
-      guardarInicioLocal(data);
-      Promise.resolve()
-        .then(() => guardarInicioEnSupabase(data))
-        .catch((e) => console.warn("[WSP] No se pudo guardar inicio rápido en Supabase.", e));
-      return data;
-    } catch (e) {
-      console.warn("[WSP] No se pudo guardar inicio local rápido.", e);
-      return null;
-    }
-  }
-
-  function asegurarModuloControlSuperiorFallbackWsp() {
-    if (window.ControlSuperior && typeof window.ControlSuperior.buildMessage === "function") return;
-
-    const qs = (id) => document.getElementById(id);
-    const rolSeleccionado = () => {
-      if (qs("controlSuperiorJefe")?.checked) return "JEFE";
-      if (qs("controlSuperiorSubjefe")?.checked) return "SUBJEFE";
-      if (qs("controlSuperiorOtros")?.checked) return "OTROS";
-      return "";
-    };
-    const nombreRol = (rol) => {
-      if (rol === "JEFE") return "SubCrio Choque Jose Maria";
-      if (rol === "SUBJEFE") return "Inspector Tramontini Ismael";
-      return limpiarTextoSimple(qs("controlSuperiorOtrosTexto")?.value || "otros");
-    };
-
-    window.ControlSuperior = {
-      ...(window.ControlSuperior || {}),
-      isActive: () => getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO,
-      reset: () => {
-        ["controlSuperiorJefe", "controlSuperiorSubjefe", "controlSuperiorOtros", "controlSuperiorConMovil", "controlSuperiorSeAcopla"].forEach((id) => {
-          const el = qs(id);
-          if (el) el.checked = false;
-        });
-        const otros = qs("controlSuperiorOtrosTexto");
-        if (otros) otros.value = "";
-      },
-      buildMessage: (ctx = {}) => {
-        const rol = rolSeleccionado();
-        if (!rol) return { ok: false, mensaje: "Debe seleccionar JEFE, SUBJEFE u OTROS en CONTROL SUPERIOR." };
-        const otrosTexto = limpiarTextoSimple(qs("controlSuperiorOtrosTexto")?.value || "");
-        if (rol === "OTROS" && !otrosTexto) return { ok: false, mensaje: "Debe completar el nombre en OTROS para CONTROL SUPERIOR." };
-
-        const inicio = ctx.inicio || {};
-        const franja = ctx.franja || {};
-        const b = typeof ctx.bold === "function" ? ctx.bold : bold;
-        const compactar = typeof ctx.compactarSaltos === "function" ? ctx.compactarSaltos : compactarSaltos;
-        const lugar = normalizarLugar(inicio.lugar || inicio.lugar_inicio || franja.lugar || "");
-        const fecha = new Date().toLocaleDateString("es-AR");
-        const hora = `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
-        const personalTexto = normalizarArrayTexto(inicio.personal || inicio.personal_inicio).join("\n") || "/";
-        const moviles = lineaDesdeArray(normalizarArrayTexto(inicio.moviles || inicio.moviles_inicio), "/");
-        const motos = lineaDesdeArray(normalizarArrayTexto(inicio.motos || inicio.motos_inicio), "/");
-        const movilTexto = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-        const conMovil = !!qs("controlSuperiorConMovil")?.checked;
-        const seAcopla = !!qs("controlSuperiorSeAcopla")?.checked;
-        const nombre = nombreRol(rol);
-        const articulo = rol === "JEFE" ? "el Jefe" : (rol === "SUBJEFE" ? "el Subjefe" : "");
-        let observacion = "";
-        if (rol === "OTROS") {
-          observacion = conMovil
-            ? `Siendo la hora al margen se hace presente ${nombre}, en móvil ${movilTexto}.`
-            : `Siendo la hora al margen se hace presente ${nombre}.`;
-        } else {
-          const tramoMovil = conMovil ? `, en móvil ${movilTexto},` : ",";
-          observacion = `Siendo la hora al margen se hace presente${tramoMovil} ${articulo} de dependencia BMZCN ${nombre} controlando el servicio,${seAcopla ? " acoplandose al mismo." : " acto seguido se retira sin novedad."}`;
-        }
-
-        return { ok: true, texto: compactar([
-          b("POLICIA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
-          b("BRIGADA MOTORIZADA ZONA CENTRO NORTE"),
-          b("TERCIO CHARLIE"),
-          "",
-          `${b("MOTIVO:")} CONTROL SUPERIOR`,
-          "",
-          `${b("LUGAR:")} ${lugar || "/"}`,
-          "",
-          `${b("HORA:")} ${hora} hs`,
-          "",
-          `${b("FECHA:")} ${fecha}`,
-          "",
-          `${b("MOVIL:")} ${movilTexto}`,
-          "",
-          b("PERSONAL:"),
-          personalTexto,
-          "",
-          b("OBSERVACIÓNES:"),
-          observacion,
-        ].join("\n")) };
-      },
-    };
-  }
-
   // ===== ENVIAR A WHATSAPP =====
   async function enviar() {
     if (esControlMovilesActivo()) {
@@ -8411,7 +7606,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       return;
     }
 
-    if (!asegurarFranjaSeleccionadaParaEnviarWsp()) return;
+    if (!franjaSeleccionada) return;
 
     if (esInformeAlcoholemiaActivo()) {
       await enviarInformeAlcoholemia();
@@ -8424,14 +7619,17 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esControlSuperiorActivo()) {
-      asegurarModuloControlSuperiorFallbackWsp();
+      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+      if (!inicioControlSuperior) {
+        alert("No hay datos de inicio guardados para este operativo.");
+        return;
+      }
+
       if (!window.ControlSuperior || typeof window.ControlSuperior.buildMessage !== "function") {
         alert("No se pudo cargar el módulo de CONTROL SUPERIOR.");
         return;
       }
 
-      // Inicio rápido sin await para no perder el click que habilita WhatsApp.
-      const inicioControlSuperior = obtenerInicioRapidoParaEnvioWsp(franjaSeleccionada);
       const resultadoControlSuperior = window.ControlSuperior.buildMessage({
         forceActivo: true,
         inicio: inicioControlSuperior,
@@ -8448,16 +7646,14 @@ ${bold(`Moviles ${organismo}:`)}`)
         return;
       }
 
+      resetUI();
       abrirWhatsappYCerrarWspLuego(resultadoControlSuperior.texto);
-      setTimeout(() => resetUI(), 80);
       return;
     }
 
     const esFinaliza = selTipo.value === "FINALIZA";
-    // Regla actual: informes 460/22 y alcoholemia NO alimentan el FINALIZADO.
-    // Tampoco se consulta Supabase antes de abrir WhatsApp.
-    const agregadoInformesLeidosFinalizado = null;
-    const agregadoYaAplicadoEnCampos = false;
+    const agregadoInformesLeidosFinalizado = esFinaliza ? await cargarAgregadoInformesIntermediosWsp() : null;
+    const agregadoYaAplicadoEnCampos = esFinaliza && informesIntermediosYaEstanAplicadosEnCampos(agregadoInformesLeidosFinalizado);
     const agregadoInformesFinalizado = agregadoYaAplicadoEnCampos ? null : agregadoInformesLeidosFinalizado;
     const hayAgregadoInformesFinalizado = agregadoInformesTieneDatos(agregadoInformesFinalizado);
     const incluirResultadosFinaliza = esFinaliza && (debeIncluirResultadosFinaliza() || hayAgregadoInformesFinalizado);
@@ -8635,59 +7831,18 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
 
     if (selTipo.value === "INICIA") {
-      guardarInicioLocalRapidoDesdePayloadWsp(payloadHistorial);
+      await guardarElementosDeInicio();
     }
 
-    // Abrir WhatsApp antes de cualquier await. Esto es lo crítico.
+    await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
+
+    resetUI();
     abrirWhatsappYCerrarWspLuego(textoFinal);
-    setTimeout(() => resetUI(), 80);
-
-    Promise.resolve()
-      .then(() => guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial))
-      .catch((e) => console.warn("[WSP] Se envió por WhatsApp, pero no se pudo guardar historial operativo.", e));
-  }
-
-  function onFocusSelectorOperativosWsp() {
-    // Al enfocar el select NO se debe recargar si está en FINALIZA o INFORMES:
-    // una recarga async durante focus/pointerdown reemplaza las opciones, vuelve
-    // a deshabilitar el select y el desplegable no abre. La lista ya se carga al
-    // elegir FINALIZA o el informe concreto.
-    if (selTipo?.value === "FINALIZA") {
-      if (operativosCache.length > 0) {
-        setSelectorHorarioDisabledWsp(false);
-      } else {
-        cargarOperativosIniciadosParaFinaliza(selHorario?.value || "").then(() => {
-          if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
-        });
-      }
-      return;
-    }
-
-    if (estaEnMenuInformes()) {
-      if (getTipoInformeActivo() && operativosCache.length > 1) {
-        setSelectorHorarioDisabledWsp(false);
-      }
-      return;
-    }
-    syncAntesDeSeleccion();
-  }
-
-  function asegurarSelectorInformesAbiertoWsp() {
-    if (selTipo?.value === "FINALIZA") {
-      if (operativosCache.length > 0) setSelectorHorarioDisabledWsp(false);
-      return;
-    }
-    if ((esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) && operativosCache.length > 1) {
-      setSelectorHorarioDisabledWsp(false);
-    }
   }
 
   // ===== Eventos =====
   if (selHorario) {
-    selHorario.addEventListener("focus", onFocusSelectorOperativosWsp);
-    selHorario.addEventListener("pointerdown", asegurarSelectorInformesAbiertoWsp);
-    selHorario.addEventListener("mousedown", asegurarSelectorInformesAbiertoWsp);
-    selHorario.addEventListener("click", asegurarSelectorInformesAbiertoWsp);
+    selHorario.addEventListener("focus", syncAntesDeSeleccion);
     selHorario.addEventListener("change", actualizarDatosFranja);
   }
   selTipo.addEventListener("change", actualizarTipo);
