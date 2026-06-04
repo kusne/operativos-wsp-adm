@@ -7757,55 +7757,73 @@ ${bold(`Moviles ${organismo}:`)}`)
     const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
 
     let inicioCompartido = null;
-    if (usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
+
+    // Regla robusta BMZCN:
+    // FINALIZA siempre debe salir con el snapshot vigente del INICIO guardado en Supabase.
+    // No se debe obligar al usuario a volver a seleccionar personal, móvil ni elementos.
+    // Si no existe INICIO previo, se corta el envío.
+    if (esFinaliza || usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
       inicioCompartido = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
       if (!inicioCompartido) {
-        alert("No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA.");
+        alert(esFinaliza
+          ? "Debe iniciar el operativo antes de finalizarlo."
+          : "No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA."
+        );
         return;
       }
       inicioGuardadoActual = inicioCompartido;
     }
 
-    const personalTexto = usarMismoPersonal
+    const personalTexto = (esFinaliza || usarMismoPersonal)
       ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
       : seleccion("personal");
 
     if (!personalTexto) {
-      alert("Debe seleccionar personal policial.");
+      alert(esFinaliza
+        ? "El INICIO guardado no tiene personal policial. Actualice primero el INICIO del operativo en curso."
+        : "Debe seleccionar personal policial."
+      );
       return;
     }
 
-    const mov = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
-    const mot = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
+    const mov = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
+    const mot = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
     if (mov === "/" && mot === "/") {
-      alert("Debe seleccionar al menos un móvil o moto.");
+      alert(esFinaliza
+        ? "El INICIO guardado no tiene móvil ni moto. Actualice primero el INICIO del operativo en curso."
+        : "Debe seleccionar al menos un móvil o moto."
+      );
       return;
     }
 
-    const elementosInicio = usarMismosElementos ? normalizarPayloadElementos(inicioCompartido) : null;
-    if (usarMismosElementos && !elementosInicio) {
-      alert("No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA.");
+    const elementosInicio = (esFinaliza || usarMismosElementos) ? normalizarPayloadElementos(inicioCompartido) : null;
+    if ((esFinaliza || usarMismosElementos) && !elementosInicio) {
+      alert(esFinaliza
+        ? "El INICIO guardado no tiene elementos. Actualice primero el INICIO del operativo en curso."
+        : "No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA."
+      );
       return;
     }
 
     const fecha = new Date().toLocaleDateString("es-AR");
 
-    const escopetasTXT = usarMismosElementos
+    const usarElementosDesdeInicio = esFinaliza || usarMismosElementos;
+    const escopetasTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
       : seleccionLinea("ESCOPETA", "/");
-    const htTXT = usarMismosElementos
+    const htTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.HT, "/")
       : seleccionLinea("HT", "/");
-    const pdaTXT = usarMismosElementos
+    const pdaTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.PDA, "/")
       : seleccionLinea("PDA", "/");
-    const impTXT = usarMismosElementos
+    const impTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.IMPRESORA, "/")
       : seleccionLinea("IMPRESORA", "/");
-    const alomTXT = usarMismosElementos
+    const alomTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.Alometro, "/")
       : seleccionLinea("Alometro", "/");
-    const alcoTXT = usarMismosElementos
+    const alcoTXT = usarElementosDesdeInicio
       ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
       : seleccionLinea("Alcoholimetro", "/");
 
