@@ -94,7 +94,8 @@
         titulo: nf.clean(input.titulo),
         actualizado_desde_repo: true
       },
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      deleted_at: null
     };
   }
 
@@ -172,29 +173,96 @@
     return Array.isArray(rows) ? rows[0] : rows;
   }
 
+  function validationError(code, message) {
+    const err = new Error(message);
+    err.code = code;
+    err.esValidacionOperativa = true;
+    return err;
+  }
+
+  async function leerEstadoPorKey(operativoKey, guardiaFecha = '') {
+    const { db, nf } = deps();
+    const key = nf.clean(operativoKey);
+    if (!key) return null;
+    const gf = nf.fechaIso(guardiaFecha);
+    const params = {
+      select: '*',
+      operativo_key: `eq.${key}`,
+      order: 'updated_at.desc',
+      limit: '1'
+    };
+    if (gf) params.guardia_fecha = `eq.${gf}`;
+    const rows = await db.select(TABLE_ESTADO, params);
+    return Array.isArray(rows) ? rows[0] || null : rows || null;
+  }
+
+  async function leerEstadoPorId(id) {
+    const { db, nf } = deps();
+    const cleanId = nf.clean(id);
+    if (!cleanId) return null;
+    const rows = await db.select(TABLE_ESTADO, {
+      select: '*',
+      id: `eq.${cleanId}`,
+      limit: '1'
+    });
+    return Array.isArray(rows) ? rows[0] || null : rows || null;
+  }
+
   async function guardarInicio(input = {}) {
+    const base = buildEstadoPayload(input, 'EN_CURSO');
+    const existente = await leerEstadoPorKey(base.operativo_key, base.guardia_fecha);
+    const estadoRealExistente = existente ? estadoOperativoReal(existente) : '';
+
+    // Regla BMZCN:
+    // - INICIO nuevo: permitido.
+    // - INICIO existente EN_CURSO: permitido como actualización del inicio vigente.
+    // - INICIO ya FINALIZADO: prohibido. Para modificar el finalizado, actualizar FINALIZADO.
+    if (existente && estadoRealExistente === 'FINALIZADO') {
+      throw validationError(
+        'VALIDACION_INICIO_YA_FINALIZADO',
+        'No se puede actualizar el INICIO porque el operativo ya está FINALIZADO. Para modificarlo, actualice el FINALIZADO.'
+      );
+    }
+
     const estado = await upsertEstado(input, 'EN_CURSO');
     const evento = await upsertEvento(estado, 'INICIO', input);
-
-    // El INICIO puede actualizarse aun cuando ya exista un FINALIZADO válido.
-    // En ese caso se actualiza el snapshot del inicio, pero NO se borra el finalizado
-    // ni se vuelve el operativo a EN_CURSO. Borrar FINALIZADO desde Estadísticas sí
-    // dejará finalizado_evento_id en null y entonces el mismo INICIO queda EN_CURSO.
-    const finalizadoVigente = estado.finalizado_evento_id || null;
     const estadoActualizado = await patchEstado(estado.id, {
-      estado: finalizadoVigente ? 'FINALIZADO' : 'EN_CURSO',
+      estado: 'EN_CURSO',
       inicio_evento_id: evento.id,
-      finalizado_evento_id: finalizadoVigente
+      finalizado_evento_id: null,
+      deleted_at: null
     });
     return { estado: estadoActualizado || estado, evento };
   }
 
   async function guardarFinalizado(input = {}) {
-    const estado = await upsertEstado(input, 'FINALIZADO');
+    const base = buildEstadoPayload(input, 'FINALIZADO');
+    const estado = await leerEstadoPorKey(base.operativo_key, base.guardia_fecha);
+
+    if (!estado || !estado.inicio_evento_id || estadoOperativoReal(estado) === 'BORRADO') {
+      throw validationError(
+        'VALIDACION_FINALIZADO_SIN_INICIO',
+        'Debe iniciar el operativo antes de finalizarlo.'
+      );
+    }
+
+    const estadoReal = estadoOperativoReal(estado);
+    if (estadoReal !== 'EN_CURSO' && estadoReal !== 'FINALIZADO') {
+      throw validationError(
+        'VALIDACION_FINALIZADO_ESTADO_INVALIDO',
+        'Debe iniciar el operativo antes de finalizarlo.'
+      );
+    }
+
+    // Regla BMZCN:
+    // - FINALIZADO de EN_CURSO: permitido, cierra el operativo.
+    // - FINALIZADO de FINALIZADO: permitido como actualización del último finalizado válido.
+    // - FINALIZADO sin INICIO: prohibido.
     const evento = await upsertEvento(estado, 'FINALIZADO', input);
     const estadoActualizado = await patchEstado(estado.id, {
       estado: 'FINALIZADO',
-      finalizado_evento_id: evento.id
+      finalizado_evento_id: evento.id,
+      deleted_at: null
     });
     return { estado: estadoActualizado || estado, evento };
   }
@@ -211,9 +279,19 @@
   async function guardarInforme(tipoEvento, input = {}) {
     const { nf } = deps();
     const key = nf.clean(input.informe_key) || informeKey(tipoEvento, input);
-    const estado = input.operativo_estado_id
-      ? { id: input.operativo_estado_id, operativo_key: input.operativo_key, guardia_fecha: input.guardia_fecha }
-      : await upsertEstado(input, 'EN_CURSO');
+    let estado = input.operativo_estado_id ? await leerEstadoPorId(input.operativo_estado_id) : null;
+
+    if (!estado) {
+      const base = buildEstadoPayload(input, 'EN_CURSO');
+      estado = await leerEstadoPorKey(base.operativo_key, base.guardia_fecha);
+    }
+
+    if (!estado?.id || !estado.inicio_evento_id || !esEnCursoReal(estado)) {
+      throw validationError(
+        'VALIDACION_INFORME_SIN_OPERATIVO_EN_CURSO',
+        'Debe iniciar el operativo antes de cargar informes.'
+      );
+    }
 
     const evento = await upsertEvento(estado, tipoEvento, {
       ...input,
@@ -349,6 +427,9 @@
     upsertEstado,
     upsertEvento,
     patchEstado,
+    validationError,
+    leerEstadoPorKey,
+    leerEstadoPorId,
     guardarInicio,
     guardarFinalizado,
     guardarInforme,
