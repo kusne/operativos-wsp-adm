@@ -795,6 +795,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function limpiarSeleccionOperativo() {
     ordenSeleccionada = null;
     franjaSeleccionada = null;
+
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.limpiarSeleccionOperativo === "function") {
+      return ui.limpiarSeleccionOperativo({
+        selHorario,
+        actualizarContadorOperativosWsp,
+      });
+    }
+
     if (selHorario) {
       selHorario.value = "";
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
@@ -1370,7 +1379,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     };
   }
 
+  function selectorOperativoUiWsp() {
+    return window.WSP?.modules?.selectorOperativoUi || window.WSP?.ui?.selectorOperativo || null;
+  }
+
   function setTituloOperativosIniciados(modoIniciados) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.setTituloOperativosIniciados === "function") {
+      return ui.setTituloOperativosIniciados(modoIniciados);
+    }
     try {
       const label = document.querySelector(".operativos-title-label");
       if (label) label.textContent = modoIniciados ? "OPERATIVOS INICIADOS" : "OPERATIVOS";
@@ -1398,10 +1415,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     candidatos.forEach((operativo) => {
       operativosCache.push(operativo);
-      const option = document.createElement("option");
-      option.value = operativo.__key;
-      option.text = construirTextoOpcionHorario(operativo);
-      option.title = construirTextoOpcionHorario(operativo);
+      const ui = selectorOperativoUiWsp();
+      const option = ui && typeof ui.crearOpcionHorario === "function"
+        ? ui.crearOpcionHorario(operativo)
+        : (() => {
+          const opt = document.createElement("option");
+          opt.value = operativo.__key;
+          opt.text = construirTextoOpcionHorario(operativo);
+          opt.title = construirTextoOpcionHorario(operativo);
+          return opt;
+        })();
       selHorario.appendChild(option);
     });
 
@@ -1423,6 +1446,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirOperativoPlano(franja, orden, idxOrden, idxFranja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.construirOperativoPlano === "function") {
+      return ui.construirOperativoPlano(franja, orden, idxOrden, idxFranja);
+    }
     return {
       ...franja,
       __key: `${idxOrden}-${idxFranja}`,
@@ -1744,10 +1771,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
         operativosCache.push(operativo);
 
         if (!selHorario) return;
-        const option = document.createElement("option");
-        option.value = operativo.__key;
-        option.text = construirTextoOpcionHorario(operativo);
-        option.title = construirTextoOpcionHorario(operativo);
+        const ui = selectorOperativoUiWsp();
+        const option = ui && typeof ui.crearOpcionHorario === "function"
+          ? ui.crearOpcionHorario(operativo)
+          : (() => {
+            const opt = document.createElement("option");
+            opt.value = operativo.__key;
+            opt.text = construirTextoOpcionHorario(operativo);
+            opt.title = construirTextoOpcionHorario(operativo);
+            return opt;
+          })();
         selHorario.appendChild(option);
       });
     });
@@ -1774,14 +1807,21 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerTextoRefOrdenDeFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerTextoRefOrdenDeFranja === "function") return ui.obtenerTextoRefOrdenDeFranja(franja);
     return limpiarTextoSimple(franja?.__ordenTextoRef || "");
   }
 
   function obtenerNumeroOrdenDeFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerNumeroOrdenDeFranja === "function") return ui.obtenerNumeroOrdenDeFranja(franja);
     return limpiarTextoSimple(franja?.__ordenNum || "");
   }
 
   function detectarTiposCombinadosVisualesWsp(fuente = "") {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.detectarTiposCombinadosVisualesWsp === "function") return ui.detectarTiposCombinadosVisualesWsp(fuente);
+
     const t = normalizarBasicoSinAcentos(fuente);
     const tipos = [];
 
@@ -1796,10 +1836,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     const tieneBalanza = /\bcontrol\s+de\s+peso\b|\bpeso\b|\bbalanza\b|\bbascula\b|\bbasculas\b|\bpesaje\b/.test(t);
     const tieneOrdenamiento = /\bordenamiento\b/.test(t);
 
-    /*
-      Mantiene el texto visual de fusiones sin tocar lugar, horario ni formato del selector.
-      Ejemplo: "OCV Y ALCOHOLEMIA" debe verse como "OCV y Alcoholemia", no solo "Alcoholemia".
-    */
     if (tieneOCV) add("OCV");
     if (tieneAlcoholemia) add("Alcoholemia");
     if (tieneDICEP) add("DICEP");
@@ -1811,6 +1847,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerTipoCortoFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerTipoCortoFranja === "function") return ui.obtenerTipoCortoFranja(franja);
+
     const fuente = normalizarBasicoSinAcentos(
       [franja?.titulo || "", obtenerTextoRefOrdenDeFranja(franja)].join(" ")
     );
@@ -1837,6 +1876,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerLugarCortoFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerLugarCortoFranja === "function") return ui.obtenerLugarCortoFranja(franja);
+
     let lugar = limpiarTextoSimple(franja?.lugar || "");
     if (!lugar) return "sin lugar";
 
@@ -1856,6 +1898,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // Texto corto SOLO para mostrar en el desplegable de operativos.
   // No modifica la franja original, ni las claves internas, ni lo que se envía por WhatsApp/Supabase.
   function obtenerFuenteVisualFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerFuenteVisualFranja === "function") return ui.obtenerFuenteVisualFranja.apply(null, arguments);
+
     /*
       Fuente visual del selector. No modifica la franja ni el informe:
       solo junta todos los campos posibles donde puede venir el tipo real.
@@ -1920,10 +1965,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function compactarClaveVisual(txt) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.compactarClaveVisual === "function") return ui.compactarClaveVisual.apply(null, arguments);
+
     return normalizarBasicoSinAcentos(txt).replace(/[^a-z0-9]+/g, "");
   }
 
   function capitalizarLugarVisual(txt) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.capitalizarLugarVisual === "function") return ui.capitalizarLugarVisual.apply(null, arguments);
+
     return limpiarTextoSimple(txt)
       .toLowerCase()
       .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -1935,6 +1986,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerLugarVisualFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerLugarVisualFranja === "function") return ui.obtenerLugarVisualFranja.apply(null, arguments);
+
     let lugar = limpiarTextoSimple(franja?.lugar || "");
     if (!lugar) return "sin lugar";
 
@@ -2011,6 +2065,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerTipoVisualFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerTipoVisualFranja === "function") return ui.obtenerTipoVisualFranja.apply(null, arguments);
+
     const fuente = obtenerFuenteVisualFranja(franja);
     const clave = compactarClaveVisual(fuente);
 
@@ -2053,6 +2110,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function obtenerSufijosVisualesFranja(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.obtenerSufijosVisualesFranja === "function") return ui.obtenerSufijosVisualesFranja.apply(null, arguments);
+
     const fuente = obtenerFuenteVisualFranja(franja);
     const clave = compactarClaveVisual(fuente);
     const sufijos = [];
@@ -2076,6 +2136,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirTextoOpcionHorario(franja) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.construirTextoOpcionHorario === "function") return ui.construirTextoOpcionHorario.apply(null, arguments);
+
     const horario = limpiarTextoSimple(franja?.horario || "");
     const lugar = obtenerLugarVisualFranja(franja);
     const tipo = obtenerTipoVisualFranja(franja);
