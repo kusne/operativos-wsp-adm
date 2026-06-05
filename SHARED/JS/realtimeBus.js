@@ -7,6 +7,9 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.Versiones = root.Versiones || {};
+  root.Versiones.realtimeBus = 'PASO15_REALTIME_BUS_20260604_2355';
+
 
   let client = null;
   const channels = new Map();      // key -> channel
