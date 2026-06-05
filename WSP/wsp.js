@@ -6130,41 +6130,12 @@ ${bold(`Moviles ${organismo}:`)}`)
       return resultadoInformeSinSupabaseWsp(data, String(e?.message || e || "error"));
     }
 
-    // Respaldo directo REST si OperativosRepo no está cargado. No usa localStorage.
-    const dataSupabase = payloadInformeEventoParaSupabaseWsp(data);
-    try {
-      const url = `${SUPABASE_URL}/rest/v1/operativos_eventos?on_conflict=informe_key`;
-      const r = await fetch(url, {
-        method: "POST",
-        headers: headersSupabase({
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Prefer: "resolution=merge-duplicates,return=representation",
-        }),
-        body: JSON.stringify(dataSupabase),
-      });
-
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("[WSP] No se pudo guardar/upsert informe:", r.status, txt);
-        alert("No se pudo guardar el informe en Supabase. Se enviará igual por WhatsApp; las fotos no quedarán archivadas hasta corregir Supabase.");
-        return resultadoInformeSinSupabaseWsp(data, `HTTP ${r.status} ${txt}`);
-      }
-
-      const rows = await r.json().catch(() => []);
-      const evento = Array.isArray(rows) ? rows[0] : rows;
-      if (!evento?.id) {
-        console.warn("[WSP] Supabase guardó/respondió sin ID de evento para el informe.", rows);
-        alert("Supabase no devolvió el ID del informe. Se enviará igual por WhatsApp; las fotos no quedarán archivadas.");
-        return resultadoInformeSinSupabaseWsp(data, "sin_id_evento");
-      }
-
-      return { evento, estado: null, informe_key: data.informe_key, supabase_ok: true };
-    } catch (e) {
-      console.error("[WSP] Error guardando/upsert informe.", e);
-      alert("Error guardando el informe en Supabase. Se enviará igual por WhatsApp; revise conexión/RLS/bucket para archivar fotos.");
-      return resultadoInformeSinSupabaseWsp(data, String(e?.message || e || "error"));
-    }
+    // Respaldo sin REST si OperativosRepo no está cargado.
+    // No se usa on_conflict ni guardados directos duplicados. El guardado canónico de informes
+    // debe pasar por BMZCN.OperativosRepo para mantener una sola fuente de verdad.
+    console.error("[WSP] OperativosRepo no disponible para guardar informe. No se usa fallback REST.");
+    alert("No se pudo guardar el informe en Supabase porque OperativosRepo no está disponible. Se enviará igual por WhatsApp; las fotos no quedarán archivadas.");
+    return resultadoInformeSinSupabaseWsp(data, "OperativosRepo no disponible");
   }
 
   async function eliminarFotosPreviasInformeWsp(resultadoHistorial) {
