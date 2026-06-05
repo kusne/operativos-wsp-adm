@@ -7,6 +7,10 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.__OPERATIVOS_REPO_VERSION__ = 'PASO15_SHARED_UNICO_MANUAL_UPSERT_20260604_2355';
+  root.Versiones = root.Versiones || {};
+  root.Versiones.operativosRepo = root.__OPERATIVOS_REPO_VERSION__;
+  console.log('[BMZCN OperativosRepo]', root.__OPERATIVOS_REPO_VERSION__, 'cargado: sin on_conflict=evento_key');
 
   const TABLE_ESTADO = 'operativos_estado';
   const TABLE_EVENTOS = 'operativos_eventos';
