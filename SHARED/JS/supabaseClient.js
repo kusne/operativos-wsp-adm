@@ -7,6 +7,9 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.Versiones = root.Versiones || {};
+  root.Versiones.supabaseClient = 'PASO15_SUPABASE_CLIENT_20260604_2355';
+
 
   const CONFIG = Object.freeze({
     SUPABASE_URL: 'https://ugeydxozfewzhldjbkat.supabase.co',
