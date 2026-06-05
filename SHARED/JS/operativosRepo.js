@@ -7,7 +7,7 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
-  root.__OPERATIVOS_REPO_VERSION__ = 'PASO16_SNAPSHOT_ESTADO_EVENTO_COMPLETO_20260605_0015';
+  root.__OPERATIVOS_REPO_VERSION__ = 'PASO16_1_FIX_NF_GUARDAR_INICIO_FINALIZADO_20260605_0045';
   root.Versiones = root.Versiones || {};
   root.Versiones.operativosRepo = root.__OPERATIVOS_REPO_VERSION__;
   console.log('[BMZCN OperativosRepo]', root.__OPERATIVOS_REPO_VERSION__, 'cargado: sin on_conflict=evento_key');
@@ -318,6 +318,7 @@
   }
 
   async function guardarInicio(input = {}) {
+    const { nf } = deps();
     const base = buildEstadoPayload(input, 'EN_CURSO');
     const existente = await leerEstadoPorKey(base.operativo_key, base.guardia_fecha);
     const estadoRealExistente = existente ? estadoOperativoReal(existente) : '';
@@ -350,6 +351,7 @@
   }
 
   async function guardarFinalizado(input = {}) {
+    const { nf } = deps();
     const base = buildEstadoPayload(input, 'FINALIZADO');
     const estado = await leerEstadoPorKey(base.operativo_key, base.guardia_fecha);
 
