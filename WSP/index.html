@@ -630,19 +630,83 @@ o se realizó (01) Procedimiento Policial"></textarea>
 
   </div>
 
-  <!-- SHARED NUEVO - fuente de verdad Supabase / sin localStorage operativo -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="../SHARED/JS/supabaseClient.js?v=paso7-sin-on-conflict-20260604" defer></script>
-  <script src="../SHARED/JS/normalizadores.js?v=paso7-sin-on-conflict-20260604" defer></script>
-  <script src="../SHARED/JS/guardia.js?v=paso7-sin-on-conflict-20260604" defer></script>
-  <script src="../SHARED/JS/operativosRepo.js?v=paso7-sin-on-conflict-20260604" defer></script>
-  <script src="../SHARED/JS/nomencladorRepo.js?v=paso7-sin-on-conflict-20260604" defer></script>
-  <script src="../SHARED/JS/realtimeBus.js?v=paso7-sin-on-conflict-20260604" defer></script>
+  <!-- CARGA ROBUSTA WSP - fuente única Supabase / sin on_conflict=evento_key -->
+  <script>
+    (function () {
+      const VERSION = 'paso15-wsp-shared-unico-manual-upsert-20260604-2355';
+      const SHARED_FILES = [
+        'supabaseClient.js',
+        'normalizadores.js',
+        'guardia.js',
+        'operativosRepo.js',
+        'nomencladorRepo.js',
+        'realtimeBus.js'
+      ];
+      const SHARED_BASES = [
+        '../SHARED/JS',
+        '../shared/js',
+        './SHARED/JS',
+        './shared/js',
+        '/operativos-wsp-adm/SHARED/JS',
+        '/operativos-wsp-adm/shared/js'
+      ];
 
-  <!-- WSP -->
-  <script src="./nomenclador.js" defer></script>
-  <script src="./controlsuperior.js" defer></script>
-  <script src="./wsp.js?v=paso11-finaliza-usa-inicio-20260604" defer></script>
+      function withVersion(src) {
+        return src + (src.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(VERSION);
+      }
+
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = withVersion(src);
+          s.async = false;
+          s.onload = () => resolve(src);
+          s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+          document.head.appendChild(s);
+        });
+      }
+
+      async function urlExists(src) {
+        try {
+          const resp = await fetch(withVersion(src), { method: 'GET', cache: 'no-store' });
+          return resp.ok;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      async function findSharedBase() {
+        for (const base of SHARED_BASES) {
+          if (await urlExists(base + '/supabaseClient.js')) return base;
+        }
+        throw new Error('No se encontró supabaseClient.js. Subí SHARED/JS completo al GitHub y app/shared/js completo en Electron.');
+      }
+
+      async function main() {
+        console.log('[WSP] PASO15 bootstrap iniciado', VERSION);
+        await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+        const base = await findSharedBase();
+        console.log('[WSP] SHARED cargando desde:', base);
+        for (const file of SHARED_FILES) await loadScript(base + '/' + file);
+        if (!window.BMZCN || !window.BMZCN.OperativosRepo) {
+          throw new Error('BMZCN.OperativosRepo no quedó disponible después de cargar SHARED.');
+        }
+        const repoVersion = window.BMZCN.__OPERATIVOS_REPO_VERSION__ || 'sin-version';
+        console.log('[WSP] OperativosRepo:', repoVersion);
+        if (!String(repoVersion).includes('PASO15')) {
+          throw new Error('OperativosRepo incorrecto/viejo cargado: ' + repoVersion + '. Reemplazar TODAS las copias de shared/js.');
+        }
+        await loadScript('./nomenclador.js');
+        await loadScript('./controlsuperior.js');
+        await loadScript('./wsp.js');
+      }
+
+      main().catch((error) => {
+        console.error('[WSP] Error de arranque PASO13', error);
+        alert('No se pudo iniciar WSP con fuente de verdad Supabase. Detalle: ' + (error && error.message ? error.message : error));
+      });
+    })();
+  </script>
 </body>
 </html>
 
