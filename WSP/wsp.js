@@ -5298,6 +5298,42 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   // ===== INFORMES INTERMEDIOS: ALCOHOLEMIA POSITIVA =====
+
+  function refsInformeAlcoholemiaWsp() {
+    return {
+      bloqueInformeAlcoholemia,
+      informeAlcoholemiaContexto,
+      infAlco460,
+      infAlcoTipoVehiculo,
+      wrapInfAlcoTipoOtro,
+      infAlcoTipoOtro,
+      infAlcoMarca,
+      infAlcoModelo,
+      infAlcoDominio,
+      infAlcoConductor,
+      infAlcoGraduacion,
+      infAlcoActa,
+      infAlcoLicenciaClase,
+      infAlcoLicenciaDigital,
+      infAlcoOtrosCodigos,
+      infAlcoMedProhibicion,
+      infAlcoMedCesion,
+      infAlcoMedRemision,
+      infAlcoMedRetencion,
+      infAlcoDependenciaRemite,
+      infAlcoCorralon,
+      infAlcoInventario,
+      bloqueAlcoRemisionDestino,
+      infAlcoObservacionExtra,
+      infAlcoResultadoAuto,
+      infAlcoFotos,
+    };
+  }
+
+  function moduloInformeAlcoholemiaWsp() {
+    return window.WSP?.modules?.alcoholemia || null;
+  }
+
   function esInformeAlcoholemiaActivo() {
     return getTipoInformeActivo() === INFORME_ALCOHOLEMIA_TIPO;
   }
@@ -5307,6 +5343,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function esInformeAlcoholemia460Seleccionado() {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.es460Seleccionado === "function") {
+      return mod.es460Seleccionado(refsInformeAlcoholemiaWsp());
+    }
     return !!infAlco460?.checked;
   }
 
@@ -5340,6 +5380,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function infoLicenciaInformeAlcoholemia() {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.infoLicencia === "function") {
+      return mod.infoLicencia(refsInformeAlcoholemiaWsp());
+    }
     const valor = normalizarLicenciaInforme(infAlcoLicenciaClase?.value || "");
     const digital = !!infAlcoLicenciaDigital?.checked;
     const esDniSinLicencia = /^\d{7,8}$/.test(valor);
@@ -5363,43 +5407,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function sincronizarCodigosAutomaticosAlcoholemia(calc = null) {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.sincronizarCodigosAutomaticos === "function") {
+      return mod.sincronizarCodigosAutomaticos(refsInformeAlcoholemiaWsp(), calc);
+    }
     if (!infAlcoOtrosCodigos) return;
-
-    const info = infoLicenciaInformeAlcoholemia();
-    let codigos = parseCodigosInputInforme(infAlcoOtrosCodigos.value);
-
-    const autoAlcoAnterior = infAlcoOtrosCodigos.dataset.codigoAlcoAuto || "";
-    const autoLicAnterior = infAlcoOtrosCodigos.dataset.codigoLicenciaAuto || "";
-    const codigoAlco = calc?.codigo ? String(calc.codigo).replace(/\D+/g, "") : "";
-    const codigoLicencia = info.codigoSinLicencia ? String(info.codigoSinLicencia).replace(/\D+/g, "") : "";
-
-    // Si cambia tipo de vehículo/graduación, retirar solo el código de alcoholemia
-    // que había sido agregado automáticamente por el sistema.
-    if (autoAlcoAnterior && autoAlcoAnterior !== codigoAlco) {
-      codigos = codigos.filter((codigo) => codigo !== autoAlcoAnterior);
-      delete infAlcoOtrosCodigos.dataset.codigoAlcoAuto;
-    }
-
-    // El tipo de vehículo + graduación define automáticamente el código de
-    // alcoholemia: moto=2020, profesional=2033, resto=2016.
-    if (codigoAlco) {
-      if (!codigos.includes(codigoAlco)) codigos.unshift(codigoAlco);
-      infAlcoOtrosCodigos.dataset.codigoAlcoAuto = codigoAlco;
-    }
-
-    // Si en Licencia se cargó DNI de 7/8 dígitos, significa que no posee
-    // licencia física ni digital: se agrega automáticamente 9119.
-    if (autoLicAnterior && autoLicAnterior !== codigoLicencia) {
-      codigos = codigos.filter((codigo) => codigo !== autoLicAnterior);
-      delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
-    }
-
-    if (codigoLicencia) {
-      if (!codigos.includes(codigoLicencia)) codigos.push(codigoLicencia);
-      infAlcoOtrosCodigos.dataset.codigoLicenciaAuto = codigoLicencia;
-    }
-
-    infAlcoOtrosCodigos.value = codigos.filter((codigo, idx, arr) => arr.indexOf(codigo) === idx).join("/");
   }
 
   function graduacionNumeroInforme(value) {
@@ -5416,6 +5428,8 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function grupoVehiculoAlcoholemia(value) {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.grupoVehiculo === "function") return mod.grupoVehiculo(value);
     const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
     if (/\bmoto\b|motovehiculo|motovehiculo/.test(v)) return "moto";
     if (/\bcamion\b|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
@@ -5430,6 +5444,8 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function calcularAlcoholemiaInforme(tipoVehiculo, graduacion) {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.calcular === "function") return mod.calcular(tipoVehiculo, graduacion);
     const n = graduacionNumeroInforme(graduacion);
     if (n == null || n <= 0) return null;
     const grupo = grupoVehiculoAlcoholemia(tipoVehiculo);
@@ -5459,65 +5475,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function actualizarReglasInformeAlcoholemia() {
-    // Alcoholemia y 460/22 es una casilla dentro del informe Alcoholemia, no una plantilla aparte.
-    if (infAlco460?.checked && infAlcoTipoVehiculo && infAlcoTipoVehiculo.value !== "moto") {
-      infAlcoTipoVehiculo.value = "moto";
-    }
-
-    if (wrapInfAlcoTipoOtro && infAlcoTipoVehiculo) {
-      const esOtro = infAlcoTipoVehiculo.value === "otros";
-      wrapInfAlcoTipoOtro.classList.toggle("hidden", !esOtro);
-      if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.toggle("alco-tipo-otros", esOtro);
-    }
-
-    if (infAlcoActa) infAlcoActa.value = normalizarNumeroActaInforme(infAlcoActa.value);
-    if (infAlcoLicenciaClase) infAlcoLicenciaClase.value = normalizarLicenciaInforme(infAlcoLicenciaClase.value);
-
-    // Licencia: si se informa clase y NO está tildada Digital, se presume física y corresponde retención.
-    // Si se informa DNI de 7/8 dígitos, no posee licencia física/digital: no hay retención y se agrega 9119.
-    const infoLicencia = infoLicenciaInformeAlcoholemia();
-    if (infoLicencia.esDniSinLicencia && infAlcoLicenciaDigital) infAlcoLicenciaDigital.checked = false;
-    if (infAlcoMedRetencion) {
-      if (infoLicencia.digital) {
-        infAlcoMedRetencion.checked = false;
-        infAlcoMedRetencion.disabled = true;
-      } else if (infoLicencia.retencionAutomatica) {
-        infAlcoMedRetencion.checked = true;
-        infAlcoMedRetencion.disabled = true;
-      } else if (infoLicencia.esDniSinLicencia) {
-        infAlcoMedRetencion.checked = false;
-        infAlcoMedRetencion.disabled = true;
-      } else {
-        infAlcoMedRetencion.disabled = false;
-      }
-    }
-
-    if (infAlco460?.checked && infAlcoMedRemision) {
-      infAlcoMedRemision.checked = true;
-      infAlcoMedRemision.disabled = true;
-    } else if (infAlcoMedRemision) {
-      infAlcoMedRemision.disabled = false;
-    }
-
-    const mostrarDestino = !!(infAlco460?.checked || infAlcoMedRemision?.checked);
-    if (bloqueAlcoRemisionDestino) bloqueAlcoRemisionDestino.classList.toggle("hidden", !mostrarDestino);
-    if (mostrarDestino) completarDestinoRemisionSiVacio();
-
-    const tipo = labelTipoVehiculoInforme();
-    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value || "");
-    const calc = calcularAlcoholemiaInforme(tipo, grad);
-    sincronizarCodigosAutomaticosAlcoholemia(calc);
-    if (infAlcoResultadoAuto) {
-      if (!calc) {
-        infAlcoResultadoAuto.textContent = "Complete tipo de vehículo y graduación mayor a cero.";
-      } else {
-        const tag460 = infAlco460?.checked ? "  >460/22" : "";
-        infAlcoResultadoAuto.textContent = `${calc.sancionable ? "POSITIVA SANCIONABLE" : "POSITIVA NO SANCIONABLE"} - CÓDIGO ${calc.codigo}${tag460} - ${grad} G/L`;
-      }
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.actualizarReglas === "function") {
+      return mod.actualizarReglas(refsInformeAlcoholemiaWsp(), {
+        completarDestinoRemisionSiVacio,
+        labelTipoVehiculoInforme,
+      });
     }
   }
 
   function aplicarMayusculasInputsInformeAlcoholemia() {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.aplicarMayusculasInputs === "function") {
+      return mod.aplicarMayusculasInputs(refsInformeAlcoholemiaWsp());
+    }
     document.querySelectorAll("#bloqueInformeAlcoholemia .upper-input").forEach((el) => {
       const pos = el.selectionStart;
       const end = el.selectionEnd;
@@ -5527,15 +5498,14 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function limpiarInformeAlcoholemia() {
-    const campos = [infAlcoTipoVehiculo, infAlcoTipoOtro, infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoGraduacion, infAlcoActa, infAlcoLicenciaClase, infAlcoOtrosCodigos, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra];
-    campos.forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
-    if (infAlcoOtrosCodigos) {
-      delete infAlcoOtrosCodigos.dataset.codigoLicenciaAuto;
-      delete infAlcoOtrosCodigos.dataset.codigoAlcoAuto;
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.limpiar === "function") {
+      return mod.limpiar(refsInformeAlcoholemiaWsp(), {
+        limpiarErrorCampo,
+        completarDestinoRemisionSiVacio,
+        labelTipoVehiculoInforme,
+      });
     }
-    [infAlco460, infAlcoLicenciaDigital, infAlcoMedProhibicion, infAlcoMedCesion, infAlcoMedRemision, infAlcoMedRetencion, infAlcoInventario].forEach((el) => { if (el) { el.checked = false; el.disabled = false; } });
-    infAlcoFotos.forEach((el) => { if (el) el.value = ""; });
-    actualizarReglasInformeAlcoholemia();
   }
 
   function esFranjaPatrullajeInformeAlcoholemia(franja) {
@@ -5665,6 +5635,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function codigosInformeAlcoholemia(codigoPrincipal) {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.codigos === "function") {
+      return mod.codigos(refsInformeAlcoholemiaWsp(), codigoPrincipal);
+    }
     const codigos = [codigoPrincipal];
     parseCodigosInputInforme(infAlcoOtrosCodigos?.value || "")
       .forEach((codigo) => { if (!codigos.includes(codigo)) codigos.push(codigo); });
@@ -5682,6 +5656,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function medidasSeleccionadasInformeAlcoholemia() {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.medidas === "function") {
+      return mod.medidas(refsInformeAlcoholemiaWsp());
+    }
     const lic = infoLicenciaInformeAlcoholemia();
     return {
       prohibicion: !!infAlcoMedProhibicion?.checked,
@@ -5701,34 +5679,25 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function fotosSeleccionadasInformeAlcoholemia() {
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.fotos === "function") {
+      return mod.fotos(refsInformeAlcoholemiaWsp());
+    }
     return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
   }
 
   function validarInformeAlcoholemia() {
-    if (!franjaSeleccionada) return marcarErrorCampo(selHorario, "Debe seleccionar un operativo.");
-    const tipo = labelTipoVehiculoInforme();
-    if (!infAlcoTipoVehiculo?.value) return marcarErrorCampo(infAlcoTipoVehiculo, "Debe seleccionar tipo de vehículo.");
-    if (infAlcoTipoVehiculo.value === "otros" && !normalizarMayusInforme(infAlcoTipoOtro?.value)) return marcarErrorCampo(infAlcoTipoOtro, "Debe escribir el tipo de vehículo.");
-    if (!normalizarMayusInforme(infAlcoMarca?.value)) return marcarErrorCampo(infAlcoMarca, "Debe completar marca.");
-    if (!normalizarDominioInforme(infAlcoDominio?.value)) return marcarErrorCampo(infAlcoDominio, "Debe completar dominio.");
-    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
-    const calc = calcularAlcoholemiaInforme(tipo, grad);
-    if (!/^\d+(?:\.\d+)?$/.test(grad) || !calc) return marcarErrorCampo(infAlcoGraduacion, "Graduación inválida. Use 0.51 o 0,51 y debe ser mayor a cero.");
-    if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Debe completar N° de acta. Solo números.");
-    const lic = infoLicenciaInformeAlcoholemia();
-    if (lic.valor && !lic.esClaseLicencia && !lic.esDniSinLicencia) {
-      return marcarErrorCampo(infAlcoLicenciaClase, "Licencia: ingrese clase de 2 a 5 caracteres o DNI de 7/8 dígitos si no posee licencia.");
+    const mod = moduloInformeAlcoholemiaWsp();
+    if (mod && typeof mod.validar === "function") {
+      return mod.validar(refsInformeAlcoholemiaWsp(), {
+        franjaSeleccionada,
+        selHorario,
+        marcarErrorCampo,
+        labelTipoVehiculoInforme,
+        codigosInvalidosNomenclador,
+      });
     }
-    if (lic.digital && !lic.esClaseLicencia) {
-      return marcarErrorCampo(infAlcoLicenciaClase, "Si marca Digital debe ingresar la clase de licencia, no DNI.");
-    }
-    if (infAlco460?.checked || infAlcoMedRemision?.checked) {
-      if (!normalizarMayusInforme(infAlcoCorralon?.value)) return marcarErrorCampo(infAlcoCorralon, "Debe completar corralón.");
-    }
-    const codigos = codigosInformeAlcoholemia(calc.codigo);
-    const invalidos = codigosInvalidosNomenclador(codigos);
-    if (invalidos.length) return marcarErrorCampo(infAlcoOtrosCodigos, `Código/s fuera del nomenclador o no permitidos: ${invalidos.join(" / ")}.`);
-    return true;
+    return false;
   }
 
   function construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
