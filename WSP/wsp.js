@@ -5534,7 +5534,27 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
   }
 
+  function historialInformesRepoWsp() {
+    return window.WSP?.services?.historialInformes || window.WSP?.modules?.historialInformes || null;
+  }
+
+  function depsHistorialInformesWsp() {
+    return {
+      limpiarTextoSimple,
+      normalizarBasicoSinAcentos,
+      normalizarNumeroActaInforme,
+      getGuardiaFechaISO,
+      construirOperativoKeyEstable,
+      alert: (msg) => alert(msg),
+      console,
+    };
+  }
+
   function normalizarComponenteInformeKeyWsp(value) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.normalizarComponenteInformeKeyWsp === "function") {
+      return svc.normalizarComponenteInformeKeyWsp(value);
+    }
     return normalizarBasicoSinAcentos(String(value || ""))
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "")
@@ -5542,6 +5562,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function clasificacionEventoInformeWsp(tipoEvento) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.clasificacionEventoInformeWsp === "function") {
+      return svc.clasificacionEventoInformeWsp(tipoEvento);
+    }
     const tipo = String(tipoEvento || "").toUpperCase();
     if (tipo === "ALCOHOLEMIA_POSITIVA") {
       return {
@@ -5586,6 +5610,13 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function construirInformeKeyWsp(tipoEvento, payload, nroActa) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.construirInformeKeyWsp === "function") {
+      return svc.construirInformeKeyWsp(tipoEvento, payload, nroActa, {
+        franja: franjaSeleccionada,
+        deps: depsHistorialInformesWsp(),
+      });
+    }
     const guardia = limpiarTextoSimple(payload?.guardia_fecha || getGuardiaFechaISO());
     const operativoKey = limpiarTextoSimple(
       payload?.operativo_key ||
@@ -5604,6 +5635,13 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.prepararPayloadInformeEventoWsp === "function") {
+      return svc.prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa, {
+        franja: franjaSeleccionada,
+        deps: depsHistorialInformesWsp(),
+      });
+    }
     const clasificacion = clasificacionEventoInformeWsp(tipoEvento);
     const guardiaFecha = limpiarTextoSimple(payload?.guardia_fecha || getGuardiaFechaISO());
     const operativoKey = limpiarTextoSimple(payload?.operativo_key || franjaSeleccionada?.__operativoKey || construirOperativoKeyEstable(franjaSeleccionada));
@@ -5654,6 +5692,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function payloadInformeEventoParaSupabaseWsp(data) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.payloadInformeEventoParaSupabaseWsp === "function") {
+      return svc.payloadInformeEventoParaSupabaseWsp(data);
+    }
     // Mantener el insert/upsert acotado a columnas usadas por la tabla de eventos.
     // El informe completo queda igualmente dentro de payload_completo y texto_generado.
     return {
@@ -5687,6 +5729,13 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function resultadoInformeSinSupabaseWsp(data, motivo = "") {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.resultadoInformeSinSupabaseWsp === "function") {
+      return svc.resultadoInformeSinSupabaseWsp(data, motivo, {
+        franja: franjaSeleccionada,
+        deps: depsHistorialInformesWsp(),
+      });
+    }
     return {
       evento: {
         id: null,
@@ -5704,6 +5753,17 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function guardarInformeEventoWsp(tipoEvento, payload, nroActa) {
+    const svc = historialInformesRepoWsp();
+    if (svc && typeof svc.guardarInformeEventoWsp === "function") {
+      try {
+        return await svc.guardarInformeEventoWsp(tipoEvento, payload, nroActa, {
+          franja: franjaSeleccionada,
+          deps: depsHistorialInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Historial informes modular falló al guardar. Se usa fallback legacy.", e);
+      }
+    }
     const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
 
     try {
