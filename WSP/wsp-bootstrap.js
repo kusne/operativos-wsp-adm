@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso29-control-moviles-ui-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso30-estadisticas-ui-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -31,6 +31,7 @@
     "./modules/wsp-informes.js",
     "./modules/wsp-decto460.js",
     "./modules/wsp-control-moviles.js",
+    "./modules/wsp-estadisticas-ui.js",
 
     /*
       LEGACY ACTUAL:
