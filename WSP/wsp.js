@@ -5934,32 +5934,44 @@ ${bold(`Moviles ${organismo}:`)}`)
 
 
   // ===== INFORME INTERMEDIO: DECTO 460/22 =====
-  function normalizarClaveCorralonInforme(value) {
-    const raw = normalizarMayusInforme(value || "")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^A-Z0-9]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!raw) return "";
-    if (/RINCON|SAN JOSE/.test(raw)) return "RINCON";
-    if (/SANTA FE|SANTAFE|CIUDAD/.test(raw)) return "SANTA FE";
-    if (/RECREO/.test(raw)) return "RECREO";
-    if (/SAUCE/.test(raw)) return "SAUCE VIEJO";
-    return raw;
-  }
 
-  function textoCorralonInforme(value) {
-    const key = normalizarClaveCorralonInforme(value);
-    const map = {
-      "RINCON": "San Jose del Rincon",
-      "SANTA FE": "Ciudad de Santa Fe",
-      "RECREO": "Ciudad de Recreo",
-      "SAUCE VIEJO": "Localidad de Sauce Viejo",
+  function refsInformeDecto460Wsp() {
+    return {
+      bloqueInformeDecto460,
+      informeDecto460Contexto,
+      inf460Marca,
+      inf460Modelo,
+      inf460Dominio,
+      inf460Acta,
+      inf460OtrosCodigos,
+      inf460Corralon,
+      inf460Inventario,
+      inf460ResultadoAuto,
+      inf460Fotos,
     };
-    return map[key] || normalizarMayusInforme(value || "");
   }
 
-  function esFranjaPatrullajeInformeDecto460(franja) {
+  function moduloInformeDecto460Wsp() {
+    return window.WSP?.modules?.decto460 || null;
+  }
+
+    function normalizarClaveCorralonInforme(value) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.normalizarClaveCorralonInforme === "function") return mod.normalizarClaveCorralonInforme(value);
+    return normalizarMayusInforme(value || "");
+  }
+
+    function textoCorralonInforme(value) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.textoCorralonInforme === "function") return mod.textoCorralonInforme(value);
+    return normalizarMayusInforme(value || "");
+  }
+
+    function esFranjaPatrullajeInformeDecto460(franja) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.esFranjaPatrullajeInformeDecto460 === "function") {
+      return mod.esFranjaPatrullajeInformeDecto460(franja, { normalizarBasicoSinAcentos, obtenerTipoCortoFranja });
+    }
     const t = normalizarBasicoSinAcentos([
       franja?.titulo,
       franja?.__tipoPublicado,
@@ -5968,7 +5980,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     return /\bpatrullaje\b|\bpatrullajes\b|\bpatrulla\b/.test(t);
   }
 
-  function ordenarCandidatosInformeDecto460(candidatos = []) {
+    function ordenarCandidatosInformeDecto460(candidatos = []) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.ordenarCandidatosInformeDecto460 === "function") {
+      return mod.ordenarCandidatosInformeDecto460(candidatos, { normalizarBasicoSinAcentos, obtenerTipoCortoFranja });
+    }
     return (Array.isArray(candidatos) ? candidatos : []).slice().sort((a, b) => {
       const ap = esFranjaPatrullajeInformeDecto460(a) ? 0 : 1;
       const bp = esFranjaPatrullajeInformeDecto460(b) ? 0 : 1;
@@ -6065,25 +6081,34 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
   }
 
-  function completarDestinoDecto460SiVacio() {
+    function completarDestinoDecto460SiVacio() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.completarDestinoDecto460SiVacio === "function") {
+      return mod.completarDestinoDecto460SiVacio(refsInformeDecto460Wsp(), {
+        inferirDestinoRemisionAlcoholemia,
+        normalizarMayusInforme,
+      });
+    }
     if (!inf460Corralon) return;
     if (normalizarMayusInforme(inf460Corralon.value)) return;
     const destino = inferirDestinoRemisionAlcoholemia();
     if (destino) inf460Corralon.value = destino;
   }
 
-  function aplicarMayusculasInputsDecto460() {
-    document.querySelectorAll("#bloqueInformeDecto460 .upper-input").forEach((el) => {
-      const pos = el.selectionStart;
-      const end = el.selectionEnd;
-      el.value = normalizarMayusInforme(el.value);
-      try { if (pos != null && end != null) el.setSelectionRange(pos, end); } catch {}
-    });
-    if (inf460Acta) inf460Acta.value = normalizarNumeroActaInforme(inf460Acta.value);
-    if (inf460Dominio) inf460Dominio.value = normalizarDominioInforme(inf460Dominio.value);
+    function aplicarMayusculasInputsDecto460() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.aplicarMayusculasInputsDecto460 === "function") {
+      return mod.aplicarMayusculasInputsDecto460(refsInformeDecto460Wsp(), {
+        normalizarMayusInforme,
+        normalizarNumeroActaInforme,
+        normalizarDominioInforme,
+      });
+    }
   }
 
-  function codigosInformeDecto460() {
+    function codigosInformeDecto460() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.codigosInformeDecto460 === "function") return mod.codigosInformeDecto460(refsInformeDecto460Wsp());
     return String(inf460OtrosCodigos?.value || "")
       .split(/[\s,;/]+/)
       .map((v) => v.replace(/\D+/g, ""))
@@ -6091,138 +6116,94 @@ ${bold(`Moviles ${organismo}:`)}`)
       .filter((codigo, idx, arr) => arr.indexOf(codigo) === idx);
   }
 
-  function fotosSeleccionadasInformeDecto460() {
+    function fotosSeleccionadasInformeDecto460() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.fotosSeleccionadasInformeDecto460 === "function") return mod.fotosSeleccionadasInformeDecto460(refsInformeDecto460Wsp());
     return inf460Fotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
   }
 
-  function limpiarInformeDecto460() {
-    [inf460Marca, inf460Modelo, inf460Dominio, inf460Acta, inf460OtrosCodigos, inf460Corralon].forEach((el) => { if (el) { el.value = ""; limpiarErrorCampo(el); } });
-    if (inf460Inventario) inf460Inventario.checked = false;
-    inf460Fotos.forEach((el) => { if (el) el.value = ""; });
-    completarDestinoDecto460SiVacio();
+    function limpiarInformeDecto460() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.limpiarInformeDecto460 === "function") {
+      return mod.limpiarInformeDecto460(refsInformeDecto460Wsp(), {
+        limpiarErrorCampo,
+        inferirDestinoRemisionAlcoholemia,
+        normalizarMayusInforme,
+      });
+    }
   }
 
-  function validarInformeDecto460() {
-    aplicarMayusculasInputsDecto460();
-    if (!normalizarMayusInforme(inf460Marca?.value)) return marcarErrorCampo(inf460Marca, "Debe completar marca.");
-    if (!normalizarDominioInforme(inf460Dominio?.value)) return marcarErrorCampo(inf460Dominio, "Debe completar dominio.");
-    if (!normalizarNumeroActaInforme(inf460Acta?.value)) return marcarErrorCampo(inf460Acta, "Debe completar N° de acta. Solo números.");
-    if (!normalizarMayusInforme(inf460Corralon?.value)) return marcarErrorCampo(inf460Corralon, "Debe completar corralón.");
-    const codigos = codigosInformeDecto460();
-    if (!codigos.length) return marcarErrorCampo(inf460OtrosCodigos, "Debe cargar al menos un código de infracción.");
-    const invalidos = codigosInvalidosNomenclador(codigos);
-    if (invalidos.length) return marcarErrorCampo(inf460OtrosCodigos, `Código/s fuera del nomenclador o no permitidos: ${invalidos.join(" / ")}.`);
+    function validarInformeDecto460() {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.validarInformeDecto460 === "function") {
+      return mod.validarInformeDecto460(refsInformeDecto460Wsp(), {
+        normalizarMayusInforme,
+        normalizarDominioInforme,
+        normalizarNumeroActaInforme,
+        marcarErrorCampo,
+        codigosInvalidosNomenclador,
+      });
+    }
     return true;
   }
 
-  function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
-    const lugar = normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || "");
-    const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
-    const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
-    const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
-    const marca = normalizarMayusInforme(inf460Marca?.value);
-    const modelo = normalizarMayusInforme(inf460Modelo?.value);
-    const dominio = normalizarDominioInforme(inf460Dominio?.value);
-    const nroActa = normalizarNumeroActaInforme(inf460Acta?.value);
-    const corralon = normalizarMayusInforme(inf460Corralon?.value);
-    const corralonTexto = textoCorralonInforme(corralon);
-    const codigosTxt = codigos.join("/");
-    const inventarioFrase = inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
-
-    return compactarSaltos([
-      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
-      bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE SANTA FE"),
-      bold("TERCIO CHARLIE"),
-      "",
-      bold("MOTIVO: REMISIÓN DE MOTOCICLETA POR DECTO 460/22"),
-      "",
-      `${bold("LUGAR:")} ${lugar}`,
-      "",
-      `${bold("HORA:")} ${hora}HS`,
-      "",
-      `${bold("FECHA:")} ${fecha}`,
-      "",
-      `${bold("MÓVIL:")} ${moviles}`,
-      "",
-      bold("PERSONAL"),
-      personal,
-      "",
-      `${bold("OBSERVACIÓN:")} ${obs}`,
-      fotosSeleccionadasInformeDecto460().length ? bold("Se adjunta vista fotográfica") : "",
-    ].filter((v) => v !== null && v !== undefined).join("\n"));
+    function construirTextoInformeDecto460({ inicio, fecha, hora, codigos }) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.construirTextoInformeDecto460 === "function") {
+      return mod.construirTextoInformeDecto460({
+        refs: refsInformeDecto460Wsp(),
+        inicio,
+        franjaSeleccionada,
+        fecha,
+        hora,
+        codigos,
+        deps: {
+          normalizarLugar,
+          lineaDesdeArray,
+          normalizarArrayTexto,
+          normalizarMayusInforme,
+          normalizarDominioInforme,
+          normalizarNumeroActaInforme,
+          obtenerNumeroOrdenDeFranja,
+          obtenerTipoCortoFranja,
+          compactarSaltos,
+          bold,
+        },
+      });
+    }
+    return "";
   }
 
-  function construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora }) {
-    const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || obtenerNumeroOrdenDeFranja(franjaSeleccionada) || "");
-    // Los inventarios NO van como detalle. Se cuentan para armar la observación
-    // del 460/22 junto con las remisiones/corralón.
-    const detalles = codigos.map(detalleLineaInforme);
-    const corralonClave = normalizarClaveCorralonInforme(inf460Corralon?.value);
-    const corralonTexto = textoCorralonInforme(inf460Corralon?.value);
-    const tieneInventario = !!inf460Inventario?.checked;
-    const resultados = {
-      "Vehículos Fiscalizados": 1,
-      "Personas Identificadas": 1,
-      "Actas Labradas": 1,
-      "Decreto 460/22": 1,
-    };
-    const medidasPayload = {
-      "Remisión": 1,
-    };
-    return {
-      fuente: "WSP",
-      operativo_key: limpiarTextoSimple(franjaSeleccionada?.__operativoKey || inicio?.operativo_key || construirOperativoKeyEstable(franjaSeleccionada)),
-      operativo_publicado_id: franjaSeleccionada?.__operativoPublicadoId || null,
-      guardia_fecha: getGuardiaFechaISO(),
-      fecha_operativo: fechaFranjaHistorialWsp(franjaSeleccionada),
-      fecha,
-      horario: hora,
-      hora_desde: hora,
-      hora_hasta: hora,
-      lugar: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      lugar_normalizado: normalizarLugar(inicio?.lugar || franjaSeleccionada?.lugar || ""),
-      tipo_operativo: obtenerTipoCortoFranja(franjaSeleccionada),
-      titulo: "DECTO 460/22",
-      ordenes_origen: ordenes,
-      personal: normalizarArrayTexto(inicio?.personal),
-      moviles: normalizarArrayTexto(inicio?.moviles),
-      motos: normalizarArrayTexto(inicio?.motos),
-      elementos: normalizarPayloadElementos(inicio),
-      resultados,
-      medidas_cautelares: medidasPayload,
-      detalles,
-      observaciones: "",
-      texto_generado: textoFinal,
-      payload_completo: {
-        tipo_evento: "DECTO_460_22",
-        tipo_informe: "DECTO_460_22",
-        franja: franjaSeleccionada,
-        datos_formulario: {
-          marca: normalizarMayusInforme(inf460Marca?.value),
-          modelo: normalizarMayusInforme(inf460Modelo?.value),
-          dominio: normalizarDominioInforme(inf460Dominio?.value),
-          nro_acta: normalizarNumeroActaInforme(inf460Acta?.value),
-          codigos,
-          corralon: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
-          corralon_texto: corralonTexto,
-          acta_inventario: tieneInventario,
-          inventarios_460: tieneInventario ? 1 : 0,
+    function construirPayloadInformeDecto460({ inicio, textoFinal, codigos, fecha, hora }) {
+    const mod = moduloInformeDecto460Wsp();
+    if (mod && typeof mod.construirPayloadInformeDecto460 === "function") {
+      return mod.construirPayloadInformeDecto460({
+        refs: refsInformeDecto460Wsp(),
+        inicio,
+        franjaSeleccionada,
+        textoFinal,
+        codigos,
+        fecha,
+        hora,
+        deps: {
+          normalizarArrayJsonWsp,
+          obtenerNumeroOrdenDeFranja,
+          detalleLineaInforme,
+          normalizarMayusInforme,
+          normalizarDominioInforme,
+          normalizarNumeroActaInforme,
+          limpiarTextoSimple,
+          construirOperativoKeyEstable,
+          getGuardiaFechaISO,
+          fechaFranjaHistorialWsp,
+          normalizarLugar,
+          obtenerTipoCortoFranja,
+          normalizarArrayTexto,
+          normalizarPayloadElementos,
         },
-        remisiones_460: 1,
-        inventarios_460: tieneInventario ? 1 : 0,
-        corralon_460: corralonClave || normalizarMayusInforme(inf460Corralon?.value),
-        corralon_460_texto: corralonTexto,
-        detalle_origen_visual: "460/22",
-        detalles_readonly: detalles.map((texto) => ({ texto, origen: "460/22", readonly: true })),
-      },
-      metadata: {
-        tipo_evento: "DECTO_460_22",
-        generado_desde: "wsp.js",
-        alimenta_finalizado: false,
-      },
-    };
+      });
+    }
+    return {};
   }
 
   async function subirFotoInformeDecto460(file, resultadoHistorial, numero) {
