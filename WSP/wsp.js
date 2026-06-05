@@ -877,6 +877,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarParteClave(txt) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.normalizarParteClave === "function") return mod.normalizarParteClave(txt);
     return normalizarBasicoSinAcentos(String(txt || ""))
       .replace(/[^a-z0-9/ -]+/g, " ")
       .replace(/\s+/g, " ")
@@ -884,6 +886,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirOperativoKeyEstable(franja) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.construirOperativoKeyEstable === "function") {
+      return mod.construirOperativoKeyEstable(franja, {
+        obtenerNumeroOrdenDeFranja,
+        obtenerTextoRefOrdenDeFranja,
+        obtenerTipoCortoFranja,
+      });
+    }
     if (!franja) return "";
 
     const ordenNum = normalizarParteClave(obtenerNumeroOrdenDeFranja(franja) || "sin-orden");
@@ -896,6 +906,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirOperativoKeysPosibles(franja) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.construirOperativoKeysPosibles === "function") {
+      return mod.construirOperativoKeysPosibles(franja, {
+        obtenerNumeroOrdenDeFranja,
+        obtenerTextoRefOrdenDeFranja,
+        obtenerTipoCortoFranja,
+        getDiaGuardiaTexto,
+      });
+    }
     if (!franja) return [];
 
     const orden = normalizarParteClave(obtenerNumeroOrdenDeFranja(franja) || "-") || "-";
@@ -917,6 +936,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarArrayTexto(arr) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.normalizarArrayTexto === "function") return mod.normalizarArrayTexto(arr);
     return (Array.isArray(arr) ? arr : []).map((v) => limpiarTextoSimple(v)).filter(Boolean);
   }
 
@@ -936,6 +957,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarPayloadElementos(payload) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.normalizarPayloadElementos === "function") return mod.normalizarPayloadElementos(payload);
     const fuente = payload?.elementos && typeof payload.elementos === "object" ? payload.elementos : payload || {};
 
     return {
@@ -949,14 +972,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function pareceHorario(txt) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.pareceHorario === "function") return mod.pareceHorario(txt);
     return /(\d{1,2})[ :](\d{2})\s*a\s*(\d{1,2})[ :](\d{2})/i.test(String(txt || ""));
   }
 
   function pareceDiaSemana(txt) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.pareceDiaSemana === "function") return mod.pareceDiaSemana(txt);
     return /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)$/i.test(limpiarTextoSimple(txt));
   }
 
   function extraerPartesDeOperativoKey(operativoKey) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.extraerPartesDeOperativoKey === "function") return mod.extraerPartesDeOperativoKey(operativoKey);
     const partes = String(operativoKey || "").split("|").map((v) => limpiarTextoSimple(v));
 
     if (partes.length >= 5 && pareceDiaSemana(partes[1])) {
@@ -999,10 +1028,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarValorComparacion(txt) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.normalizarValorComparacion === "function") return mod.normalizarValorComparacion(txt);
     return normalizarBasicoSinAcentos(String(txt || "")).replace(/[^a-z0-9]+/g, "");
   }
 
   function valoresComparablesCoinciden(a, b) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.valoresComparablesCoinciden === "function") return mod.valoresComparablesCoinciden(a, b);
     const aa = normalizarValorComparacion(a);
     const bb = normalizarValorComparacion(b);
     if (!aa || !bb) return false;
@@ -1010,6 +1043,18 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function puntuarCoincidenciaInicio(payload, franja = franjaSeleccionada) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.puntuarCoincidenciaInicio === "function") {
+      return mod.puntuarCoincidenciaInicio(payload, franja, {
+        fechasBusqueda: getFechasBusquedaInicio(),
+        deps: {
+          obtenerNumeroOrdenDeFranja,
+          obtenerTextoRefOrdenDeFranja,
+          obtenerTipoCortoFranja,
+          getDiaGuardiaTexto,
+        },
+      });
+    }
     if (!payload || !franja) return -1;
 
     const fechasBusqueda = getFechasBusquedaInicio();
@@ -1034,6 +1079,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarInicioGuardado(payload) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.normalizarInicioGuardado === "function") return mod.normalizarInicioGuardado(payload);
     if (!payload) return null;
 
     const derivado = extraerPartesDeOperativoKey(payload.operativo_key || "");
@@ -1056,6 +1103,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirInicioGuardadoActual() {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.construirInicioGuardadoActual === "function") {
+      return mod.construirInicioGuardadoActual({
+        franja: franjaSeleccionada,
+        guardiaFecha: getGuardiaFechaISO(),
+        deps: {
+          obtenerNumeroOrdenDeFranja,
+          obtenerTextoRefOrdenDeFranja,
+          obtenerTipoCortoFranja,
+          leerSeleccionPorClase,
+          construirPayloadElementosActual,
+        },
+      });
+    }
     if (!franjaSeleccionada) return null;
 
     return normalizarInicioGuardado({
@@ -4230,6 +4291,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return window.WSP?.forms?.operativo || window.WSP?.modules?.formularioOperativo || null;
   }
 
+  function payloadOperativoWsp() {
+    return window.WSP?.payloads?.operativo || window.WSP?.modules?.payloadOperativo || null;
+  }
+
   function seleccion(clase) {
     const mod = formularioOperativoWsp();
     if (mod && typeof mod.seleccion === "function") return mod.seleccion(clase);
@@ -5143,16 +5208,22 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   // ===== HISTORIAL OPERATIVOS SUPABASE =====
   function arrayDesdeLineaHistorialWsp(linea) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.arrayDesdeLineaHistorialWsp === "function") return mod.arrayDesdeLineaHistorialWsp(linea);
     const raw = limpiarTextoSimple(linea || "");
     if (!raw || raw === "/") return [];
     return raw.split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
   }
 
   function fechaFranjaHistorialWsp(franja) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.fechaFranjaHistorialWsp === "function") return mod.fechaFranjaHistorialWsp(franja);
     return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
   }
 
   function extraerMapasResultadosHistorialWsp(lineas = []) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.extraerMapasResultadosHistorialWsp === "function") return mod.extraerMapasResultadosHistorialWsp(lineas);
     const resultados = {};
     const medidas = {};
     let enMedidas = false;
@@ -5191,6 +5262,36 @@ ${bold(`Moviles ${organismo}:`)}`)
     detallesProcesados,
     observacionesFinales,
   }) {
+    const mod = payloadOperativoWsp();
+    if (mod && typeof mod.construirPayloadHistorialOperativoWsp === "function") {
+      return mod.construirPayloadHistorialOperativoWsp({
+        tipoEvento,
+        textoFinal,
+        personalTexto,
+        mov,
+        mot,
+        escopetasTXT,
+        htTXT,
+        pdaTXT,
+        impTXT,
+        alomTXT,
+        alcoTXT,
+        lineasResultados,
+        detallesProcesados,
+        observacionesFinales,
+        franja: franjaSeleccionada,
+        fecha: new Date().toLocaleDateString("es-AR"),
+        deps: {
+          extraerHorarioPartesWsp,
+          normalizarArrayJsonWsp,
+          getGuardiaFechaISO,
+          obtenerTipoCortoFranja,
+          obtenerNumeroOrdenDeFranja,
+          obtenerTextoRefOrdenDeFranja,
+          getDiaGuardiaTexto,
+        },
+      });
+    }
     const partesHorario = extraerHorarioPartesWsp(franjaSeleccionada?.horario || "");
     const mapas = extraerMapasResultadosHistorialWsp(lineasResultados || []);
     const ordenes = normalizarArrayJsonWsp(franjaSeleccionada?.__ordenesOrigen || franjaSeleccionada?.__ordenNum || "");

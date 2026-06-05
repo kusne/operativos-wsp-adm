@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso35-formulario-operativo-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso36-payload-operativo-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -37,6 +37,7 @@
     "./modules/wsp-texto-operativo.js",
     "./modules/wsp-mensajes-operativo.js",
     "./modules/wsp-formulario-operativo.js",
+    "./modules/wsp-payload-operativo.js",
 
     /*
       LEGACY ACTUAL:
