@@ -1,7 +1,20 @@
-(function () {
+﻿(function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso16-snapshot-estado-evento-completo-20260605-0015";
+  const WSP_BOOTSTRAP_VERSION = "paso17-modularizacion-base-20260605";
+
+  const SCRIPTS_WSP = [
+    "./modules/wsp-namespace.js",
+    "./modules/wsp-utils.js",
+
+    /*
+      LEGACY ACTUAL:
+      Por ahora sigue cargando el wsp.js completo.
+      A medida que modularicemos, vamos sacando partes de wsp.js
+      y agregando nuevos módulos arriba de esta línea.
+    */
+    "./wsp.js"
+  ];
 
   function cargarScript(src) {
     return new Promise((resolve, reject) => {
@@ -25,22 +38,19 @@
 
   async function iniciarBootstrapWsp() {
     try {
-      console.log("[WSP bootstrap] iniciando...");
+      console.log("[WSP bootstrap] iniciando carga modular...");
 
-      /*
-        PASO SEGURO:
-        Primero cargamos el wsp.js actual estable.
-        Cuando esto funcione, recién después empezamos a separar módulos.
-      */
-      await cargarScript("./wsp.js");
+      for (const src of SCRIPTS_WSP) {
+        await cargarScript(src);
+      }
 
-      console.log("[WSP bootstrap] WSP cargado correctamente.");
+      console.log("[WSP bootstrap] carga modular completa.");
     } catch (error) {
       console.error("[WSP bootstrap] fallo crítico:", error);
 
       alert(
         "Error cargando WSP.\n\n" +
-        "Revisá que exista el archivo WSP/wsp.js y que no tenga errores de JavaScript.\n\n" +
+        "Archivo con problema: revisá la consola.\n\n" +
         error.message
       );
     }
