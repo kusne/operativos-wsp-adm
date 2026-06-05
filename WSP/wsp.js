@@ -4286,13 +4286,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return `*${String(txt || "").trim()}*`;
   }
 
+  function mensajesOperativoWsp() {
+    return window.WSP?.messages?.operativo || window.WSP?.modules?.mensajesOperativo || null;
+  }
+
   function valorObservacionPorDefecto() {
     const txt = String(document.getElementById("obs")?.value || "").trim();
     return txt || "Sin novedad";
   }
 
   function construirObservacionesFinales(observacionesExtras = []) {
+    const mod = mensajesOperativoWsp();
     const usuario = String(document.getElementById("obs")?.value || "").trim();
+    if (mod && typeof mod.construirObservacionesFinales === "function") {
+      return mod.construirObservacionesFinales(usuario, observacionesExtras);
+    }
+
     const extras = Array.isArray(observacionesExtras)
       ? observacionesExtras.map((linea) => limpiarTextoSimple(linea)).filter(Boolean)
       : [];
@@ -4304,6 +4313,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function compactarSaltos(texto) {
+    const mod = mensajesOperativoWsp();
+    if (mod && typeof mod.compactarSaltos === "function") return mod.compactarSaltos(texto);
     return String(texto || "")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
@@ -7096,47 +7107,76 @@ ${bold(`Moviles ${organismo}:`)}`)
       ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
       : seleccionLinea("Alcoholimetro", "/");
 
-    const tituloPrincipal = `${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(
-      franjaSeleccionada.titulo
-    )}`.trim();
-
-    const mobilesTexto = [mov, mot].filter((v) => v !== "/").join(" / ") || "/";
-
-    const partes = [];
-
-    partes.push(bold("Policia de la Provincia de Santa Fe - Guardia Provincial"));
-    partes.push(bold("Brigada Motorizada Centro Norte"));
-    partes.push(bold("Tercio Charlie"));
-    partes.push("");
-
-    partes.push(bold(tituloPrincipal));
-    partes.push("");
-
-    partes.push(`${bold("Fecha:")} ${fecha}`);
-    partes.push(`${bold("Horario:")} ${normalizarHorario(franjaSeleccionada.horario)}`);
-    partes.push(`${bold("Lugar:")} ${normalizarLugar(franjaSeleccionada.lugar)}`);
-    partes.push("");
-
-    partes.push(bold("Personal Policial:"));
-    partes.push(personalTexto || "/");
-    partes.push("");
-
-    partes.push(`${bold("Móviles:")} ${mobilesTexto}`);
-    partes.push("");
-
+    const modMensajesOperativo = mensajesOperativoWsp();
     const extraConjunto = bloqueConjuntoExtra();
-    if (extraConjunto) {
-      partes.push(extraConjunto);
-      partes.push("");
-    }
+    let partes;
 
-    partes.push(bold("Elementos:"));
-    partes.push(`Escopetas: ${escopetasTXT}`);
-    partes.push(`Ht: ${htTXT}`);
-    partes.push(`Pda: ${pdaTXT}`);
-    partes.push(`Impresoras: ${impTXT}`);
-    partes.push(`Alómetros: ${alomTXT}`);
-    partes.push(`Alcoholímetros: ${alcoTXT}`);
+    if (modMensajesOperativo && typeof modMensajesOperativo.construirBaseMensajeOperativo === "function") {
+      partes = modMensajesOperativo.construirBaseMensajeOperativo({
+        tipo: selTipo.value,
+        franja: franjaSeleccionada,
+        fecha,
+        personalTexto,
+        mov,
+        mot,
+        extraConjunto,
+        elementos: {
+          escopetasTXT,
+          htTXT,
+          pdaTXT,
+          impTXT,
+          alomTXT,
+          alcoTXT,
+        },
+        deps: {
+          bold,
+          normalizarTituloOperativo,
+          normalizarHorario,
+          normalizarLugar,
+        },
+      });
+    } else {
+      const tituloPrincipal = `${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(
+        franjaSeleccionada.titulo
+      )}`.trim();
+
+      const mobilesTexto = [mov, mot].filter((v) => v !== "/").join(" / ") || "/";
+
+      partes = [];
+
+      partes.push(bold("Policia de la Provincia de Santa Fe - Guardia Provincial"));
+      partes.push(bold("Brigada Motorizada Centro Norte"));
+      partes.push(bold("Tercio Charlie"));
+      partes.push("");
+
+      partes.push(bold(tituloPrincipal));
+      partes.push("");
+
+      partes.push(`${bold("Fecha:")} ${fecha}`);
+      partes.push(`${bold("Horario:")} ${normalizarHorario(franjaSeleccionada.horario)}`);
+      partes.push(`${bold("Lugar:")} ${normalizarLugar(franjaSeleccionada.lugar)}`);
+      partes.push("");
+
+      partes.push(bold("Personal Policial:"));
+      partes.push(personalTexto || "/");
+      partes.push("");
+
+      partes.push(`${bold("Móviles:")} ${mobilesTexto}`);
+      partes.push("");
+
+      if (extraConjunto) {
+        partes.push(extraConjunto);
+        partes.push("");
+      }
+
+      partes.push(bold("Elementos:"));
+      partes.push(`Escopetas: ${escopetasTXT}`);
+      partes.push(`Ht: ${htTXT}`);
+      partes.push(`Pda: ${pdaTXT}`);
+      partes.push(`Impresoras: ${impTXT}`);
+      partes.push(`Alómetros: ${alomTXT}`);
+      partes.push(`Alcoholímetros: ${alcoTXT}`);
+    }
 
     const textoDetallesManual = document.getElementById("detalles")?.value || "";
     const textoDetallesAgregados = hayAgregadoInformesFinalizado ? (agregadoInformesFinalizado.detalles || []).join("\n") : "";
@@ -7160,22 +7200,34 @@ ${bold(`Moviles ${organismo}:`)}`)
         lineasResultados.__observaciones460Resultados.forEach((linea) => pushUnicoTextoWsp(observacionesResultadosFinaliza, linea));
       }
 
-      partes.push("");
-      partes.push(bold("Resultados:"));
-      partes.push(...lineasResultados);
+      if (modMensajesOperativo && typeof modMensajesOperativo.agregarBloqueResultados === "function") {
+        modMensajesOperativo.agregarBloqueResultados(partes, lineasResultados, { bold });
+      } else {
+        partes.push("");
+        partes.push(bold("Resultados:"));
+        partes.push(...lineasResultados);
+      }
 
       if (incluirDetallesFinaliza && detallesProcesados.detalles) {
-        partes.push("");
-        partes.push(bold("Detalles:"));
-        partes.push(detallesProcesados.detalles);
+        if (modMensajesOperativo && typeof modMensajesOperativo.agregarBloqueDetalles === "function") {
+          modMensajesOperativo.agregarBloqueDetalles(partes, detallesProcesados.detalles, { bold });
+        } else {
+          partes.push("");
+          partes.push(bold("Detalles:"));
+          partes.push(detallesProcesados.detalles);
+        }
       }
     }
 
     if (esFinaliza && !incluirResultadosFinaliza && incluirDetallesFinaliza) {
       if (detallesProcesados.detalles) {
-        partes.push("");
-        partes.push(bold("Detalles:"));
-        partes.push(detallesProcesados.detalles);
+        if (modMensajesOperativo && typeof modMensajesOperativo.agregarBloqueDetalles === "function") {
+          modMensajesOperativo.agregarBloqueDetalles(partes, detallesProcesados.detalles, { bold });
+        } else {
+          partes.push("");
+          partes.push(bold("Detalles:"));
+          partes.push(detallesProcesados.detalles);
+        }
       }
     }
 
@@ -7188,11 +7240,17 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     const observacionesFinalesTexto = construirObservacionesFinales(observacionesExtras);
 
-    partes.push("");
-    partes.push(bold("Observaciones:"));
-    partes.push(observacionesFinalesTexto);
+    if (modMensajesOperativo && typeof modMensajesOperativo.agregarBloqueObservaciones === "function") {
+      modMensajesOperativo.agregarBloqueObservaciones(partes, observacionesFinalesTexto, { bold });
+    } else {
+      partes.push("");
+      partes.push(bold("Observaciones:"));
+      partes.push(observacionesFinalesTexto);
+    }
 
-    const textoFinal = compactarSaltos(partes.join("\n"));
+    const textoFinal = modMensajesOperativo && typeof modMensajesOperativo.construirTextoDesdePartes === "function"
+      ? modMensajesOperativo.construirTextoDesdePartes(partes)
+      : compactarSaltos(partes.join("\n"));
     const tipoEventoHistorial = esFinaliza ? "FINALIZADO" : "INICIO";
     const payloadHistorial = construirPayloadHistorialOperativoWsp({
       tipoEvento: tipoEventoHistorial,
