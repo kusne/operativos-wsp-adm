@@ -1385,10 +1385,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       horario,
       lugar: row?.lugar || "",
       tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: row?.inicio_personal || metadataEstado?.personal || [],
-      moviles: row?.inicio_moviles || metadataEstado?.moviles || [],
-      motos: row?.inicio_motos || metadataEstado?.motos || [],
-      elementos: row?.inicio_elementos || metadataEstado?.elementos || {},
+      personal: row?.inicio_personal || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -1458,10 +1458,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       horario,
       lugar: row?.lugar || "",
       tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
-      personal: row?.personal || meta?.personal || [],
-      moviles: row?.moviles || meta?.moviles || [],
-      motos: row?.motos || meta?.motos || [],
-      elementos: row?.elementos || meta?.elementos || {},
+      personal: row?.personal || meta?.personal_inicio || meta?.ultimo_personal || meta?.personal || [],
+      moviles: row?.moviles || meta?.moviles_inicio || meta?.ultimo_moviles || meta?.moviles || [],
+      motos: row?.motos || meta?.motos_inicio || meta?.ultimo_motos || meta?.motos || [],
+      elementos: row?.elementos || meta?.elementos_inicio || meta?.ultimo_elementos || meta?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
