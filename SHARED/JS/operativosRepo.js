@@ -7,7 +7,7 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
-  root.__OPERATIVOS_REPO_VERSION__ = 'PASO15_SHARED_UNICO_MANUAL_UPSERT_20260604_2355';
+  root.__OPERATIVOS_REPO_VERSION__ = 'PASO16_SNAPSHOT_ESTADO_EVENTO_COMPLETO_20260605_0015';
   root.Versiones = root.Versiones || {};
   root.Versiones.operativosRepo = root.__OPERATIVOS_REPO_VERSION__;
   console.log('[BMZCN OperativosRepo]', root.__OPERATIVOS_REPO_VERSION__, 'cargado: sin on_conflict=evento_key');
@@ -147,8 +147,68 @@
       metadata: {
         ...nf.jsonObject(input.metadata),
         actualizado_desde_repo: true
-      }
+      },
+      updated_at: new Date().toISOString()
     };
+  }
+
+  function snapshotMetadataEvento(tipoEvento, estadoRow, eventoRow, input = {}) {
+    const { nf } = deps();
+    const tipo = nf.clean(tipoEvento).toUpperCase();
+    const personal = nf.jsonArray(input.personal);
+    const moviles = nf.jsonArray(input.moviles);
+    const motos = nf.jsonArray(input.motos);
+    const elementos = nf.jsonObject(input.elementos);
+    const resultados = nf.jsonObject(input.resultados);
+    const medidas = nf.jsonObject(input.medidas_cautelares || input.medidas);
+    const detalles = Array.isArray(input.detalles) ? input.detalles : nf.jsonArray(input.detalles);
+    const texto = String(input.texto_generado || '');
+    const base = {
+      ultimo_evento_id: eventoRow?.id || '',
+      ultimo_tipo_evento: tipo,
+      ultimo_texto_generado: texto,
+      ultimo_evento_updated_at: eventoRow?.updated_at || eventoRow?.created_at || new Date().toISOString(),
+      ultimo_personal: personal,
+      ultimo_moviles: moviles,
+      ultimo_motos: motos,
+      ultimo_elementos: elementos,
+      ultimo_lugar: nf.clean(input.lugar || estadoRow?.lugar || ''),
+      ultimo_tipo_operativo: nf.clean(input.tipo_operativo || estadoRow?.tipo_operativo || ''),
+      ultimo_horario: nf.clean(input.horario || ''),
+      snapshot_actualizado_desde_repo: true
+    };
+    if (tipo === 'INICIO') {
+      return {
+        ...base,
+        inicio_evento_id_snapshot: eventoRow?.id || '',
+        inicio_texto_generado: texto,
+        personal_inicio: personal,
+        moviles_inicio: moviles,
+        motos_inicio: motos,
+        elementos_inicio: elementos,
+        lugar_inicio: nf.clean(input.lugar || estadoRow?.lugar || ''),
+        tipo_operativo_inicio: nf.clean(input.tipo_operativo || estadoRow?.tipo_operativo || ''),
+        horario_inicio: nf.clean(input.horario || '')
+      };
+    }
+    if (tipo === 'FINALIZADO') {
+      return {
+        ...base,
+        finalizado_evento_id_snapshot: eventoRow?.id || '',
+        finalizado_texto_generado: texto,
+        personal_finalizado: personal,
+        moviles_finalizado: moviles,
+        motos_finalizado: motos,
+        elementos_finalizado: elementos,
+        resultados_finalizado: resultados,
+        medidas_finalizado: medidas,
+        detalles_finalizado: detalles,
+        lugar_finalizado: nf.clean(input.lugar || estadoRow?.lugar || ''),
+        tipo_operativo_finalizado: nf.clean(input.tipo_operativo || estadoRow?.tipo_operativo || ''),
+        horario_finalizado: nf.clean(input.horario || '')
+      };
+    }
+    return base;
   }
 
   async function upsertEstado(input = {}, estado = 'EN_CURSO') {
@@ -275,11 +335,16 @@
 
     const estado = await upsertEstado(input, 'EN_CURSO');
     const evento = await upsertEvento(estado, 'INICIO', input);
+    const metaEstado = nf.jsonObject(estado.metadata);
     const estadoActualizado = await patchEstado(estado.id, {
       estado: 'EN_CURSO',
       inicio_evento_id: evento.id,
       finalizado_evento_id: null,
-      deleted_at: null
+      deleted_at: null,
+      metadata: {
+        ...metaEstado,
+        ...snapshotMetadataEvento('INICIO', estado, evento, input)
+      }
     });
     return { estado: estadoActualizado || estado, evento };
   }
@@ -308,10 +373,15 @@
     // - FINALIZADO de FINALIZADO: permitido como actualización del último finalizado válido.
     // - FINALIZADO sin INICIO: prohibido.
     const evento = await upsertEvento(estado, 'FINALIZADO', input);
+    const metaEstado = nf.jsonObject(estado.metadata);
     const estadoActualizado = await patchEstado(estado.id, {
       estado: 'FINALIZADO',
       finalizado_evento_id: evento.id,
-      deleted_at: null
+      deleted_at: null,
+      metadata: {
+        ...metaEstado,
+        ...snapshotMetadataEvento('FINALIZADO', estado, evento, input)
+      }
     });
     return { estado: estadoActualizado || estado, evento };
   }
@@ -488,6 +558,7 @@
     dedupeByKey,
     upsertEstado,
     upsertEvento,
+    snapshotMetadataEvento,
     patchEstado,
     validationError,
     leerEstadoPorKey,
