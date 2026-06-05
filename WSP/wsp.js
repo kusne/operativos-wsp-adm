@@ -138,94 +138,49 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
 
-  const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000; // 5 minutos después de abrir WhatsApp
-  let autoCierreWspTimer = null;
-
+  // ===== WHATSAPP SERVICE BRIDGE =====
+  // La lógica real fue extraída a WSP/modules/wsp-whatsapp.js.
+  // Estas funciones puente conservan los nombres usados por el wsp.js actual.
   function programarCierreVentanaWsp() {
-    if (autoCierreWspTimer) {
-      clearTimeout(autoCierreWspTimer);
-      autoCierreWspTimer = null;
+    const svc = window.WSP?.services?.whatsapp;
+    if (!svc || typeof svc.programarCierreVentanaWsp !== "function") {
+      console.error("[WSP] No se cargó el módulo WhatsApp.");
+      return false;
     }
-
-    autoCierreWspTimer = setTimeout(() => {
-      try {
-        if (window.electronAPI && typeof window.electronAPI.closeCurrentWindow === "function") {
-          window.electronAPI.closeCurrentWindow();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP] No se pudo cerrar mediante electronAPI.closeCurrentWindow.", e);
-      }
-
-      try {
-        if (window.electronAPI && typeof window.electronAPI.cerrarVentanaActual === "function") {
-          window.electronAPI.cerrarVentanaActual();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP] No se pudo cerrar mediante electronAPI.cerrarVentanaActual.", e);
-      }
-
-      try {
-        window.close();
-      } catch (e) {
-        console.warn("[WSP] El navegador bloqueó window.close().", e);
-      }
-    }, AUTO_CIERRE_WSP_MS);
+    return svc.programarCierreVentanaWsp();
   }
 
   function archivosCompartiblesWsp(files) {
-    return (Array.isArray(files) ? files : [])
-      .filter((file) => file && typeof File !== "undefined" && file instanceof File)
-      .filter((file) => String(file.type || "").toLowerCase().startsWith("image/"))
-      .slice(0, 4);
+    const svc = window.WSP?.services?.whatsapp;
+    if (!svc || typeof svc.archivosCompartiblesWsp !== "function") return [];
+    return svc.archivosCompartiblesWsp(files);
   }
 
   function abrirWhatsappTextoWsp(texto) {
-    const url = "https://wa.me/?text=" + encodeURIComponent(texto || "");
-
-    try {
-      const win = window.open(url, "_blank");
-      if (win) return true;
-    } catch (e) {
-      console.warn("[WSP] No se pudo abrir WhatsApp en ventana nueva. Se usa navegación actual.", e);
+    const svc = window.WSP?.services?.whatsapp;
+    if (!svc || typeof svc.abrirWhatsappTextoWsp !== "function") {
+      alert("No se pudo cargar el módulo de WhatsApp.");
+      return false;
     }
-
-    // Respaldo: mantiene el comportamiento anterior si el navegador bloquea la ventana nueva.
-    // En este caso el cierre automático puede no ejecutarse porque la página navega a WhatsApp.
-    window.location.href = url;
-    return true;
+    return svc.abrirWhatsappTextoWsp(texto);
   }
 
   async function compartirWhatsappConFotosSiCorresponde(texto, files = []) {
-    const fotos = archivosCompartiblesWsp(files);
-
-    if (fotos.length && navigator.share && (!navigator.canShare || navigator.canShare({ files: fotos }))) {
-      try {
-        await navigator.share({
-          title: "Informe BMZCN",
-          text: texto || "",
-          files: fotos,
-        });
-        return true;
-      } catch (e) {
-        const name = String(e?.name || "");
-        if (name === "AbortError" || name === "NotAllowedError") {
-          console.warn("[WSP] El usuario canceló o el navegador bloqueó compartir fotos.", e);
-          return false;
-        }
-        console.warn("[WSP] No se pudo compartir texto + fotos. Se enviará solo texto por WhatsApp.", e);
-      }
-    } else if (fotos.length) {
-      alert("Este navegador no permite adjuntar fotos automáticamente desde la app. Se abrirá WhatsApp solo con el texto del informe.");
+    const svc = window.WSP?.services?.whatsapp;
+    if (!svc || typeof svc.compartirWhatsappConFotosSiCorresponde !== "function") {
+      alert("No se pudo cargar el módulo de WhatsApp.");
+      return false;
     }
-
-    return abrirWhatsappTextoWsp(texto);
+    return svc.compartirWhatsappConFotosSiCorresponde(texto, files);
   }
 
   function abrirWhatsappYCerrarWspLuego(texto, files = []) {
-    programarCierreVentanaWsp();
-    compartirWhatsappConFotosSiCorresponde(texto, files);
+    const svc = window.WSP?.services?.whatsapp;
+    if (!svc || typeof svc.abrirWhatsappYCerrarWspLuego !== "function") {
+      alert("No se pudo cargar el módulo de WhatsApp.");
+      return false;
+    }
+    return svc.abrirWhatsappYCerrarWspLuego(texto, files);
   }
 
   const detallesAutocompletadoState = new WeakMap();
