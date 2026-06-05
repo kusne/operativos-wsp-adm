@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso24-selector-informes-control-superior-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso25-control-superior-module-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -27,6 +27,7 @@
     "./modules/wsp-alcoholimetro.js",
     "./modules/wsp-detalles.js",
     "./modules/wsp-selector.js",
+    "./modules/wsp-control-superior.js",
 
     /*
       LEGACY ACTUAL:
