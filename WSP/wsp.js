@@ -233,13 +233,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (estaAbierta) cerrarAyudaControlMoviles();
     else abrirAyudaControlMoviles();
   }
-
   function limpiarErrorCampo(el) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.limpiarErrorCampo === "function") return ui.limpiarErrorCampo(el);
     if (!el) return;
     el.classList.remove("input-error");
   }
-
   function marcarErrorCampo(el, mensaje) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.marcarErrorCampo === "function") return ui.marcarErrorCampo(el, mensaje);
     if (el) {
       el.classList.add("input-error");
       try { el.focus({ preventScroll: false }); } catch { try { el.focus(); } catch {} }
@@ -247,17 +249,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     alert(mensaje);
     return false;
   }
-
   function leerEnteroNoNegativo(valor) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.leerEnteroNoNegativo === "function") return ui.leerEnteroNoNegativo(valor);
     const n = parseInt(String(valor ?? "").trim(), 10);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
-
   function leerEnteroInput(el) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.leerEnteroInput === "function") return ui.leerEnteroInput(el);
     return leerEnteroNoNegativo(el?.value);
   }
-
   function formatearCantidad(n) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.formatearCantidad === "function") return ui.formatearCantidad(n);
     const v = Math.max(0, parseInt(n, 10) || 0);
     return String(v).padStart(2, "0");
   }
@@ -579,15 +584,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       valoresNo,
     };
   }
-
   function normalizarInputNoNegativo(el) {
+    const ui = window.WSP?.ui?.helpers;
+    if (ui && typeof ui.normalizarInputNoNegativo === "function") return ui.normalizarInputNoNegativo(el);
     if (!el) return;
     const crudo = String(el.value || "").trim();
     if (!crudo) {
       limpiarErrorCampo(el);
       return;
     }
-
     const n = parseInt(crudo, 10);
     el.value = Number.isFinite(n) && n > 0 ? String(n) : "0";
     limpiarErrorCampo(el);
