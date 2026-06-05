@@ -1139,6 +1139,32 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return window.WSP?.services?.historialOperativo || null;
   }
 
+  function historialOperativoRepoWsp() {
+    return window.WSP?.services?.historialOperativoRepo || window.WSP?.modules?.historialOperativo || null;
+  }
+
+  function depsHistorialOperativoRepoWsp() {
+    return {
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      getGuardiaFechaISO,
+      construirOperativoKeysPosibles,
+      puntuarCoincidenciaInicio,
+      normalizarInicioGuardado,
+      deduplicarIniciosInformeWsp,
+      construirOperativoKeyEstable,
+      resultadoGuardadoValidoWsp,
+      esErrorValidacionOperativaWsp,
+      mensajeErrorOperativoWsp,
+      headersSupabase,
+      fetchSupabaseTabla,
+      limpiarTextoSimple,
+      normalizarArrayJsonWsp,
+      parseJsonObjectWsp,
+      timestampOperativoAMs,
+    };
+  }
+
   function headersSupabase(extra = {}) {
     const svc = historialOperativoServiceWsp();
     if (svc && typeof svc.headersSupabase === "function") {
@@ -1222,6 +1248,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerInicioDesdeSupabase(franja) {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.leerInicioDesdeSupabase === "function") {
+      try {
+        return await svcRepo.leerInicioDesdeSupabase(franja, depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al leer INICIO. Se usa fallback legacy.", e);
+      }
+    }
+
     if (!franja) return null;
     const keysPosibles = new Set(construirOperativoKeysPosibles(franja).map((v) => limpiarTextoSimple(v)).filter(Boolean));
     const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
@@ -1295,6 +1330,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerOperativoKeysFinalizadosGuardiaSupabase() {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.leerOperativoKeysFinalizadosGuardiaSupabase === "function") {
+      try {
+        return await svcRepo.leerOperativoKeysFinalizadosGuardiaSupabase(depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al leer FINALIZADOS. Se usa fallback legacy.", e);
+      }
+    }
+
     const guardiaFecha = getGuardiaFechaISO();
     const out = new Set();
 
@@ -1352,6 +1396,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerOperativosEnCursoDesdeEstadoSupabase() {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.leerOperativosEnCursoDesdeEstadoSupabase === "function") {
+      try {
+        return await svcRepo.leerOperativosEnCursoDesdeEstadoSupabase(depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al leer EN CURSO. Se usa fallback legacy.", e);
+      }
+    }
+
     const guardiaFecha = getGuardiaFechaISO();
     const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
 
@@ -1384,6 +1437,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerIniciosGuardiaDesdeWspIniciosFallback() {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.leerIniciosGuardiaDesdeWspIniciosFallback === "function") {
+      try {
+        return await svcRepo.leerIniciosGuardiaDesdeWspIniciosFallback(depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al leer fallback wsp_inicios. Se usa fallback legacy.", e);
+      }
+    }
+
     const guardiaFecha = getGuardiaFechaISO();
     const selectCols = "id,guardia_fecha,operativo_key,orden_num,texto_ref,horario,lugar,tipo_corto,personal,moviles,motos,elementos";
 
@@ -1416,6 +1478,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function leerIniciosGuardiaDesdeSupabase() {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.leerIniciosGuardiaDesdeSupabase === "function") {
+      try {
+        return await svcRepo.leerIniciosGuardiaDesdeSupabase(depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al leer inicios de guardia. Se usa fallback legacy.", e);
+      }
+    }
+
     // Fuente única para INFORMES: Supabase canónico.
     // No usa localStorage, no usa wsp_inicios y no mezcla caches viejas.
     try {
@@ -5404,6 +5475,15 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
+    const svcRepo = historialOperativoRepoWsp();
+    if (svcRepo && typeof svcRepo.guardarHistorialOperativoWsp === "function") {
+      try {
+        return await svcRepo.guardarHistorialOperativoWsp(tipoEvento, payload, depsHistorialOperativoRepoWsp());
+      } catch (e) {
+        console.warn("[WSP] Historial operativo modular falló al guardar. Se usa fallback legacy.", e);
+      }
+    }
+
     const tipo = limpiarTextoSimple(tipoEvento).toUpperCase();
     const critico = esEventoOperativoCriticoWsp(tipo);
 
