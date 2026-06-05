@@ -1135,7 +1135,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     });
   }
 
+  function historialOperativoServiceWsp() {
+    return window.WSP?.services?.historialOperativo || null;
+  }
+
   function headersSupabase(extra = {}) {
+    const svc = historialOperativoServiceWsp();
+    if (svc && typeof svc.headersSupabase === "function") {
+      try {
+        return svc.headersSupabase({ anonKey: SUPABASE_ANON_KEY, extra });
+      } catch (e) {
+        console.warn("[WSP] Historial service no pudo armar headers Supabase. Se usa fallback.", e);
+      }
+    }
+
     return {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -2305,6 +2318,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function querySupabase(params = {}) {
+    const svc = historialOperativoServiceWsp();
+    if (svc && typeof svc.querySupabase === "function") {
+      try {
+        return svc.querySupabase(params);
+      } catch (e) {
+        console.warn("[WSP] Historial service no pudo armar query Supabase. Se usa fallback.", e);
+      }
+    }
+
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value === undefined || value === null) return;
@@ -2314,6 +2336,23 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   async function fetchSupabaseTabla(table, { method = "GET", params = {}, body = null, extraHeaders = {} } = {}) {
+    const svc = historialOperativoServiceWsp();
+    if (svc && typeof svc.fetchSupabaseTabla === "function") {
+      try {
+        return await svc.fetchSupabaseTabla({
+          supabaseUrl: SUPABASE_URL,
+          anonKey: SUPABASE_ANON_KEY,
+          table,
+          method,
+          params,
+          body,
+          extraHeaders,
+        });
+      } catch (e) {
+        console.warn("[WSP] Historial service falló en fetchSupabaseTabla. Se usa fallback legacy.", e);
+      }
+    }
+
     const qs = querySupabase(params);
     const url = `${SUPABASE_URL}/rest/v1/${table}${qs ? `?${qs}` : ""}`;
     const r = await fetch(url, {
