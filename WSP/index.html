@@ -50,16 +50,17 @@
       <option value="CONTROL SUPERIOR">CONTROL SUPERIOR</option>
       <option value="CONTROL MOVILES">CONTROL DE MÓVILES</option>
     </select>
+
     <div class="operativos-title-row">
       <label class="top-label operativos-title-label">OPERATIVOS</label>
       <span id="contadorOperativosWsp" class="contador-operativos-wsp" title="Cantidad de operativos disponibles">0</span>
     </div>
+
     <div class="operativo-select-wrap">
       <select id="horario" class="obligatorio">
         <option value="">Seleccionar Operativo</option>
       </select>
     </div>
-
 
     <!-- INFORMES: selector interno y formularios vinculados al operativo EN CURSO -->
     <div id="bloqueInformeSelector" class="bloque-informe-selector section hidden destacado">
@@ -248,7 +249,6 @@
       </div>
     </div>
 
-
     <div id="bloqueControlSuperior" class="section hidden destacado">
       <div class="control-superior-grid control-superior-grid-3">
         <label class="control-superior-item">
@@ -349,7 +349,6 @@
       </div>
     </div>
 
-
     <!-- PERSONAL -->
     <div class="section obligatorio destacado" id="bloquePersonal">
       <label>Personal Policial</label>
@@ -364,6 +363,7 @@
           <span>Subinspector Fernandez M.</span>
           <input type="checkbox" class="personal" value="Subinspector Fernandez M.">
         </label>
+
         <label class="check check-chip">
           <span>Oficial Merlo D.</span>
           <input type="checkbox" class="personal" value="Oficial Merlo D.">
@@ -388,7 +388,6 @@
           <span>Suboficial Benavidez.</span>
           <input type="checkbox" class="personal" value="Suboficial Benavidez.">
         </label>
-
       </div>
     </div>
 
@@ -396,16 +395,13 @@
     <div class="section obligatorio destacado" id="bloqueMovil">
       <label>Móviles:</label>
 
-
       <div class="grid-moviles">
         <label class="check check-chip"><span>12428</span><input type="checkbox" class="movil" value="12428"></label>
         <label class="check check-chip"><span>10139</span><input type="checkbox" class="movil" value="10139"></label>
         <label class="check check-chip"><span>12502</span><input type="checkbox" class="movil" value="12502"></label>
       </div>
 
-
       <label class="subtitulo">Motos:</label>
-
 
       <div class="grid-motos">
         <label class="check check-chip"><span>9092</span><input type="checkbox" class="moto" value="9092"></label>
@@ -413,7 +409,6 @@
         <label class="check check-chip"><span>12089</span><input type="checkbox" class="moto" value="12089"></label>
         <label class="check check-chip"><span>12090</span><input type="checkbox" class="moto" value="12090"></label>
         <label class="check check-chip"><span>9029</span><input type="checkbox" class="moto" value="9029"></label>
-        
         <label class="check check-chip"><span>9030</span><input type="checkbox" class="moto" value="9030"></label>
         <label class="check check-chip"><span>12091</span><input type="checkbox" class="moto" value="12091"></label>
         <label class="check check-chip"><span>12087</span><input type="checkbox" class="moto" value="12087"></label>
@@ -503,7 +498,6 @@
       <div class="fila-alcoholimetro">
         <label class="check check-chip"><span>AREC-0732</span><input type="checkbox" class="Alcoholimetro" value="AREC-0732"></label>
         <label class="check check-chip"><span>ARLM-0652</span><input type="checkbox" class="Alcoholimetro" value="ARLM-0652"></label>
-        
       </div>
     </div>
 
@@ -517,103 +511,105 @@
       </div>
 
       <div id="contenidoResultadosFinaliza">
-      <label id="tituloResultadosFinaliza">Resultados</label>
+        <label id="tituloResultadosFinaliza">Resultados</label>
 
-      <div class="resultado-item">
-        <label for="vehiculos" class="gold-title">Vehículos Fiscalizados:</label>
-        <input type="number" id="vehiculos" min="0" inputmode="numeric" placeholder="15">
-      </div>
-
-      <div class="resultado-item">
-        <label for="personas" class="gold-title">Personas Identificadas:</label>
-        <input type="number" id="personas" min="0" inputmode="numeric">
-      </div>
-
-      <div class="resultado-item">
-        <label for="testalom" class="gold-title">Test de Alómetro:</label>
-        <input type="number" id="testalom" min="0" inputmode="numeric">
-      </div>
-
-      <div class="resultado-item">
-        <label for="Alcotest" class="gold-title">Test de Alcoholímetro:</label>
-        <input type="number" id="Alcotest" min="0" inputmode="numeric">
-      </div>
-
-      <div id="bloquePositivosAlcoholimetro" class="resultado-subgrupo hidden">
         <div class="resultado-item">
-          <label for="positivaSancionable" class="gold-title">Positiva Sancionable:</label>
-          <input type="number" id="positivaSancionable" min="0" inputmode="numeric">
-        </div>
-
-        <div id="wrapGraduacionesSancionable" class="resultado-item resultado-item-graduaciones hidden">
-          <label class="gold-title">Graduaciones:</label>
-          <div id="graduacionesSancionable" class="graduaciones-inline" aria-live="polite"></div><span id="unitGraduacionesSancionable" class="graduaciones-unit hidden">g/l</span>
+          <label for="vehiculos" class="gold-title">Vehículos Fiscalizados:</label>
+          <input type="number" id="vehiculos" min="0" inputmode="numeric" placeholder="15">
         </div>
 
         <div class="resultado-item">
-          <label for="positivaNoSancionable" class="gold-title">Positiva no Sancionable:</label>
-          <input type="number" id="positivaNoSancionable" min="0" inputmode="numeric">
-        </div>
-
-        <div id="wrapGraduacionesNoSancionable" class="resultado-item resultado-item-graduaciones hidden">
-          <label class="gold-title">Graduaciones:</label>
-          <div id="graduacionesNoSancionable" class="graduaciones-inline" aria-live="polite"></div><span id="unitGraduacionesNoSancionable" class="graduaciones-unit hidden">g/l</span>
-        </div>
-      </div>
-
-      <div class="resultado-item">
-        <label for="actas" class="gold-title">Actas Labradas:</label>
-        <input type="number" id="actas" min="0" inputmode="numeric">
-      </div>
-
-      <div class="resultado-item">
-        <label for="Requisa" class="gold-title">Requisas:</label>
-        <input type="number" id="Requisa" min="0" inputmode="numeric">
-      </div>
-
-      <div class="resultado-item">
-        <label for="qrz" class="gold-title">Qrz:</label>
-        <input type="number" id="qrz" min="0" inputmode="numeric">
-      </div>
-
-      <div id="wrapQrzCasilleros" class="resultado-item resultado-item-sublista hidden">
-        <label class="gold-title">Documentos Qrz:</label>
-        <div id="qrzCasilleros" class="casilleros-verticales" aria-live="polite"></div>
-      </div>
-
-      <div class="resultado-item">
-        <label for="dominio" class="gold-title">Dominio:</label>
-        <input type="number" id="dominio" min="0" inputmode="numeric">
-      </div>
-
-      <div id="wrapDominioCasilleros" class="resultado-item resultado-item-sublista hidden">
-        <label class="gold-title">Dominios:</label>
-        <div id="dominioCasilleros" class="casilleros-verticales" aria-live="polite"></div>
-      </div>
-
-      <div class="medidas-cautelares-ui">
-        <label class="gold-title medidas-title">Medidas Cautelares:</label>
-
-        <div class="resultado-item">
-          <label for="Remision" class="gold-title">Remisión:</label>
-          <input type="number" id="Remision" min="0" inputmode="numeric">
+          <label for="personas" class="gold-title">Personas Identificadas:</label>
+          <input type="number" id="personas" min="0" inputmode="numeric">
         </div>
 
         <div class="resultado-item">
-          <label for="Retencion" class="gold-title">Retención:</label>
-          <input type="number" id="Retencion" min="0" inputmode="numeric">
+          <label for="testalom" class="gold-title">Test de Alómetro:</label>
+          <input type="number" id="testalom" min="0" inputmode="numeric">
         </div>
 
         <div class="resultado-item">
-          <label for="Prohibicion" class="gold-title">Prohibición de Circulación:</label>
-          <input type="number" id="Prohibicion" min="0" inputmode="numeric">
+          <label for="Alcotest" class="gold-title">Test de Alcoholímetro:</label>
+          <input type="number" id="Alcotest" min="0" inputmode="numeric">
+        </div>
+
+        <div id="bloquePositivosAlcoholimetro" class="resultado-subgrupo hidden">
+          <div class="resultado-item">
+            <label for="positivaSancionable" class="gold-title">Positiva Sancionable:</label>
+            <input type="number" id="positivaSancionable" min="0" inputmode="numeric">
+          </div>
+
+          <div id="wrapGraduacionesSancionable" class="resultado-item resultado-item-graduaciones hidden">
+            <label class="gold-title">Graduaciones:</label>
+            <div id="graduacionesSancionable" class="graduaciones-inline" aria-live="polite"></div>
+            <span id="unitGraduacionesSancionable" class="graduaciones-unit hidden">g/l</span>
+          </div>
+
+          <div class="resultado-item">
+            <label for="positivaNoSancionable" class="gold-title">Positiva no Sancionable:</label>
+            <input type="number" id="positivaNoSancionable" min="0" inputmode="numeric">
+          </div>
+
+          <div id="wrapGraduacionesNoSancionable" class="resultado-item resultado-item-graduaciones hidden">
+            <label class="gold-title">Graduaciones:</label>
+            <div id="graduacionesNoSancionable" class="graduaciones-inline" aria-live="polite"></div>
+            <span id="unitGraduacionesNoSancionable" class="graduaciones-unit hidden">g/l</span>
+          </div>
         </div>
 
         <div class="resultado-item">
-          <label for="Cesion" class="gold-title">Cesión de Conducción:</label>
-          <input type="number" id="Cesion" min="0" inputmode="numeric">
+          <label for="actas" class="gold-title">Actas Labradas:</label>
+          <input type="number" id="actas" min="0" inputmode="numeric">
         </div>
-      </div>
+
+        <div class="resultado-item">
+          <label for="Requisa" class="gold-title">Requisas:</label>
+          <input type="number" id="Requisa" min="0" inputmode="numeric">
+        </div>
+
+        <div class="resultado-item">
+          <label for="qrz" class="gold-title">Qrz:</label>
+          <input type="number" id="qrz" min="0" inputmode="numeric">
+        </div>
+
+        <div id="wrapQrzCasilleros" class="resultado-item resultado-item-sublista hidden">
+          <label class="gold-title">Documentos Qrz:</label>
+          <div id="qrzCasilleros" class="casilleros-verticales" aria-live="polite"></div>
+        </div>
+
+        <div class="resultado-item">
+          <label for="dominio" class="gold-title">Dominio:</label>
+          <input type="number" id="dominio" min="0" inputmode="numeric">
+        </div>
+
+        <div id="wrapDominioCasilleros" class="resultado-item resultado-item-sublista hidden">
+          <label class="gold-title">Dominios:</label>
+          <div id="dominioCasilleros" class="casilleros-verticales" aria-live="polite"></div>
+        </div>
+
+        <div class="medidas-cautelares-ui">
+          <label class="gold-title medidas-title">Medidas Cautelares:</label>
+
+          <div class="resultado-item">
+            <label for="Remision" class="gold-title">Remisión:</label>
+            <input type="number" id="Remision" min="0" inputmode="numeric">
+          </div>
+
+          <div class="resultado-item">
+            <label for="Retencion" class="gold-title">Retención:</label>
+            <input type="number" id="Retencion" min="0" inputmode="numeric">
+          </div>
+
+          <div class="resultado-item">
+            <label for="Prohibicion" class="gold-title">Prohibición de Circulación:</label>
+            <input type="number" id="Prohibicion" min="0" inputmode="numeric">
+          </div>
+
+          <div class="resultado-item">
+            <label for="Cesion" class="gold-title">Cesión de Conducción:</label>
+            <input type="number" id="Cesion" min="0" inputmode="numeric">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -627,119 +623,9 @@
 o se realizó (01) Procedimiento Policial"></textarea>
 
     <button type="button" id="btnEnviar">Enviar por WhatsApp</button>
-
   </div>
 
-  <!-- CARGA ROBUSTA WSP - fuente única Supabase / sin on_conflict=evento_key -->
-  <script>
-    (function () {
-      const VERSION = 'paso16-snapshot-estado-evento-completo-20260605-0015';
-      const SHARED_FILES = [
-        'supabaseClient.js',
-        'normalizadores.js',
-        'guardia.js',
-        'operativosRepo.js',
-        'nomencladorRepo.js',
-        'realtimeBus.js'
-      ];
-      const SHARED_BASES = [
-        '../SHARED/JS',
-        '../shared/js',
-        './SHARED/JS',
-        './shared/js',
-        '/operativos-wsp-adm/SHARED/JS',
-        '/operativos-wsp-adm/shared/js'
-      ];
-
-      function withVersion(src) {
-        return src + (src.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(VERSION);
-      }
-
-      function loadScript(src) {
-        return new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = withVersion(src);
-          s.async = false;
-          s.onload = () => resolve(src);
-          s.onerror = () => reject(new Error('No se pudo cargar ' + src));
-          document.head.appendChild(s);
-        });
-      }
-
-      async function urlExists(src) {
-        try {
-          const resp = await fetch(withVersion(src), { method: 'GET', cache: 'no-store' });
-          return resp.ok;
-        } catch (_) {
-          return false;
-        }
-      }
-
-      async function findSharedBase() {
-        for (const base of SHARED_BASES) {
-          if (await urlExists(base + '/supabaseClient.js')) return base;
-        }
-        throw new Error('No se encontró supabaseClient.js. Subí SHARED/JS completo al GitHub y app/shared/js completo en Electron.');
-      }
-
-      async function main() {
-        console.log('[WSP] PASO15 bootstrap iniciado', VERSION);
-        await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
-        const base = await findSharedBase();
-        console.log('[WSP] SHARED cargando desde:', base);
-        for (const file of SHARED_FILES) await loadScript(base + '/' + file);
-        if (!window.BMZCN || !window.BMZCN.OperativosRepo) {
-          throw new Error('BMZCN.OperativosRepo no quedó disponible después de cargar SHARED.');
-        }
-        const repoVersion = window.BMZCN.__OPERATIVOS_REPO_VERSION__ || 'sin-version';
-        console.log('[WSP] OperativosRepo:', repoVersion);
-        if (!String(repoVersion).includes('PASO16')) {
-          throw new Error('OperativosRepo incorrecto/viejo cargado: ' + repoVersion + '. Reemplazar TODAS las copias de shared/js.');
-        }
-        await loadScript('./nomenclador.js');
-        await loadScript('./controlsuperior.js');
-        await loadScript('./wsp.js?v=' + VERSION);
-      }
-
-      main().catch((error) => {
-        console.error('[WSP] Error de arranque PASO16', error);
-        alert('No se pudo iniciar WSP con fuente de verdad Supabase. Detalle: ' + (error && error.message ? error.message : error));
-      });
-    })();
-  </script>
+  <!-- CARGA ROBUSTA WSP - bootstrap modular -->
+  <script src="./wsp-bootstrap.js?v=paso16-snapshot-estado-evento-completo-20260605-0015"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
