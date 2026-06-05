@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso39-historial-informes-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso40-fotos-informes-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -41,6 +41,7 @@
     "./modules/wsp-historial-service.js",
     "./modules/wsp-historial-operativo.js",
     "./modules/wsp-historial-informes.js",
+    "./modules/wsp-fotos-informes.js",
 
     /*
       LEGACY ACTUAL:

@@ -5791,7 +5791,39 @@ ${bold(`Moviles ${organismo}:`)}`)
     return resultadoInformeSinSupabaseWsp(data, "OperativosRepo no disponible");
   }
 
+  function fotosInformesRepoWsp() {
+    return window.WSP?.services?.fotosInformes || window.WSP?.modules?.fotosInformes || null;
+  }
+
+  function depsFotosInformesWsp() {
+    return {
+      SUPABASE_URL,
+      HISTORIAL_FOTOS_BUCKET,
+      HISTORIAL_FOTOS_TABLE,
+      headersSupabase,
+      getGuardiaFechaISO,
+      limpiarTextoSimple,
+      normalizarComponenteInformeKeyWsp,
+      construirOperativoKeyEstable,
+      normalizarImagenControlMovil,
+      fetch: window.fetch,
+      console,
+    };
+  }
+
   async function eliminarFotosPreviasInformeWsp(resultadoHistorial) {
+    const svc = fotosInformesRepoWsp();
+    if (svc && typeof svc.eliminarFotosPreviasInformeWsp === "function") {
+      try {
+        return await svc.eliminarFotosPreviasInformeWsp(resultadoHistorial, {
+          franja: franjaSeleccionada,
+          deps: depsFotosInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Fotos informes modular falló al limpiar fotos previas. Se usa fallback legacy.", e);
+      }
+    }
+
     const evento = resultadoHistorial?.evento || {};
     const informeKey = limpiarTextoSimple(evento.informe_key || resultadoHistorial?.informe_key || evento?.payload_completo?.informe_key || "");
     const guardiaFecha = limpiarTextoSimple(evento.guardia_fecha || getGuardiaFechaISO());
@@ -6371,6 +6403,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function subirFotoInformeAlcoholemia(file, resultadoHistorial, numero) {
+    const svc = fotosInformesRepoWsp();
+    if (svc && typeof svc.subirFotoInformeWsp === "function") {
+      try {
+        return await svc.subirFotoInformeWsp(file, resultadoHistorial, numero, {
+          tipoEvento: "ALCOHOLEMIA_POSITIVA",
+          carpeta: "alcoholemia",
+          franja: franjaSeleccionada,
+          deps: depsFotosInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Fotos informes modular falló al subir foto de alcoholemia. Se usa fallback legacy.", e);
+      }
+    }
+
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
@@ -6413,6 +6459,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function subirFotosInformeAlcoholemia(resultadoHistorial, files) {
+    const svc = fotosInformesRepoWsp();
+    if (svc && typeof svc.subirFotosInformeWsp === "function") {
+      try {
+        return await svc.subirFotosInformeWsp(resultadoHistorial, files, {
+          tipoEvento: "ALCOHOLEMIA_POSITIVA",
+          carpeta: "alcoholemia",
+          franja: franjaSeleccionada,
+          deps: depsFotosInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Fotos informes modular falló al subir fotos de alcoholemia. Se usa fallback legacy.", e);
+      }
+    }
+
     const fotos = (Array.isArray(files) ? files : []).slice(0, 4);
     for (let i = 0; i < fotos.length; i += 1) {
       await subirFotoInformeAlcoholemia(fotos[i], resultadoHistorial, i + 1);
@@ -6735,6 +6795,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function subirFotoInformeDecto460(file, resultadoHistorial, numero) {
+    const svc = fotosInformesRepoWsp();
+    if (svc && typeof svc.subirFotoInformeWsp === "function") {
+      try {
+        return await svc.subirFotoInformeWsp(file, resultadoHistorial, numero, {
+          tipoEvento: "DECTO_460_22",
+          carpeta: "460",
+          franja: franjaSeleccionada,
+          deps: depsFotosInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Fotos informes modular falló al subir foto de Decto 460/22. Se usa fallback legacy.", e);
+      }
+    }
+
     if (!file || !resultadoHistorial?.evento?.id) return null;
     const archivo = await normalizarImagenControlMovil(file);
     const eventoId = String(resultadoHistorial.evento.id);
@@ -6777,6 +6851,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function subirFotosInformeDecto460(resultadoHistorial, files) {
+    const svc = fotosInformesRepoWsp();
+    if (svc && typeof svc.subirFotosInformeWsp === "function") {
+      try {
+        return await svc.subirFotosInformeWsp(resultadoHistorial, files, {
+          tipoEvento: "DECTO_460_22",
+          carpeta: "460",
+          franja: franjaSeleccionada,
+          deps: depsFotosInformesWsp(),
+        });
+      } catch (e) {
+        console.warn("[WSP] Fotos informes modular falló al subir fotos de Decto 460/22. Se usa fallback legacy.", e);
+      }
+    }
+
     const fotos = (Array.isArray(files) ? files : []).slice(0, 4);
     for (let i = 0; i < fotos.length; i += 1) {
       await subirFotoInformeDecto460(fotos[i], resultadoHistorial, i + 1);
