@@ -921,6 +921,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirPayloadElementosActual() {
+    const mod = formularioOperativoWsp();
+    if (mod && typeof mod.construirPayloadElementosActual === "function") {
+      return mod.construirPayloadElementosActual();
+    }
     return {
       ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
       HT: leerSeleccionPorClase("HT"),
@@ -4220,28 +4224,48 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   // ======================================================
-  // ===== SELECCIONES =====================================
+  // ===== SELECCIONES / FORMULARIO OPERATIVO ==============
   // ======================================================
+  function formularioOperativoWsp() {
+    return window.WSP?.forms?.operativo || window.WSP?.modules?.formularioOperativo || null;
+  }
+
   function seleccion(clase) {
+    const mod = formularioOperativoWsp();
+    if (mod && typeof mod.seleccion === "function") return mod.seleccion(clase);
     return Array.from(document.querySelectorAll("." + clase + ":checked"))
       .map((e) => e.value)
       .join("\n");
   }
 
   function seleccionLinea(clase, sep) {
+    const mod = formularioOperativoWsp();
+    if (mod && typeof mod.seleccionLinea === "function") return mod.seleccionLinea(clase, sep);
     const v = Array.from(document.querySelectorAll("." + clase + ":checked")).map((e) => e.value);
     return v.length ? v.join(" " + sep + " ") : "/";
   }
 
   function leerSeleccionPorClase(clase) {
+    const mod = formularioOperativoWsp();
+    if (mod && typeof mod.leerSeleccionPorClase === "function") return mod.leerSeleccionPorClase(clase);
     return Array.from(document.querySelectorAll("." + clase + ":checked")).map((e) => e.value);
   }
 
   function lineaDesdeArray(arr, sep) {
+    const modFormulario = formularioOperativoWsp();
+    if (modFormulario && typeof modFormulario.lineaDesdeArray === "function") return modFormulario.lineaDesdeArray(arr, sep);
     const mod = textoOperativoWsp();
     if (mod && typeof mod.lineaDesdeArray === "function") return mod.lineaDesdeArray(arr, sep);
     const v = Array.isArray(arr) ? arr : [];
     return v.length ? v.join(" " + sep + " ") : "/";
+  }
+
+  function resolverLecturaFormularioOperativo(ctx = {}) {
+    const mod = formularioOperativoWsp();
+    if (mod && typeof mod.resolverLecturaFormularioOperativo === "function") {
+      return mod.resolverLecturaFormularioOperativo(ctx);
+    }
+    return null;
   }
 
   // ======================================================
@@ -7054,58 +7078,97 @@ ${bold(`Moviles ${organismo}:`)}`)
       inicioGuardadoActual = inicioCompartido;
     }
 
-    const personalTexto = (esFinaliza || usarMismoPersonal)
-      ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
-      : seleccion("personal");
-
-    if (!personalTexto) {
-      alert(esFinaliza
-        ? "El INICIO guardado no tiene personal policial. Actualice primero el INICIO del operativo en curso."
-        : "Debe seleccionar personal policial."
-      );
-      return;
-    }
-
-    const mov = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
-    const mot = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
-    if (mov === "/" && mot === "/") {
-      alert(esFinaliza
-        ? "El INICIO guardado no tiene móvil ni moto. Actualice primero el INICIO del operativo en curso."
-        : "Debe seleccionar al menos un móvil o moto."
-      );
-      return;
-    }
-
     const elementosInicio = (esFinaliza || usarMismosElementos) ? normalizarPayloadElementos(inicioCompartido) : null;
-    if ((esFinaliza || usarMismosElementos) && !elementosInicio) {
-      alert(esFinaliza
-        ? "El INICIO guardado no tiene elementos. Actualice primero el INICIO del operativo en curso."
-        : "No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA."
-      );
-      return;
+    const lecturaFormulario = resolverLecturaFormularioOperativo({
+      esFinaliza,
+      usarMismoPersonal,
+      usarMismoMovil,
+      usarMismosElementos,
+      inicioCompartido,
+      elementosInicio,
+    });
+
+    let personalTexto;
+    let mov;
+    let mot;
+    let usarElementosDesdeInicio;
+    let escopetasTXT;
+    let htTXT;
+    let pdaTXT;
+    let impTXT;
+    let alomTXT;
+    let alcoTXT;
+
+    if (lecturaFormulario) {
+      if (!lecturaFormulario.ok) {
+        alert(lecturaFormulario.mensaje || "Revise los datos del formulario del operativo.");
+        return;
+      }
+      ({
+        personalTexto,
+        mov,
+        mot,
+        usarElementosDesdeInicio,
+        escopetasTXT,
+        htTXT,
+        pdaTXT,
+        impTXT,
+        alomTXT,
+        alcoTXT,
+      } = lecturaFormulario);
+    } else {
+      personalTexto = (esFinaliza || usarMismoPersonal)
+        ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
+        : seleccion("personal");
+
+      if (!personalTexto) {
+        alert(esFinaliza
+          ? "El INICIO guardado no tiene personal policial. Actualice primero el INICIO del operativo en curso."
+          : "Debe seleccionar personal policial."
+        );
+        return;
+      }
+
+      mov = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
+      mot = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
+      if (mov === "/" && mot === "/") {
+        alert(esFinaliza
+          ? "El INICIO guardado no tiene móvil ni moto. Actualice primero el INICIO del operativo en curso."
+          : "Debe seleccionar al menos un móvil o moto."
+        );
+        return;
+      }
+
+      if ((esFinaliza || usarMismosElementos) && !elementosInicio) {
+        alert(esFinaliza
+          ? "El INICIO guardado no tiene elementos. Actualice primero el INICIO del operativo en curso."
+          : "No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA."
+        );
+        return;
+      }
+
+      usarElementosDesdeInicio = esFinaliza || usarMismosElementos;
+      escopetasTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
+        : seleccionLinea("ESCOPETA", "/");
+      htTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.HT, "/")
+        : seleccionLinea("HT", "/");
+      pdaTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.PDA, "/")
+        : seleccionLinea("PDA", "/");
+      impTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.IMPRESORA, "/")
+        : seleccionLinea("IMPRESORA", "/");
+      alomTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.Alometro, "/")
+        : seleccionLinea("Alometro", "/");
+      alcoTXT = usarElementosDesdeInicio
+        ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
+        : seleccionLinea("Alcoholimetro", "/");
     }
 
     const fecha = new Date().toLocaleDateString("es-AR");
-
-    const usarElementosDesdeInicio = esFinaliza || usarMismosElementos;
-    const escopetasTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
-      : seleccionLinea("ESCOPETA", "/");
-    const htTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.HT, "/")
-      : seleccionLinea("HT", "/");
-    const pdaTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.PDA, "/")
-      : seleccionLinea("PDA", "/");
-    const impTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.IMPRESORA, "/")
-      : seleccionLinea("IMPRESORA", "/");
-    const alomTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.Alometro, "/")
-      : seleccionLinea("Alometro", "/");
-    const alcoTXT = usarElementosDesdeInicio
-      ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
-      : seleccionLinea("Alcoholimetro", "/");
 
     const modMensajesOperativo = mensajesOperativoWsp();
     const extraConjunto = bloqueConjuntoExtra();
