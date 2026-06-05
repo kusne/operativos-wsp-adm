@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso20-ui-helpers-modular-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso21-alcoholimetro-modular-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -9,6 +9,7 @@
     "./modules/wsp-whatsapp.js",
     "./modules/wsp-guardia.js",
     "./modules/wsp-ui.js",
+    "./modules/wsp-alcoholimetro.js",
 
     /*
       LEGACY ACTUAL:

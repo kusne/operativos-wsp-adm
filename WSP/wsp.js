@@ -267,28 +267,61 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return String(v).padStart(2, "0");
   }
 
+  function refsAlcoholimetroWsp() {
+    return {
+      inputAlcotest,
+      inputPositivaSancionable,
+      inputPositivaNoSancionable,
+      bloquePositivosAlcoholimetro,
+      wrapGraduacionesSancionable,
+      wrapGraduacionesNoSancionable,
+      graduacionesSancionable,
+      graduacionesNoSancionable,
+      unitGraduacionesSancionable,
+      unitGraduacionesNoSancionable,
+    };
+  }
+
+  function refsQrzDominioWsp() {
+    return {
+      inputQrz,
+      inputDominio,
+      wrapQrzCasilleros,
+      qrzCasilleros,
+      wrapDominioCasilleros,
+      dominioCasilleros,
+    };
+  }
+
+  function alcoholimetroUiWsp() {
+    return window.WSP?.ui?.alcoholimetro || null;
+  }
+
   function normalizarTextoGraduacion(valor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.normalizarTextoGraduacion === "function") return mod.normalizarTextoGraduacion(valor);
     return String(valor || "").replace(/\s+/g, "").trim();
   }
 
   function graduacionTieneFormatoValido(valor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.graduacionTieneFormatoValido === "function") return mod.graduacionTieneFormatoValido(valor);
     return /^\d+[.,]\d{2}$/.test(normalizarTextoGraduacion(valor));
   }
 
   function graduacionEsCero(valor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.graduacionEsCero === "function") return mod.graduacionEsCero(valor);
     const limpio = normalizarTextoGraduacion(valor);
     if (!graduacionTieneFormatoValido(limpio)) return false;
     return Number(limpio.replace(",", ".")) === 0;
   }
 
   function crearInputGraduacion(valorInicial) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.crearInputGraduacion === "function") return mod.crearInputGraduacion(valorInicial);
     const slot = document.createElement("div");
     slot.className = "graduacion-slot";
-
-    const abre = document.createElement("span");
-    abre.className = "graduacion-paren";
-    abre.textContent = "(";
-
     const input = document.createElement("input");
     input.type = "text";
     input.inputMode = "decimal";
@@ -296,123 +329,75 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     input.maxLength = 4;
     input.placeholder = "0,86";
     input.value = valorInicial || "";
-
     input.addEventListener("input", () => limpiarErrorCampo(input));
-
-    const cierra = document.createElement("span");
-    cierra.className = "graduacion-paren";
-    cierra.textContent = ")";
-
-    slot.appendChild(abre);
     slot.appendChild(input);
-    slot.appendChild(cierra);
-
     return slot;
   }
 
   function obtenerValoresGraduaciones(contenedor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.obtenerValoresGraduaciones === "function") return mod.obtenerValoresGraduaciones(contenedor);
     return Array.from(contenedor?.querySelectorAll('input[type="text"]') || []).map((inp) => inp.value || "");
   }
 
   function renderGraduaciones(contenedor, cantidad) {
-    if (!contenedor) return;
-
-    const cant = Math.max(0, parseInt(cantidad, 10) || 0);
-    const actuales = obtenerValoresGraduaciones(contenedor);
-    contenedor.innerHTML = "";
-
-    for (let i = 0; i < cant; i += 1) {
-      contenedor.appendChild(crearInputGraduacion(actuales[i] || ""));
-    }
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.renderGraduaciones === "function") return mod.renderGraduaciones(contenedor, cantidad);
   }
 
   function limpiarGraduaciones(contenedor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.limpiarGraduaciones === "function") return mod.limpiarGraduaciones(contenedor);
     if (!contenedor) return;
     contenedor.innerHTML = "";
   }
 
   function sanitizarValorQrz(valor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.sanitizarValorQrz === "function") return mod.sanitizarValorQrz(valor);
     return String(valor || "").replace(/\D+/g, "").slice(0, 9);
   }
 
   function sanitizarValorDominio(valor) {
-    return String(valor || "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9 ]+/g, "")
-      .slice(0, 16);
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.sanitizarValorDominio === "function") return mod.sanitizarValorDominio(valor);
+    return String(valor || "").toUpperCase().replace(/[^A-Z0-9 ]+/g, "").slice(0, 16);
   }
 
   function crearInputDinamicoLista(tipo, valorInicial) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.crearInputDinamicoLista === "function") return mod.crearInputDinamicoLista(tipo, valorInicial);
     const wrap = document.createElement("div");
     wrap.className = "casillero-dinamico";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.autocomplete = "off";
-    input.spellcheck = false;
-    input.className = `casillero-${tipo}`;
-
-    if (tipo === "qrz") {
-      input.inputMode = "numeric";
-      input.maxLength = 9;
-      input.placeholder = "36459780";
-      input.value = sanitizarValorQrz(valorInicial);
-      input.addEventListener("input", () => {
-        input.value = sanitizarValorQrz(input.value);
-      });
-    } else {
-      input.inputMode = "text";
-      input.maxLength = 16;
-      input.placeholder = "AA123QK Sedan";
-      input.value = sanitizarValorDominio(valorInicial);
-      input.addEventListener("input", () => {
-        input.value = sanitizarValorDominio(input.value);
-      });
-    }
-
-    wrap.appendChild(input);
     return wrap;
   }
 
   function obtenerValoresListaDinamica(contenedor, tipo) {
-    const inputs = Array.from(contenedor?.querySelectorAll('input[type="text"]') || []);
-    return inputs.map((input) => {
-      const valor = tipo === "qrz" ? sanitizarValorQrz(input.value) : sanitizarValorDominio(input.value);
-      input.value = valor;
-      return valor;
-    });
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.obtenerValoresListaDinamica === "function") return mod.obtenerValoresListaDinamica(contenedor, tipo);
+    return [];
   }
 
   function renderListaDinamica(contenedor, cantidad, tipo) {
-    if (!contenedor) return;
-
-    const cant = Math.max(0, parseInt(cantidad, 10) || 0);
-    const actuales = obtenerValoresListaDinamica(contenedor, tipo);
-    contenedor.innerHTML = "";
-
-    for (let i = 0; i < cant; i += 1) {
-      contenedor.appendChild(crearInputDinamicoLista(tipo, actuales[i] || ""));
-    }
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.renderListaDinamica === "function") return mod.renderListaDinamica(contenedor, cantidad, tipo);
   }
 
   function limpiarListaDinamica(contenedor) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.limpiarListaDinamica === "function") return mod.limpiarListaDinamica(contenedor);
     if (!contenedor) return;
     contenedor.innerHTML = "";
   }
 
   function sincronizarUIQrzDominio() {
-    const cantidadQrz = leerEnteroInput(inputQrz);
-    wrapQrzCasilleros?.classList.toggle("hidden", cantidadQrz <= 0);
-    if (cantidadQrz > 0) renderListaDinamica(qrzCasilleros, cantidadQrz, "qrz");
-    else limpiarListaDinamica(qrzCasilleros);
-
-    const cantidadDominio = leerEnteroInput(inputDominio);
-    wrapDominioCasilleros?.classList.toggle("hidden", cantidadDominio <= 0);
-    if (cantidadDominio > 0) renderListaDinamica(dominioCasilleros, cantidadDominio, "dominio");
-    else limpiarListaDinamica(dominioCasilleros);
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.sincronizarUIQrzDominio === "function") return mod.sincronizarUIQrzDominio(refsQrzDominioWsp());
   }
 
   function construirBloqueListaVertical(titulo, cantidad, valores) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.construirBloqueListaVertical === "function") return mod.construirBloqueListaVertical(titulo, cantidad, valores);
     const lineas = [`${titulo}: (${formatearCantidad(cantidad)})`];
     const completos = (Array.isArray(valores) ? valores : []).filter(Boolean);
     if (completos.length) lineas.push(...completos);
@@ -420,170 +405,28 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function sincronizarUIAlcoholimetro() {
-    const alcotest = leerEnteroInput(inputAlcotest);
-    const posSan = leerEnteroInput(inputPositivaSancionable);
-    const posNo = leerEnteroInput(inputPositivaNoSancionable);
-
-    limpiarErrorCampo(inputAlcotest);
-
-    const mostrarPositivos = alcotest > 0;
-    bloquePositivosAlcoholimetro?.classList.toggle("hidden", !mostrarPositivos);
-
-    if (!mostrarPositivos) {
-      if (inputPositivaSancionable) inputPositivaSancionable.value = "";
-      if (inputPositivaNoSancionable) inputPositivaNoSancionable.value = "";
-      wrapGraduacionesSancionable?.classList.add("hidden");
-      wrapGraduacionesNoSancionable?.classList.add("hidden");
-      unitGraduacionesSancionable?.classList.add("hidden");
-      unitGraduacionesNoSancionable?.classList.add("hidden");
-      limpiarGraduaciones(graduacionesSancionable);
-      limpiarGraduaciones(graduacionesNoSancionable);
-      return;
-    }
-
-    const mostrarGradSan = posSan > 0;
-    wrapGraduacionesSancionable?.classList.toggle("hidden", !mostrarGradSan);
-    unitGraduacionesSancionable?.classList.toggle("hidden", !mostrarGradSan);
-    if (mostrarGradSan) renderGraduaciones(graduacionesSancionable, posSan);
-    else limpiarGraduaciones(graduacionesSancionable);
-
-    const mostrarGradNo = posNo > 0;
-    wrapGraduacionesNoSancionable?.classList.toggle("hidden", !mostrarGradNo);
-    unitGraduacionesNoSancionable?.classList.toggle("hidden", !mostrarGradNo);
-    if (mostrarGradNo) renderGraduaciones(graduacionesNoSancionable, posNo);
-    else limpiarGraduaciones(graduacionesNoSancionable);
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.sincronizarUIAlcoholimetro === "function") return mod.sincronizarUIAlcoholimetro(refsAlcoholimetroWsp());
   }
 
-  function serializarGraduaciones(contenedor, etiqueta, { permiteCero = false } = {}) {
-    const inputs = Array.from(contenedor?.querySelectorAll('input[type="text"]') || []);
-    const valores = [];
-
-    for (const input of inputs) {
-      const valor = normalizarTextoGraduacion(input.value);
-
-      if (!valor) {
-        return {
-          ok: false,
-          mensaje: `Complete todas las graduaciones de ${etiqueta}.`,
-          input,
-        };
-      }
-
-      if (!graduacionTieneFormatoValido(valor)) {
-        return {
-          ok: false,
-          mensaje: `Cada graduación de ${etiqueta} debe tener formato 0.00 o 0,00.`,
-          input,
-        };
-      }
-
-      if (!permiteCero && graduacionEsCero(valor)) {
-        return {
-          ok: false,
-          mensaje: `En Positiva Sancionable no se permite 0.00 ni 0,00.`,
-          input,
-        };
-      }
-
-      valores.push(valor);
-    }
-
-    return { ok: true, valores };
+  function serializarGraduaciones(contenedor, etiqueta, opts = {}) {
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.serializarGraduaciones === "function") return mod.serializarGraduaciones(contenedor, etiqueta, opts);
+    return { ok: true, valores: [] };
   }
 
   function construirLineaGraduaciones(valores) {
-    return `Graduaciones: ${valores.map((v) => `(${v})`).join(" ")} g/l`;
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.construirLineaGraduaciones === "function") return mod.construirLineaGraduaciones(valores);
+    return `Graduaciones: ${(Array.isArray(valores) ? valores : []).map((v) => `(${v})`).join(" ")} g/l`;
   }
 
   function construirBloqueAlcoholimetro() {
-    const alcotest = leerEnteroInput(inputAlcotest);
-
-    if (alcotest <= 0) {
-      return {
-        ok: true,
-        lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`],
-        cantidadSancionables: 0,
-        cantidadNoSancionables: 0,
-        totalValidos: 0,
-        valoresSan: [],
-        valoresNo: [],
-      };
-    }
-
-    const posSan = leerEnteroInput(inputPositivaSancionable);
-    const posNo = leerEnteroInput(inputPositivaNoSancionable);
-    const sumaIngresada = posSan + posNo;
-
-    if (posSan <= 0 && posNo <= 0) {
-      const el = inputPositivaSancionable || inputPositivaNoSancionable || inputAlcotest;
-      return {
-        ok: false,
-        mensaje: 'Si "Test de Alcoholímetro" es mayor a 0, debe completar Positiva Sancionable o Positiva no Sancionable con un numeral mayor a cero.',
-        input: el,
-      };
-    }
-
-    if (alcotest !== sumaIngresada) {
-      return {
-        ok: false,
-        mensaje: 'Revisar Numerales: Test de Alcoholímetro debe ser igual a Positiva Sancionable + Positiva no Sancionable.',
-        input: inputAlcotest,
-      };
-    }
-
-    let valoresSan = [];
-    let valoresNo = [];
-
-    if (posSan > 0) {
-      const validacionSan = serializarGraduaciones(graduacionesSancionable, "Positiva Sancionable");
-      if (!validacionSan.ok) return validacionSan;
-      valoresSan = validacionSan.valores;
-    }
-
-    if (posNo > 0) {
-      const validacionNo = serializarGraduaciones(graduacionesNoSancionable, "Positiva no Sancionable", { permiteCero: true });
-      if (!validacionNo.ok) return validacionNo;
-      valoresNo = validacionNo.valores.filter((v) => !graduacionEsCero(v));
-    }
-
-    const totalValidos = valoresSan.length + valoresNo.length;
-    if (totalValidos === 0) {
-      return {
-        ok: true,
-        lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`],
-        cantidadSancionables: 0,
-        cantidadNoSancionables: 0,
-        totalValidos: 0,
-        valoresSan: [],
-        valoresNo: [],
-      };
-    }
-
-    const lineas = [
-      `Test de Alcoholímetro: (${formatearCantidad(totalValidos)})`,
-      `Positiva Sancionable: (${formatearCantidad(valoresSan.length)})`,
-    ];
-
-    if (valoresSan.length > 0) {
-      lineas.push(construirLineaGraduaciones(valoresSan));
-    }
-
-    lineas.push(`Positiva no Sancionable: (${formatearCantidad(valoresNo.length)})`);
-
-    if (valoresNo.length > 0) {
-      lineas.push(construirLineaGraduaciones(valoresNo));
-    }
-
-    return {
-      ok: true,
-      lineas,
-      cantidadSancionables: valoresSan.length,
-      cantidadNoSancionables: valoresNo.length,
-      totalValidos,
-      valoresSan,
-      valoresNo,
-    };
+    const mod = alcoholimetroUiWsp();
+    if (mod && typeof mod.construirBloqueAlcoholimetro === "function") return mod.construirBloqueAlcoholimetro(refsAlcoholimetroWsp());
+    return { ok: true, lineas: [`Test de Alcoholímetro: (${formatearCantidad(0)})`], cantidadSancionables: 0, cantidadNoSancionables: 0, totalValidos: 0, valoresSan: [], valoresNo: [] };
   }
+
   function normalizarInputNoNegativo(el) {
     const ui = window.WSP?.ui?.helpers;
     if (ui && typeof ui.normalizarInputNoNegativo === "function") return ui.normalizarInputNoNegativo(el);
