@@ -6,6 +6,9 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.Versiones = root.Versiones || {};
+  root.Versiones.normalizadores = 'PASO15_NORMALIZADORES_20260604_2355';
+
 
   function clean(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
