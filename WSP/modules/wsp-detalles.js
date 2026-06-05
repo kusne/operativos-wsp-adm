@@ -60,6 +60,10 @@
       .trim();
   }
 
+  function obtenerServicioNomencladorWsp() {
+    return window.WSP?.services?.nomenclador || null;
+  }
+
   function extraerReferenciaDesdeObjetoNomenclador(item, fallback = "") {
     if (!item) return fallback;
 
@@ -89,6 +93,16 @@
     const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
     const fallbackLimpio = limpiarDescripcionDetalle(fallback || "");
     if (!codigoLimpio || codigoLimpio === "17117") return fallbackLimpio;
+
+    const svcNomenclador = obtenerServicioNomencladorWsp();
+    if (svcNomenclador && typeof svcNomenclador.obtenerReferencia === "function") {
+      try {
+        const refServicio = limpiarDescripcionDetalle(svcNomenclador.obtenerReferencia(codigoLimpio, fallbackLimpio || ""));
+        if (refServicio) return refServicio;
+      } catch (e) {
+        console.warn("[WSP detalles] No se pudo leer referencia desde servicio nomenclador.", e);
+      }
+    }
 
     const fuentesObjeto = [
       () => window.NOMENCLADOR_CODIGOS,
@@ -131,8 +145,16 @@
   function codigoExisteEnNomenclador(codigo) {
     const codigoLimpio = String(codigo || "").replace(/\D+/g, "");
     if (!codigoLimpio) return false;
-    // 460/22 es procedimiento/contador, no detalle de infracción.
+    // 460/22 es procedimiento/contador, no detalle de infracción común.
+    // Se autocompleta por caso especial y recién al enviar pasa a Observaciones.
     if (codigoLimpio === "460" || codigoLimpio === "46022" || codigoLimpio === "22") return false;
+
+    const svcNomenclador = obtenerServicioNomencladorWsp();
+    if (svcNomenclador && typeof svcNomenclador.existeCodigo === "function") {
+      try {
+        if (svcNomenclador.existeCodigo(codigoLimpio)) return true;
+      } catch {}
+    }
 
     const ref = obtenerReferenciaNomenclador(codigoLimpio, "");
     return !!limpiarDescripcionDetalle(ref);

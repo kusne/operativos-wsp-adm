@@ -1,12 +1,26 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso22-detalles-modular-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso23-nomenclador-service-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
     "./modules/wsp-utils.js",
+
+    /*
+      NOMENCLADOR LOCAL FALLBACK:
+      Define getReferenciaFalta / getNomencladorFalta / NOMENCLADOR_CODIGOS.
+      Debe cargarse antes de wsp-nomenclador.js y wsp-detalles.js.
+    */
     "./nomenclador.js",
+
+    /*
+      SERVICIO NOMENCLADOR:
+      Envuelve el nomenclador local en window.WSP.services.nomenclador.
+      Más adelante este módulo podrá leer desde Supabase y usar nomenclador.js como fallback.
+    */
+    "./modules/wsp-nomenclador.js",
+
     "./modules/wsp-whatsapp.js",
     "./modules/wsp-guardia.js",
     "./modules/wsp-ui.js",
@@ -15,9 +29,7 @@
 
     /*
       LEGACY ACTUAL:
-      Por ahora sigue cargando el wsp.js completo.
-      A medida que modularicemos, vamos sacando partes de wsp.js
-      y agregando nuevos módulos arriba de esta línea.
+      Sigue cargando el wsp.js completo mientras se continúa modularizando.
     */
     "./wsp.js"
   ];
