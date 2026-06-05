@@ -303,6 +303,23 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return window.WSP?.ui?.alcoholimetro || null;
   }
 
+  function operativoUiWsp() {
+    return window.WSP?.ui?.operativo || null;
+  }
+
+  function refsOperativoUiWsp() {
+    return {
+      bloquePersonal: document.getElementById("bloquePersonal"),
+      bloqueMovil: document.getElementById("bloqueMovil"),
+      labelObs,
+      textareaObs,
+      divFinaliza,
+      divDetalles,
+      divMismosElementos,
+      bloquePresenciaActiva,
+    };
+  }
+
   function normalizarTextoGraduacion(valor) {
     const mod = alcoholimetroUiWsp();
     if (mod && typeof mod.normalizarTextoGraduacion === "function") return mod.normalizarTextoGraduacion(valor);
@@ -4664,6 +4681,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setElementosVisibles(visible) {
+    const mod = operativoUiWsp();
+    if (mod && typeof mod.setElementosVisibles === "function") {
+      return mod.setElementosVisibles(visible, refsOperativoUiWsp());
+    }
+
     const ids = [
       "bloqueEscopeta",
       "bloqueHT",
@@ -4681,12 +4703,22 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setPersonalVisible(visible) {
+    const mod = operativoUiWsp();
+    if (mod && typeof mod.setPersonalVisible === "function") {
+      return mod.setPersonalVisible(visible, refsOperativoUiWsp());
+    }
+
     const el = document.getElementById("bloquePersonal");
     if (!el) return;
     el.classList.toggle("hidden", !visible);
   }
 
   function setMovilidadVisible(visible) {
+    const mod = operativoUiWsp();
+    if (mod && typeof mod.setMovilidadVisible === "function") {
+      return mod.setMovilidadVisible(visible, refsOperativoUiWsp());
+    }
+
     const el = document.getElementById("bloqueMovil");
     if (!el) return;
     el.classList.toggle("hidden", !visible);
@@ -4706,6 +4738,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setObservacionesVisible(visible) {
+    const mod = operativoUiWsp();
+    if (mod && typeof mod.setObservacionesVisible === "function") {
+      return mod.setObservacionesVisible(visible, refsOperativoUiWsp());
+    }
+
     if (labelObs) labelObs.classList.toggle("hidden", !visible);
     if (textareaObs) textareaObs.classList.toggle("hidden", !visible);
   }
