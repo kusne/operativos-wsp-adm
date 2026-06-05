@@ -6,6 +6,9 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.Versiones = root.Versiones || {};
+  root.Versiones.guardia = 'PASO15_GUARDIA_20260604_2355';
+
 
   function pad(n) { return String(n).padStart(2, '0'); }
 
