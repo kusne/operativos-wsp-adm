@@ -3,7 +3,7 @@
 
   window.WSP = window.WSP || {};
 
-  window.WSP.version = "paso18-whatsapp-modular-20260605";
+  window.WSP.version = "paso19-guardia-modular-20260605";
   window.WSP.modules = window.WSP.modules || {};
   window.WSP.state = window.WSP.state || {};
   window.WSP.services = window.WSP.services || {};

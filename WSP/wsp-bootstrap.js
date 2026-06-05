@@ -1,12 +1,13 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso18-whatsapp-modular-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso19-guardia-modular-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
     "./modules/wsp-utils.js",
     "./modules/wsp-whatsapp.js",
+    "./modules/wsp-guardia.js",
 
     /*
       LEGACY ACTUAL:
