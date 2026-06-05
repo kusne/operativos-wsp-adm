@@ -7,6 +7,9 @@
   'use strict';
 
   const root = window.BMZCN = window.BMZCN || {};
+  root.Versiones = root.Versiones || {};
+  root.Versiones.nomencladorRepo = 'PASO15_NOMENCLADOR_REPO_20260604_2355';
+
   const TABLE = 'nomenclador_infracciones';
 
   let cache = null;
