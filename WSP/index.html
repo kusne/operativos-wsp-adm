@@ -633,7 +633,7 @@ o se realizó (01) Procedimiento Policial"></textarea>
   <!-- CARGA ROBUSTA WSP - fuente única Supabase / sin on_conflict=evento_key -->
   <script>
     (function () {
-      const VERSION = 'paso15-wsp-shared-unico-manual-upsert-20260604-2355';
+      const VERSION = 'paso16-snapshot-estado-evento-completo-20260605-0015';
       const SHARED_FILES = [
         'supabaseClient.js',
         'normalizadores.js',
@@ -693,16 +693,16 @@ o se realizó (01) Procedimiento Policial"></textarea>
         }
         const repoVersion = window.BMZCN.__OPERATIVOS_REPO_VERSION__ || 'sin-version';
         console.log('[WSP] OperativosRepo:', repoVersion);
-        if (!String(repoVersion).includes('PASO15')) {
+        if (!String(repoVersion).includes('PASO16')) {
           throw new Error('OperativosRepo incorrecto/viejo cargado: ' + repoVersion + '. Reemplazar TODAS las copias de shared/js.');
         }
         await loadScript('./nomenclador.js');
         await loadScript('./controlsuperior.js');
-        await loadScript('./wsp.js');
+        await loadScript('./wsp.js?v=' + VERSION);
       }
 
       main().catch((error) => {
-        console.error('[WSP] Error de arranque PASO13', error);
+        console.error('[WSP] Error de arranque PASO16', error);
         alert('No se pudo iniciar WSP con fuente de verdad Supabase. Detalle: ' + (error && error.message ? error.message : error));
       });
     })();
