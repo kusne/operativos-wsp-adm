@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso28-decto460-module-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso29-control-moviles-ui-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -30,6 +30,7 @@
     "./modules/wsp-control-superior.js",
     "./modules/wsp-informes.js",
     "./modules/wsp-decto460.js",
+    "./modules/wsp-control-moviles.js",
 
     /*
       LEGACY ACTUAL:

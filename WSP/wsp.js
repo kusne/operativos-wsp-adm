@@ -210,6 +210,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
 
   function cerrarAyudaControlMoviles() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.cerrarAyuda === "function") return ui.cerrarAyuda(refsControlMovilesWsp());
     if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
     controlMovilesAyudaPopup.classList.add("hidden");
     controlMovilesAyudaBtn.classList.remove("ayuda-activa");
@@ -217,6 +219,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function abrirAyudaControlMoviles() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.abrirAyuda === "function") return ui.abrirAyuda(refsControlMovilesWsp());
     if (!controlMovilesAyudaPopup || !controlMovilesAyudaBtn) return;
     controlMovilesAyudaPopup.classList.remove("hidden");
     controlMovilesAyudaBtn.classList.add("ayuda-activa");
@@ -224,6 +228,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function alternarAyudaControlMoviles(event) {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.alternarAyuda === "function") return ui.alternarAyuda(event, refsControlMovilesWsp());
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -2069,7 +2075,35 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     return selTipo?.value === "CONTROL MOVILES";
   }
 
+  function controlMovilesUiWsp() {
+    return window.WSP?.modules?.controlMovilesUi || null;
+  }
+
+  function refsControlMovilesWsp() {
+    return {
+      bloqueControlMoviles,
+      controlMovilesEstado,
+      controlMovilesChips,
+      controlMovilesFormulario,
+      controlMovilNumeroSeleccionado,
+      controlMovilKilometraje,
+      controlMovilCombustible,
+      controlMovilObservaciones,
+      controlMovilFueraServicio,
+      controlMovilesAyudaWrap,
+      controlMovilesAyudaBtn,
+      controlMovilesAyudaPopup,
+      controlMovilFoto1,
+      controlMovilFoto2,
+      controlMovilPreview1,
+      controlMovilPreview2,
+      btnEnviar,
+    };
+  }
+
   function setTextoEstadoControlMoviles(texto) {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.setTextoEstado === "function") return ui.setTextoEstado(texto, refsControlMovilesWsp());
     if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
   }
 
@@ -3003,6 +3037,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function actualizarBotonSalirControlMoviles() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.actualizarBotonSalir === "function") {
+      return ui.actualizarBotonSalir(refsControlMovilesWsp(), {
+        enControlMoviles: esControlMovilesActivo(),
+        hayMovilSeleccionado: !!controlMovilSeleccionado,
+      });
+    }
+
     if (!btnEnviar) return;
 
     const enControlMoviles = esControlMovilesActivo();
@@ -3020,11 +3062,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     document.body.classList.toggle("control-movil-seleccionado-activo", hayMovilSeleccionado);
 
     if (hayMovilSeleccionado) {
-      // Vista de formulario: solo debe quedar visible el botón rojo Guardar.
       btnEnviar.classList.add("hidden");
       btnEnviar.style.display = "none";
     } else {
-      // Vista principal: se ven los chips y solo el botón azul Salir.
       btnEnviar.classList.remove("hidden");
       btnEnviar.style.display = "block";
       btnEnviar.textContent = "Salir";
@@ -3147,12 +3187,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function formularioControlMovilActivo() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.formularioActivo === "function") return ui.formularioActivo(refsControlMovilesWsp(), controlMovilSeleccionado);
     return !!controlMovilSeleccionado?.numero
       && !!controlMovilesFormulario
       && !controlMovilesFormulario.classList.contains("hidden");
   }
 
   function camposControlMovilEnEdicion() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.camposEnEdicion === "function") return ui.camposEnEdicion(refsControlMovilesWsp());
     const active = document.activeElement;
     return !!active && [
       controlMovilKilometraje,
@@ -3167,6 +3211,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function aplicarMovilControlAlFormulario(movil) {
     if (!movil) return;
     controlMovilSeleccionado = movil;
+
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.aplicarMovilAlFormulario === "function") return ui.aplicarMovilAlFormulario(movil, refsControlMovilesWsp());
+
     if (controlMovilNumeroSeleccionado) controlMovilNumeroSeleccionado.textContent = movil.numero || "---";
     if (controlMovilKilometraje) controlMovilKilometraje.value = movil.kilometraje || "";
     if (controlMovilCombustible) controlMovilCombustible.value = movil.combustible || "";
@@ -3243,6 +3291,17 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function construirFirmaRenderControlMoviles(visibles) {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.construirFirmaRender === "function") {
+      return ui.construirFirmaRender({
+        visibles,
+        limpiarTextoSimple,
+        normalizarTipoMovilControl,
+        obtenerLockControlMovil,
+        lockControlMovilEsPropio,
+      });
+    }
+
     return (Array.isArray(visibles) ? visibles : [])
       .map((movil) => {
         const numero = limpiarTextoSimple(movil?.numero || "");
@@ -3260,6 +3319,28 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function renderControlMovilesChips() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.renderChips === "function") {
+      const result = ui.renderChips({
+        refs: refsControlMovilesWsp(),
+        visibles: movilesControlVisibles(),
+        firmaAnterior: controlMovilesUltimaFirmaRender,
+        baseNumeros: CONTROL_MOVILES_BASE_NUMEROS,
+        limpiarTextoSimple,
+        normalizarBasicoSinAcentos,
+        normalizarTipoMovilControl,
+        ordenarMovilesControl,
+        obtenerLockControlMovil,
+        lockControlMovilEsPropio,
+        onSeleccionar: seleccionarMovilControl,
+        setEstado: (texto) => {
+          if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
+        },
+      });
+      if (result && typeof result.firmaRender === "string") controlMovilesUltimaFirmaRender = result.firmaRender;
+      return;
+    }
+
     if (!controlMovilesChips) return;
 
     const visibles = movilesControlVisibles();
@@ -3278,76 +3359,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     setTextoEstadoControlMoviles("Seleccione un móvil en servicio.");
-
-    // Cuadro superior: SOLO 12428, 10139 y 12502.
-    const movilesBase = visibles
-      .filter((movil) => CONTROL_MOVILES_BASE_NUMEROS.includes(limpiarTextoSimple(movil?.numero)))
-      .sort((a, b) => CONTROL_MOVILES_BASE_NUMEROS.indexOf(limpiarTextoSimple(a?.numero)) - CONTROL_MOVILES_BASE_NUMEROS.indexOf(limpiarTextoSimple(b?.numero)));
-
-    // Cuadro inferior: SOLO motos.
-    const motos = visibles
-      .filter((movil) => normalizarTipoMovilControl(movil?.tipo) === "MOTO")
-      .sort(ordenarMovilesControl);
-
-    const crearGrupo = (titulo, rows, tipoGrupo) => {
-      if (!rows.length) return;
-
-      const box = document.createElement("div");
-      box.className = `control-moviles-grupo control-moviles-grupo-${tipoGrupo}`;
-
-      const title = document.createElement("div");
-      title.className = "control-moviles-grupo-titulo";
-      title.textContent = titulo;
-      box.appendChild(title);
-
-      const grid = document.createElement("div");
-      grid.className = "control-moviles-grupo-grid";
-
-      rows.forEach((movil) => {
-        const lock = obtenerLockControlMovil(movil.numero);
-        const bloqueadoPorOtro = !!lock && !lockControlMovilEsPropio(lock);
-        const controlado = !!lock;
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "control-movil-chip";
-        btn.dataset.numero = movil.numero;
-        btn.disabled = bloqueadoPorOtro;
-
-        if (controlado) btn.classList.add("control-movil-chip-controlado");
-        if (bloqueadoPorOtro) btn.classList.add("control-movil-chip-bloqueado");
-        if (!movil.condicion) btn.classList.add("control-movil-chip-fuera-servicio");
-
-        const candado = bloqueadoPorOtro ? ' <span class="control-movil-candado" aria-hidden="true">🔒</span>' : "";
-
-        if (tipoGrupo === "motos") {
-          const cilindrada = cilindradaMotoControl(movil);
-          btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}${cilindrada ? ` <small>${escapeHtmlControlMovil(cilindrada)}</small>` : ""}${candado}`;
-        } else {
-          btn.innerHTML = `${escapeHtmlControlMovil(movil.numero)}${candado}`;
-        }
-
-        if (bloqueadoPorOtro) {
-          btn.title = "Ya fue controlado desde otra app. Queda bloqueado hasta que todas las apps salgan del modo control de móviles.";
-        } else if (controlado) {
-          btn.title = "Ya controlado desde esta app. Puede volver a editarlo.";
-        } else {
-          btn.title = "Seleccionar móvil";
-        }
-
-        btn.addEventListener("click", () => {
-          if (bloqueadoPorOtro) return;
-          seleccionarMovilControl(movil.numero);
-        });
-        grid.appendChild(btn);
-      });
-
-      box.appendChild(grid);
-      controlMovilesChips.appendChild(box);
-    };
-
-    crearGrupo("Móviles", movilesBase, "base");
-    crearGrupo("Motos", motos, "motos");
   }
 
   function cilindradaMotoControl(movil) {
@@ -3379,17 +3390,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     if (!movil) return;
 
     controlMovilSeleccionado = movil;
-    document.body.classList.add("control-movil-seleccionado-activo");
 
-    // Al seleccionar un móvil, se ocultan TODOS los chips para dejar la vista limpia.
-    if (controlMovilesChips) {
-      controlMovilesChips.classList.add("hidden");
-      controlMovilesChips.style.display = "none";
-    }
-
-    if (controlMovilesFormulario) {
-      controlMovilesFormulario.classList.remove("hidden");
-      controlMovilesFormulario.style.display = "grid";
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.mostrarFormulario === "function") {
+      ui.mostrarFormulario(refsControlMovilesWsp());
+    } else {
+      document.body.classList.add("control-movil-seleccionado-activo");
+      if (controlMovilesChips) {
+        controlMovilesChips.classList.add("hidden");
+        controlMovilesChips.style.display = "none";
+      }
+      if (controlMovilesFormulario) {
+        controlMovilesFormulario.classList.remove("hidden");
+        controlMovilesFormulario.style.display = "grid";
+      }
     }
 
     aplicarMovilControlAlFormulario(movil);
@@ -3417,6 +3431,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function volverASeleccionMovilControl() {
     controlMovilSeleccionado = null;
+
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.volverASeleccion === "function") {
+      ui.volverASeleccion(refsControlMovilesWsp(), {
+        hayMoviles: movilesControlVisibles().length > 0,
+        setEstado: (texto) => {
+          if (controlMovilesEstado) controlMovilesEstado.textContent = texto || "";
+        },
+      });
+      actualizarBotonSalirControlMoviles();
+      return;
+    }
+
     document.body.classList.remove("control-movil-seleccionado-activo");
 
     if (controlMovilesFormulario) {
@@ -3443,6 +3470,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function limpiarFotosControlMovil() {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.limpiarFotos === "function") return ui.limpiarFotos(refsControlMovilesWsp());
+
     [controlMovilFoto1, controlMovilFoto2].forEach((input) => {
       if (input) input.value = "";
     });
@@ -3454,6 +3484,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function mostrarPreviewControlMovil(input, preview) {
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.mostrarPreview === "function") return ui.mostrarPreview(input, preview);
+
     if (!input || !preview) return;
     const file = input.files?.[0];
     if (!file) {
@@ -3824,9 +3857,14 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function setUIControlMovilesActiva(activa) {
-    if (bloqueControlMoviles) bloqueControlMoviles.classList.toggle("hidden", !activa);
-    document.body.classList.toggle("modo-control-moviles", !!activa);
-    if (!activa) cerrarAyudaControlMoviles();
+    const ui = controlMovilesUiWsp();
+    if (ui && typeof ui.setActiva === "function") {
+      ui.setActiva(refsControlMovilesWsp(), activa);
+    } else {
+      if (bloqueControlMoviles) bloqueControlMoviles.classList.toggle("hidden", !activa);
+      document.body.classList.toggle("modo-control-moviles", !!activa);
+      if (!activa) cerrarAyudaControlMoviles();
+    }
 
     if (activa) {
       setUIControlSuperiorActiva(false);
@@ -3842,16 +3880,19 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
       limpiarSeleccionOperativo();
 
-      // Pantalla principal del control: chips visibles, formulario oculto, botón azul Salir visible.
       controlMovilSeleccionado = null;
-      document.body.classList.remove("control-movil-seleccionado-activo");
-      if (controlMovilesFormulario) {
-        controlMovilesFormulario.classList.add("hidden");
-        controlMovilesFormulario.style.display = "none";
-      }
-      if (controlMovilesChips) {
-        controlMovilesChips.classList.remove("hidden");
-        controlMovilesChips.style.display = "grid";
+      if (ui && typeof ui.mostrarPantallaPrincipal === "function") {
+        ui.mostrarPantallaPrincipal(refsControlMovilesWsp());
+      } else {
+        document.body.classList.remove("control-movil-seleccionado-activo");
+        if (controlMovilesFormulario) {
+          controlMovilesFormulario.classList.add("hidden");
+          controlMovilesFormulario.style.display = "none";
+        }
+        if (controlMovilesChips) {
+          controlMovilesChips.classList.remove("hidden");
+          controlMovilesChips.style.display = "grid";
+        }
       }
 
       iniciarModoControlMovilesCompartido();
