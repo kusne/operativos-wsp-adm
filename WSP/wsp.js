@@ -1792,7 +1792,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     actualizarContadorOperativosWsp(operativosCache.length);
   }
 
+  function textoOperativoWsp() {
+    return window.WSP?.modules?.textoOperativo || window.WSP?.textoOperativo || null;
+  }
+
   function limpiarTextoSimple(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.limpiarTextoSimple === "function") return mod.limpiarTextoSimple(txt);
     return String(txt || "")
       .replace(/\s+/g, " ")
       .replace(/[–—]/g, "-")
@@ -1800,6 +1806,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarBasicoSinAcentos(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarBasicoSinAcentos === "function") return mod.normalizarBasicoSinAcentos(txt);
     return limpiarTextoSimple(txt)
       .toLowerCase()
       .normalize("NFD")
@@ -4230,6 +4238,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function lineaDesdeArray(arr, sep) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.lineaDesdeArray === "function") return mod.lineaDesdeArray(arr, sep);
     const v = Array.isArray(arr) ? arr : [];
     return v.length ? v.join(" " + sep + " ") : "/";
   }
@@ -4238,6 +4248,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ===== NORMALIZADORES DE SALIDA =======================
   // ======================================================
   function normalizarTituloOperativo(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarTituloOperativo === "function") return mod.normalizarTituloOperativo(txt);
     if (!txt) return "";
 
     let t = txt.toLowerCase().trim();
@@ -4248,6 +4260,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarLugar(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarLugar === "function") return mod.normalizarLugar(txt);
     if (!txt) return "";
     return txt
       .toLowerCase()
@@ -4256,6 +4270,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function normalizarHorario(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarHorario === "function") return mod.normalizarHorario(txt);
     if (!txt) return "";
 
     let t = txt.toLowerCase().replace(/\s+/g, " ").trim();
@@ -4265,6 +4281,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   }
 
   function bold(txt) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.bold === "function") return mod.bold(txt);
     return `*${String(txt || "").trim()}*`;
   }
 
@@ -5536,10 +5554,14 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function normalizarMayusInforme(value) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarMayus === "function") return mod.normalizarMayus(value);
     return limpiarTextoSimple(value || "").toUpperCase();
   }
 
   function normalizarMayusInformeInput(value) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarMayusInput === "function") return mod.normalizarMayusInput(value);
     // Para escritura en vivo: no usar trim(), porque si el usuario escribe
     // "QUISPE " se borra el espacio final y parece que el campo no permite
     // separar nombre/apellido o marca/modelo. El recorte se hace en blur/envío.
@@ -5549,14 +5571,20 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function normalizarDominioInforme(value) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarDominio === "function") return mod.normalizarDominio(value);
     return normalizarMayusInforme(value).replace(/\s+/g, "");
   }
 
   function normalizarNumeroActaInforme(value) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarNumeroActa === "function") return mod.normalizarNumeroActa(value);
     return String(value || "").replace(/\D+/g, "");
   }
 
   function normalizarGraduacionInforme(value) {
+    const mod = textoOperativoWsp();
+    if (mod && typeof mod.normalizarGraduacion === "function") return mod.normalizarGraduacion(value);
     return String(value || "").replace(/\s+/g, "").replace(",", ".").trim();
   }
 

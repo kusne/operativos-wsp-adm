@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso32-selector-operativo-ui-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso33-texto-operativo-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -34,6 +34,7 @@
     "./modules/wsp-estadisticas-ui.js",
     "./modules/wsp-operativo-ui.js",
     "./modules/wsp-selector-operativo-ui.js",
+    "./modules/wsp-texto-operativo.js",
 
     /*
       LEGACY ACTUAL:
