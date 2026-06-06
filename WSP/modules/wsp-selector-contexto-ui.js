@@ -10,6 +10,9 @@
     sinInicio: "No hay INICIO guardado para este operativo. Envíe primero el INICIA.",
   });
 
+  const MENSAJE_SIN_INICIO_DETALLADO =
+    "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.";
+
   function limpiarTextoSimple(valor) {
     return String(valor || "")
       .replace(/\s+/g, " ")
@@ -68,6 +71,52 @@
   function setTextoContexto(el, texto = "") {
     if (!el) return;
     el.textContent = limpiarTextoSimple(texto);
+  }
+
+  function mensajeSinInicioInforme(config = {}) {
+    return limpiarTextoSimple(config.mensaje || config.mensajeSinInicio || MENSAJE_SIN_INICIO_DETALLADO);
+  }
+
+  function getAlertFn(config = {}) {
+    if (typeof config.alert === "function") return config.alert;
+    return window.alert ? window.alert.bind(window) : null;
+  }
+
+  function alertarSiCorresponde(config = {}, mensaje = "") {
+    if (config.mostrarAlerta === false) return false;
+    const alertFn = getAlertFn(config);
+    if (!alertFn) return false;
+    alertFn(limpiarTextoSimple(mensaje));
+    return true;
+  }
+
+  async function refrescarContextoSiCorresponde(config = {}) {
+    if (typeof config.refrescarContexto !== "function") return false;
+    try {
+      await config.refrescarContexto();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function obtenerInicioPorCallback(config = {}) {
+    if (typeof config.obtenerInicio !== "function") return null;
+    try {
+      return await config.obtenerInicio();
+    } catch {
+      return null;
+    }
+  }
+
+  function resultadoSinInicio(motivo, mensaje, extra = {}) {
+    return {
+      ok: false,
+      inicio: null,
+      motivo: motivo || "sin_inicio",
+      mensaje: limpiarTextoSimple(mensaje),
+      ...extra,
+    };
   }
 
   function asegurarElementoContexto(config = {}) {
@@ -207,31 +256,16 @@
       return { ok: true, inicio, motivo: "ok" };
     }
 
-    const mensaje = limpiarTextoSimple(
-      config.mensaje ||
-      config.mensajeSinInicio ||
-      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
-    );
+    const mensaje = mensajeSinInicioInforme(config);
+    await refrescarContextoSiCorresponde(config);
+    alertarSiCorresponde(config, mensaje);
 
-    if (typeof config.refrescarContexto === "function") {
-      try { await config.refrescarContexto(); } catch {}
-    }
-
-    if (config.mostrarAlerta !== false) {
-      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
-      if (alertFn) alertFn(mensaje);
-    }
-
-    return { ok: false, inicio: null, motivo: "sin_inicio", mensaje };
+    return resultadoSinInicio("sin_inicio", mensaje);
   }
 
 
   async function resolverInicioRequeridoInforme(config = {}) {
-    const mensaje = limpiarTextoSimple(
-      config.mensaje ||
-      config.mensajeSinInicio ||
-      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
-    );
+    const mensaje = mensajeSinInicioInforme(config);
 
     const requerir = typeof config.requerirInicio === "function"
       ? await config.requerirInicio({ ...config, mensaje })
@@ -242,42 +276,21 @@
     }
 
     if (requerir && requerir.ok === false) {
-      return {
-        ok: false,
-        inicio: null,
-        motivo: requerir.motivo || "sin_inicio",
-        mensaje: limpiarTextoSimple(requerir.mensaje || mensaje),
-        requerir,
-      };
+      return resultadoSinInicio(requerir.motivo || "sin_inicio", requerir.mensaje || mensaje, { requerir });
     }
 
-    let inicio = null;
-    if (typeof config.obtenerInicio === "function") {
-      try { inicio = await config.obtenerInicio(); } catch {}
-    }
-
+    const inicio = await obtenerInicioPorCallback(config);
     if (inicio) return { ok: true, inicio, motivo: "obtener_inicio" };
 
-    if (typeof config.refrescarContexto === "function") {
-      try { await config.refrescarContexto(); } catch {}
-    }
+    await refrescarContextoSiCorresponde(config);
+    alertarSiCorresponde(config, mensaje);
 
-    if (config.mostrarAlerta !== false) {
-      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
-      if (alertFn) alertFn(mensaje);
-    }
-
-    return { ok: false, inicio: null, motivo: "sin_inicio", mensaje };
+    return resultadoSinInicio("sin_inicio", mensaje);
   }
 
 
   async function resolverInicioParaEnvioInforme(config = {}) {
-    const mensaje = limpiarTextoSimple(
-      config.mensaje ||
-      config.mensajeSinInicio ||
-      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
-    );
-
+    const mensaje = mensajeSinInicioInforme(config);
     const resolver = typeof config.resolverInicioRequerido === "function"
       ? config.resolverInicioRequerido
       : resolverInicioRequeridoInforme;
@@ -286,21 +299,11 @@
     if (resultado && resultado.ok && resultado.inicio) return resultado.inicio;
     if (resultado && resultado.ok === false) return null;
 
-    let inicio = null;
-    if (typeof config.obtenerInicio === "function") {
-      try { inicio = await config.obtenerInicio(); } catch {}
-    }
-
+    const inicio = await obtenerInicioPorCallback(config);
     if (inicio) return inicio;
 
-    if (typeof config.refrescarContexto === "function") {
-      try { await config.refrescarContexto(); } catch {}
-    }
-
-    if (config.mostrarAlerta !== false) {
-      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
-      if (alertFn) alertFn(mensaje);
-    }
+    await refrescarContextoSiCorresponde(config);
+    alertarSiCorresponde(config, mensaje);
 
     return null;
   }
@@ -415,6 +418,10 @@
     construirLugarInicio,
     resolverTextoContextoInforme,
     setTextoContexto,
+    mensajeSinInicioInforme,
+    alertarSiCorresponde,
+    refrescarContextoSiCorresponde,
+    obtenerInicioPorCallback,
     asegurarElementoContexto,
     refrescarContextoInforme,
     refrescarContextosActivos,

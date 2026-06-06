@@ -1766,18 +1766,30 @@ window.WSP.config = {
     }
   }
 
+  function crearConfigInicioInformeWsp(config = {}) {
+    return {
+      getFranja: () => franjaSeleccionada,
+      seleccionarDefault: config.seleccionarDefault,
+      leerInicio: leerInicioDesdeSupabase,
+      cargarInicioGuardadoCoincidente,
+      cargarInicioLocal,
+      refrescarContexto: config.refrescarContexto,
+      mensaje: config.mensaje,
+      mensajeSinInicio: config.mensajeSinInicio,
+      mostrarAlerta: config.mostrarAlerta,
+      alert,
+      obtenerInicio: config.obtenerInicio,
+      requerirInicio: config.requerirInicio,
+      resolverInicioRequerido: config.resolverInicioRequerido,
+    };
+  }
+
   async function obtenerInicioSeleccionadoInformeModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.obtenerInicioSeleccionadoInforme !== "function") return null;
 
     try {
-      return await ui.obtenerInicioSeleccionadoInforme({
-        getFranja: () => franjaSeleccionada,
-        seleccionarDefault: config.seleccionarDefault,
-        leerInicio: leerInicioDesdeSupabase,
-        cargarInicioGuardadoCoincidente,
-        cargarInicioLocal,
-      });
+      return await ui.obtenerInicioSeleccionadoInforme(crearConfigInicioInformeWsp(config));
     } catch (error) {
       console.warn("[WSP] Obtención modular de INICIO de informe falló. Se usa fallback legacy.", error);
       return null;
@@ -1789,17 +1801,7 @@ window.WSP.config = {
     if (!ui || typeof ui.requerirInicioSeleccionadoInforme !== "function") return null;
 
     try {
-      return await ui.requerirInicioSeleccionadoInforme({
-        getFranja: () => franjaSeleccionada,
-        seleccionarDefault: config.seleccionarDefault,
-        leerInicio: leerInicioDesdeSupabase,
-        cargarInicioGuardadoCoincidente,
-        cargarInicioLocal,
-        refrescarContexto: config.refrescarContexto,
-        mensaje: config.mensaje,
-        mostrarAlerta: config.mostrarAlerta,
-        alert,
-      });
+      return await ui.requerirInicioSeleccionadoInforme(crearConfigInicioInformeWsp(config));
     } catch (error) {
       console.warn("[WSP] Validación modular de INICIO de informe falló. Se usa fallback legacy.", error);
       return null;
@@ -1812,18 +1814,7 @@ window.WSP.config = {
     if (!ui || typeof ui.resolverInicioRequeridoInforme !== "function") return null;
 
     try {
-      return await ui.resolverInicioRequeridoInforme({
-        getFranja: () => franjaSeleccionada,
-        seleccionarDefault: config.seleccionarDefault,
-        leerInicio: leerInicioDesdeSupabase,
-        cargarInicioGuardadoCoincidente,
-        cargarInicioLocal,
-        refrescarContexto: config.refrescarContexto,
-        mensaje: config.mensaje,
-        mostrarAlerta: config.mostrarAlerta,
-        alert,
-        obtenerInicio: config.obtenerInicio,
-      });
+      return await ui.resolverInicioRequeridoInforme(crearConfigInicioInformeWsp(config));
     } catch (error) {
       console.warn("[WSP] Resolución modular de INICIO requerido para informe falló. Se usa fallback legacy.", error);
       return null;
@@ -1836,18 +1827,7 @@ window.WSP.config = {
 
     if (ui && typeof ui.resolverInicioParaEnvioInforme === "function") {
       try {
-        return await ui.resolverInicioParaEnvioInforme({
-          getFranja: () => franjaSeleccionada,
-          seleccionarDefault: config.seleccionarDefault,
-          leerInicio: leerInicioDesdeSupabase,
-          cargarInicioGuardadoCoincidente,
-          cargarInicioLocal,
-          refrescarContexto: config.refrescarContexto,
-          mensaje: config.mensaje,
-          mostrarAlerta: config.mostrarAlerta,
-          alert,
-          obtenerInicio: config.obtenerInicio,
-        });
+        return await ui.resolverInicioParaEnvioInforme(crearConfigInicioInformeWsp(config));
       } catch (error) {
         console.warn("[WSP] Resolución modular de INICIO para envío de informe falló. Se usa fallback legacy.", error);
       }
