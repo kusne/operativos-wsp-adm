@@ -2046,6 +2046,92 @@ window.WSP.config = {
   }
 
 
+  function seleccionPrincipalFlujoUiWsp() {
+    return window.WSP?.ui?.seleccionPrincipalFlujo || window.WSP?.modules?.seleccionPrincipalFlujoUi || null;
+  }
+
+  function configSeleccionPrincipalFlujoWsp() {
+    return {
+      enInformes: estaEnMenuInformes(),
+      tipoInformeActivo: getTipoInformeActivo(),
+      controlMoviles: esControlMovilesActivo(),
+      controlSuperior: esControlSuperiorActivo(),
+      informeAlcoholemia: esInformeAlcoholemiaActivo(),
+      informeDecto460: esInformeDecto460Activo(),
+      fin: selTipo.value === "FINALIZA",
+      setSelectorInformesVisible,
+      resetPresenciaActiva: () => {
+        if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+      },
+      activarControlMoviles: activarPantallaControlMovilesWsp,
+      desactivarControlMoviles: () => setUIControlMovilesActiva(false),
+      activarFinaliza: activarPantallaFinalizaWsp,
+      prepararMenuInformes: prepararMenuInformesWsp,
+      activarInformePorTipo: activarPantallaInformePorTipoWsp,
+      refrescarContextoDecto460: refrescarContextoInformeDecto460,
+      refrescarContextoAlcoholemia: refrescarContextoInformeAlcoholemia,
+      refrescarContextoControlSuperior,
+      postActivarAlcoholemia: actualizarReglasInformeAlcoholemia,
+      limpiarInformesAntesControlSuperior: () => {
+        setUIInformeAlcoholemiaActiva(false);
+        setUIInformeDecto460Activa(false);
+      },
+      activarInicia: activarPantallaIniciaWsp,
+    };
+  }
+
+  function actualizarTipoPrincipalWsp() {
+    const ui = seleccionPrincipalFlujoUiWsp();
+    const config = configSeleccionPrincipalFlujoWsp();
+
+    if (ui && typeof ui.actualizarTipoPrincipal === "function") {
+      return ui.actualizarTipoPrincipal(config);
+    }
+
+    setSelectorInformesVisible(config.enInformes);
+    if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+
+    if (config.controlMoviles) {
+      activarPantallaControlMovilesWsp();
+      return;
+    }
+
+    setUIControlMovilesActiva(false);
+
+    if (config.fin) {
+      activarPantallaFinalizaWsp();
+      return;
+    }
+
+    if (config.enInformes && !config.tipoInformeActivo) {
+      prepararMenuInformesWsp();
+      return;
+    }
+
+    if (config.informeDecto460) {
+      activarPantallaInformePorTipoWsp("DECTO460", refrescarContextoInformeDecto460);
+      return;
+    }
+
+    if (config.informeAlcoholemia) {
+      activarPantallaInformePorTipoWsp("ALCOHOLEMIA", refrescarContextoInformeAlcoholemia, {
+        postActivar: actualizarReglasInformeAlcoholemia,
+      });
+      return;
+    }
+
+    setUIInformeAlcoholemiaActiva(false);
+    setUIInformeDecto460Activa(false);
+
+    if (config.controlSuperior) {
+      activarPantallaInformePorTipoWsp("CONTROL_SUPERIOR", refrescarContextoControlSuperior);
+      return;
+    }
+
+    activarPantallaIniciaWsp();
+  }
+
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -5132,61 +5218,7 @@ window.WSP.config = {
   }
 
   function actualizarTipo() {
-    const enInformes = estaEnMenuInformes();
-    setSelectorInformesVisible(enInformes);
-    const controlMoviles = esControlMovilesActivo();
-    const controlSuperior = esControlSuperiorActivo();
-    const informeAlcoholemia = esInformeAlcoholemiaActivo();
-    const informeDecto460 = esInformeDecto460Activo();
-    const fin = selTipo.value === "FINALIZA";
-
-    if (chkPresenciaActiva) {
-      chkPresenciaActiva.checked = false;
-    }
-
-    if (controlMoviles) {
-      // Control de Móviles es una pantalla exclusiva: al entrar debe cerrar
-      // cualquier formulario de INFORMES que hubiera quedado visible.
-      activarPantallaControlMovilesWsp();
-      return;
-    }
-
-    setUIControlMovilesActiva(false);
-
-    if (fin) {
-      // FINALIZA debe trabajar sobre la misma fuente real que INFORMES:
-      // operativos iniciados/en curso desde Supabase, nunca operativos publicados ni cache vieja.
-      activarPantallaFinalizaWsp();
-      return;
-    }
-
-    if (enInformes && !getTipoInformeActivo()) {
-      prepararMenuInformesWsp();
-      return;
-    }
-
-    if (informeDecto460) {
-      activarPantallaInformePorTipoWsp("DECTO460", refrescarContextoInformeDecto460);
-      return;
-    }
-
-    if (informeAlcoholemia) {
-      activarPantallaInformePorTipoWsp("ALCOHOLEMIA", refrescarContextoInformeAlcoholemia, {
-        postActivar: actualizarReglasInformeAlcoholemia,
-      });
-      return;
-    }
-
-    setUIInformeAlcoholemiaActiva(false);
-    setUIInformeDecto460Activa(false);
-
-    if (controlSuperior) {
-      activarPantallaInformePorTipoWsp("CONTROL_SUPERIOR", refrescarContextoControlSuperior);
-      return;
-    }
-
-    activarPantallaIniciaWsp();
-    return;
+    return actualizarTipoPrincipalWsp();
   }
 
   // ======================================================
