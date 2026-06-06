@@ -35,9 +35,25 @@
     });
   }
 
+  function activarPantallaInforme(config = {}) {
+    if (typeof config.aplicarVisibilidad === "function") {
+      config.aplicarVisibilidad();
+    }
+
+    const tarea = cargarOperativosYRefrescar(config);
+
+    if (typeof config.postActivar === "function") {
+      config.postActivar();
+    }
+
+    sincronizarWidgetsAuxiliares(config);
+    return tarea;
+  }
+
   const api = {
     sincronizarWidgetsAuxiliares,
     cargarOperativosYRefrescar,
+    activarPantallaInforme,
   };
 
   window.WSP.ui.informesFlujo = api;

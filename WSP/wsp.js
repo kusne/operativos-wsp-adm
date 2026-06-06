@@ -1765,6 +1765,28 @@ window.WSP.config = {
     });
   }
 
+  function activarPantallaInformeWsp(config = {}) {
+    const ui = informesFlujoUiWsp();
+    const deps = {
+      valorSeleccionado: selHorario?.value || "",
+      cargarOperativos: cargarOperativosIniciadosParaInformes,
+      actualizarDatosFranja,
+      sincronizarUIAlcoholimetro,
+      sincronizarUIQrzDominio,
+      ...config,
+    };
+
+    if (ui && typeof ui.activarPantallaInforme === "function") {
+      return ui.activarPantallaInforme(deps);
+    }
+
+    if (typeof deps.aplicarVisibilidad === "function") deps.aplicarVisibilidad();
+    const tarea = cargarOperativosYRefrescarInformeWsp(deps.refrescarContexto);
+    if (typeof deps.postActivar === "function") deps.postActivar();
+    sincronizarWidgetsAuxiliaresInformesWsp();
+    return tarea;
+  }
+
 
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
@@ -4926,20 +4948,26 @@ window.WSP.config = {
     }
 
     if (informeDecto460) {
-      setUIControlSuperiorActiva(false);
-      setUIInformeAlcoholemiaActiva(false);
-      setUIInformeDecto460Activa(true);
-      cargarOperativosYRefrescarInformeWsp(refrescarContextoInformeDecto460);
-      sincronizarWidgetsAuxiliaresInformesWsp();
+      activarPantallaInformeWsp({
+        aplicarVisibilidad: () => {
+          setUIControlSuperiorActiva(false);
+          setUIInformeAlcoholemiaActiva(false);
+          setUIInformeDecto460Activa(true);
+        },
+        refrescarContexto: refrescarContextoInformeDecto460,
+      });
       return;
     }
 
     if (informeAlcoholemia) {
-      setUIInformeDecto460Activa(false);
-      setUIInformeAlcoholemiaActiva(true);
-      cargarOperativosYRefrescarInformeWsp(refrescarContextoInformeAlcoholemia);
-      actualizarReglasInformeAlcoholemia();
-      sincronizarWidgetsAuxiliaresInformesWsp();
+      activarPantallaInformeWsp({
+        aplicarVisibilidad: () => {
+          setUIInformeDecto460Activa(false);
+          setUIInformeAlcoholemiaActiva(true);
+        },
+        refrescarContexto: refrescarContextoInformeAlcoholemia,
+        postActivar: actualizarReglasInformeAlcoholemia,
+      });
       return;
     }
 
@@ -4947,9 +4975,12 @@ window.WSP.config = {
     setUIInformeDecto460Activa(false);
 
     if (controlSuperior) {
-      setUIControlSuperiorActiva(true);
-      cargarOperativosYRefrescarInformeWsp(refrescarContextoControlSuperior);
-      sincronizarWidgetsAuxiliaresInformesWsp();
+      activarPantallaInformeWsp({
+        aplicarVisibilidad: () => {
+          setUIControlSuperiorActiva(true);
+        },
+        refrescarContexto: refrescarContextoControlSuperior,
+      });
       return;
     }
 
