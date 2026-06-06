@@ -190,10 +190,16 @@
     };
   }
 
+  function selectorOperativosDebeLimpiarse(estadoVisibilidad = {}) {
+    return !normalizarEstadoVisibilidadSelectorOperativos(estadoVisibilidad).visible;
+  }
+
   function aplicarEstadoVisibilidadSelectorOperativos(config = {}, visibilidad = {}) {
     const estadoVisibilidad = normalizarEstadoVisibilidadSelectorOperativos(visibilidad);
 
-    if (!estadoVisibilidad.visible) ejecutar(config.limpiarSelectorOperativosOculto, estadoVisibilidad);
+    if (selectorOperativosDebeLimpiarse(estadoVisibilidad)) {
+      ejecutar(config.limpiarSelectorOperativosOculto, estadoVisibilidad);
+    }
     ejecutar(config.setSelectorOperativosVisible, estadoVisibilidad.visible, estadoVisibilidad);
 
     return estadoVisibilidad;
@@ -389,6 +395,7 @@
     motivoVisibilidadSelectorOperativos,
     crearEstadoVisibilidadSelectorOperativos,
     normalizarEstadoVisibilidadSelectorOperativos,
+    selectorOperativosDebeLimpiarse,
     aplicarEstadoVisibilidadSelectorOperativos,
     aplicarVisibilidadSelectorOperativosSeleccionPrincipal,
     prepararEjecucionModoSeleccionPrincipal,

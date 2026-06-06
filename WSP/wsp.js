@@ -2498,6 +2498,16 @@ window.WSP.config = {
     return estado;
   }
 
+  function guardarEstadoElementosSelectorOperativosWsp(visible, cantidad = 0) {
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.selectorOperativosElementosVisibilidad = {
+      visible: !!visible,
+      cantidad: Math.max(0, parseInt(cantidad, 10) || 0),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   function registrarLimpiezaSelectorOperativosWsp(contexto = {}) {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
@@ -2508,24 +2518,37 @@ window.WSP.config = {
     };
   }
 
+  function obtenerElementosVisibilidadSelectorOperativosWsp() {
+    const elementos = [selHorario, contadorOperativosWsp].filter(Boolean);
+
+    try {
+      const titulo = document.querySelector(".operativos-title-label");
+      if (titulo) elementos.push(titulo);
+    } catch {}
+
+    return elementos;
+  }
+
+  function aplicarVisibilidadElementoSelectorOperativosWsp(el, mostrar) {
+    if (!el) return;
+    el.classList.toggle("hidden", !mostrar);
+    el.setAttribute("aria-hidden", mostrar ? "false" : "true");
+  }
+
+  function aplicarVisibilidadElementosSelectorOperativosWsp(mostrar) {
+    const elementos = obtenerElementosVisibilidadSelectorOperativosWsp();
+    elementos.forEach((el) => aplicarVisibilidadElementoSelectorOperativosWsp(el, mostrar));
+    guardarEstadoElementosSelectorOperativosWsp(mostrar, elementos.length);
+    return elementos.length;
+  }
+
   function setSelectorOperativosVisibleWsp(visible, contexto = {}) {
     const estadoVisibilidad = guardarEstadoVisibilidadSelectorOperativosWsp(
       crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto)
     );
     const mostrar = !!estadoVisibilidad.visible;
 
-    const aplicarVisibilidad = (el) => {
-      if (!el) return;
-      el.classList.toggle("hidden", !mostrar);
-      el.setAttribute("aria-hidden", mostrar ? "false" : "true");
-    };
-
-    aplicarVisibilidad(selHorario);
-    aplicarVisibilidad(contadorOperativosWsp);
-
-    try {
-      aplicarVisibilidad(document.querySelector(".operativos-title-label"));
-    } catch {}
+    aplicarVisibilidadElementosSelectorOperativosWsp(mostrar);
 
     if (selHorario) {
       if (!mostrar) {
