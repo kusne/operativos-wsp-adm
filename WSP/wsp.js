@@ -770,6 +770,11 @@ window.WSP.config = {
   async function syncAntesDeSeleccion() {
     if (syncingOrdenes) return;
 
+    // En el menú principal de INFORMES todavía no corresponde elegir operativo.
+    // Primero se selecciona el tipo de informe y recién ahí se cargan/ven
+    // los operativos iniciados.
+    if (estaEnMenuInformes() && !getTipoInformeActivo()) return;
+
     // INFORMES usa como fuente los operativos realmente iniciados/en curso.
     // No recargar el selector cada vez que recibe foco: en celulares/Chrome eso
     // desarma el desplegable justo cuando el usuario intenta elegir otro operativo.
@@ -1835,6 +1840,7 @@ window.WSP.config = {
   }
 
   function activarPantallaInformePorTipoWsp(tipoPantalla, refrescarContexto, opts = {}) {
+    setSelectorOperativosVisibleWsp(true);
     const ui = informesFlujoUiWsp();
 
     if (ui && typeof ui.activarPantallaInformePorTipo === "function") {
@@ -1876,6 +1882,7 @@ window.WSP.config = {
       setTituloOperativosIniciados,
       limpiarSeleccion: limpiarSeleccionMenuInformes,
       prepararSelectorInformesMenu: prepararSelectorInformesMenuWsp,
+      setSelectorOperativosVisible: setSelectorOperativosVisibleWsp,
       divFinaliza,
       divDetalles,
     };
@@ -2060,6 +2067,7 @@ window.WSP.config = {
       informeDecto460: esInformeDecto460Activo(),
       fin: selTipo.value === "FINALIZA",
       setSelectorInformesVisible,
+      setSelectorOperativosVisible: setSelectorOperativosVisibleWsp,
       resetPresenciaActiva: () => {
         if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
       },
@@ -2082,6 +2090,7 @@ window.WSP.config = {
 
   function actualizarTipoPrincipalLegacyWsp(config) {
     setSelectorInformesVisible(config.enInformes);
+    setSelectorOperativosVisibleWsp(!(config.enInformes && !config.tipoInformeActivo));
     if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
 
     if (config.controlMoviles) {
@@ -2475,7 +2484,36 @@ window.WSP.config = {
     } catch {}
   }
 
+  function setSelectorOperativosVisibleWsp(visible) {
+    const mostrar = !!visible;
+
+    const aplicarVisibilidad = (el) => {
+      if (!el) return;
+      el.classList.toggle("hidden", !mostrar);
+      el.setAttribute("aria-hidden", mostrar ? "false" : "true");
+    };
+
+    aplicarVisibilidad(selHorario);
+    aplicarVisibilidad(contadorOperativosWsp);
+
+    try {
+      aplicarVisibilidad(document.querySelector(".operativos-title-label"));
+    } catch {}
+
+    if (selHorario) {
+      if (!mostrar) {
+        selHorario.value = "";
+        selHorario.disabled = true;
+      } else {
+        selHorario.disabled = false;
+      }
+    }
+
+    return mostrar;
+  }
+
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
+    setSelectorOperativosVisibleWsp(true);
     if (!selHorario) return [];
 
     const uiCarga = selectorCargaUiWsp();
@@ -2819,6 +2857,7 @@ window.WSP.config = {
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
+    setSelectorOperativosVisibleWsp(true);
     const uiCarga = selectorCargaUiWsp();
     if (uiCarga && typeof uiCarga.prepararSelectorDisponibles === "function") {
       uiCarga.prepararSelectorDisponibles({ selHorario, setTituloOperativosIniciados });
@@ -3415,6 +3454,8 @@ window.WSP.config = {
   }
 
   function prepararSelectorInformesMenuWsp() {
+    setSelectorOperativosVisibleWsp(false);
+
     const ui = transicionesUiWsp();
     if (ui && typeof ui.prepararSelectorInformesMenu === "function") {
       return ui.prepararSelectorInformesMenu(refsTransicionesUiWsp(), {

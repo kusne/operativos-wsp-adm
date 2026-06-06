@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso80-seleccion-principal-ultimo-resultado-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso81-informes-ocultar-selector-operativos-menu-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

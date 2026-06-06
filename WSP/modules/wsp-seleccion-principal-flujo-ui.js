@@ -162,9 +162,14 @@
     return MODOS.INICIA;
   }
 
+  function debeMostrarSelectorOperativos(estado = {}) {
+    return !(estado.enInformes && !estado.tipoInformeActivo);
+  }
+
   function prepararCambioSeleccionPrincipal(config = {}) {
     const estado = estadoDesdeConfig(config);
     ejecutar(config.setSelectorInformesVisible, estado.enInformes);
+    ejecutar(config.setSelectorOperativosVisible, debeMostrarSelectorOperativos(estado));
     ejecutar(config.resetPresenciaActiva);
   }
 
@@ -339,6 +344,7 @@
     guardarUltimoResultadoSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
+    debeMostrarSelectorOperativos,
     prepararEjecucionModoSeleccionPrincipal,
     modoEsInformeSeleccionPrincipal,
     tipoPantallaInformeDesdeModo,
