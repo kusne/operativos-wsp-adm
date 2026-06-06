@@ -1693,6 +1693,29 @@ window.WSP.config = {
     });
   }
 
+  function refrescarContextosInformesActivosWsp() {
+    const items = [
+      { activo: esInformeAlcoholemiaActivo, refrescar: refrescarContextoInformeAlcoholemia },
+      { activo: esInformeDecto460Activo, refrescar: refrescarContextoInformeDecto460 },
+      { activo: esControlSuperiorActivo, refrescar: refrescarContextoControlSuperior },
+    ];
+
+    const ui = selectorContextoUiWsp();
+    const tarea = ui && typeof ui.refrescarContextosActivos === "function"
+      ? ui.refrescarContextosActivos(items)
+      : Promise.all(items.map(async (item) => {
+          const activo = typeof item.activo === "function" ? !!item.activo() : item.activo !== false;
+          if (!activo || typeof item.refrescar !== "function") return null;
+          return item.refrescar();
+        }));
+
+    return Promise.resolve(tarea).catch((error) => {
+      console.warn("[WSP] No se pudieron refrescar contextos activos de informes.", error);
+      return [];
+    });
+  }
+
+
   function resolverCambioSeleccionOperativoWsp() {
     const mod = selectorEstadoUiWsp();
     if (mod && typeof mod.resolverCambioSeleccion === "function") {
@@ -4656,15 +4679,7 @@ window.WSP.config = {
     if (selTipo.value === "FINALIZA") {
       sincronizarInicioGuardadoSegunContexto();
     }
-    if (esInformeAlcoholemiaActivo()) {
-      refrescarContextoInformeAlcoholemia();
-    }
-    if (esInformeDecto460Activo()) {
-      refrescarContextoInformeDecto460();
-    }
-    if (esControlSuperiorActivo()) {
-      refrescarContextoControlSuperior();
-    }
+    refrescarContextosInformesActivosWsp();
   }
 
   function actualizarTipo() {

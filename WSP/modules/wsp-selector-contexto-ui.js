@@ -143,6 +143,32 @@
   }
 
 
+  async function refrescarContextosActivos(items = []) {
+    const lista = Array.isArray(items) ? items : [];
+    const resultados = [];
+
+    for (const item of lista) {
+      if (!item) continue;
+
+      const estaActivo = typeof item.activo === "function" ? !!item.activo() : item.activo !== false;
+      if (!estaActivo) continue;
+
+      try {
+        if (typeof item.refrescar === "function") {
+          resultados.push(await item.refrescar());
+        } else {
+          resultados.push(await refrescarContextoInforme(item));
+        }
+      } catch (error) {
+        resultados.push({ ok: false, skipped: false, motivo: "error", error });
+        try { console.warn("[WSP selector contexto UI] No se pudo refrescar un contexto activo.", error); } catch {}
+      }
+    }
+
+    return resultados;
+  }
+
+
   const api = {
     MENSAJES_DEFAULT,
     limpiarTextoSimple,
@@ -154,6 +180,7 @@
     setTextoContexto,
     asegurarElementoContexto,
     refrescarContextoInforme,
+    refrescarContextosActivos,
   };
 
   window.WSP.ui.selectorContexto = api;
