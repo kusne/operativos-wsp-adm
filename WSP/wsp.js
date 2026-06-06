@@ -1787,6 +1787,32 @@ window.WSP.config = {
     return tarea;
   }
 
+  function aplicarVisibilidadPantallaInformeWsp(tipoPantalla) {
+    const tipo = limpiarTextoSimple(tipoPantalla).toUpperCase();
+    const esControlSuperior = tipo === "CONTROL_SUPERIOR";
+    const esAlcoholemia = tipo === "ALCOHOLEMIA";
+    const esDecto460 = tipo === "DECTO460";
+
+    // Primero se apagan las pantallas que no corresponden y recién después
+    // se activa la elegida. Evita que un setUI...Activa(false) posterior
+    // vuelva a mostrar la UI base o esconda el formulario activo.
+    if (!esControlSuperior) setUIControlSuperiorActiva(false);
+    if (!esAlcoholemia) setUIInformeAlcoholemiaActiva(false);
+    if (!esDecto460) setUIInformeDecto460Activa(false);
+
+    if (esControlSuperior) setUIControlSuperiorActiva(true);
+    if (esAlcoholemia) setUIInformeAlcoholemiaActiva(true);
+    if (esDecto460) setUIInformeDecto460Activa(true);
+  }
+
+  function activarPantallaInformePorTipoWsp(tipoPantalla, refrescarContexto, opts = {}) {
+    return activarPantallaInformeWsp({
+      aplicarVisibilidad: () => aplicarVisibilidadPantallaInformeWsp(tipoPantalla),
+      refrescarContexto,
+      postActivar: opts.postActivar,
+    });
+  }
+
 
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
@@ -4948,24 +4974,12 @@ window.WSP.config = {
     }
 
     if (informeDecto460) {
-      activarPantallaInformeWsp({
-        aplicarVisibilidad: () => {
-          setUIControlSuperiorActiva(false);
-          setUIInformeAlcoholemiaActiva(false);
-          setUIInformeDecto460Activa(true);
-        },
-        refrescarContexto: refrescarContextoInformeDecto460,
-      });
+      activarPantallaInformePorTipoWsp("DECTO460", refrescarContextoInformeDecto460);
       return;
     }
 
     if (informeAlcoholemia) {
-      activarPantallaInformeWsp({
-        aplicarVisibilidad: () => {
-          setUIInformeDecto460Activa(false);
-          setUIInformeAlcoholemiaActiva(true);
-        },
-        refrescarContexto: refrescarContextoInformeAlcoholemia,
+      activarPantallaInformePorTipoWsp("ALCOHOLEMIA", refrescarContextoInformeAlcoholemia, {
         postActivar: actualizarReglasInformeAlcoholemia,
       });
       return;
@@ -4975,12 +4989,7 @@ window.WSP.config = {
     setUIInformeDecto460Activa(false);
 
     if (controlSuperior) {
-      activarPantallaInformeWsp({
-        aplicarVisibilidad: () => {
-          setUIControlSuperiorActiva(true);
-        },
-        refrescarContexto: refrescarContextoControlSuperior,
-      });
+      activarPantallaInformePorTipoWsp("CONTROL_SUPERIOR", refrescarContextoControlSuperior);
       return;
     }
 
