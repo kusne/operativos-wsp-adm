@@ -40,6 +40,14 @@
     return config.__estadoSeleccionPrincipal || crearEstadoSeleccionPrincipal(config);
   }
 
+  function modoDebeCerrarControlMoviles(modo) {
+    return modo !== MODOS.CONTROL_MOVILES;
+  }
+
+  function prepararEjecucionModoSeleccionPrincipal(modo, config = {}) {
+    if (modoDebeCerrarControlMoviles(modo)) ejecutar(config.desactivarControlMoviles);
+  }
+
   function resolverModoSeleccionPrincipal(config = {}) {
     const estado = estadoDesdeConfig(config);
 
@@ -59,30 +67,27 @@
   }
 
   function ejecutarModoSeleccionPrincipal(modo, config = {}) {
+    prepararEjecucionModoSeleccionPrincipal(modo, config);
+
     switch (modo) {
       case MODOS.CONTROL_MOVILES:
         return ejecutar(config.activarControlMoviles) || { ok: true, modo };
 
       case MODOS.FINALIZA:
-        ejecutar(config.desactivarControlMoviles);
         return ejecutar(config.activarFinaliza) || { ok: true, modo };
 
       case MODOS.INFORMES_MENU:
-        ejecutar(config.desactivarControlMoviles);
         return ejecutar(config.prepararMenuInformes) || { ok: true, modo };
 
       case MODOS.DECTO460:
-        ejecutar(config.desactivarControlMoviles);
         return ejecutar(config.activarInformePorTipo, "DECTO460", config.refrescarContextoDecto460) || { ok: true, modo };
 
       case MODOS.ALCOHOLEMIA:
-        ejecutar(config.desactivarControlMoviles);
         return ejecutar(config.activarInformePorTipo, "ALCOHOLEMIA", config.refrescarContextoAlcoholemia, {
           postActivar: config.postActivarAlcoholemia,
         }) || { ok: true, modo };
 
       case MODOS.CONTROL_SUPERIOR:
-        ejecutar(config.desactivarControlMoviles);
         // Compatibilidad con el flujo legacy: antes de entrar a Control Superior
         // se apagaban explícitamente los formularios de Alcoholemia y Decto.
         // La visibilidad modular también lo hace, pero se conserva el gesto para
@@ -92,7 +97,6 @@
 
       case MODOS.INICIA:
       default:
-        ejecutar(config.desactivarControlMoviles);
         return ejecutar(config.activarInicia) || { ok: true, modo: MODOS.INICIA };
     }
   }
@@ -108,6 +112,8 @@
   const api = {
     MODOS,
     crearEstadoSeleccionPrincipal,
+    modoDebeCerrarControlMoviles,
+    prepararEjecucionModoSeleccionPrincipal,
     resolverModoSeleccionPrincipal,
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
