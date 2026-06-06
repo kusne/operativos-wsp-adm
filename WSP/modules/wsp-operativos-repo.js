@@ -107,7 +107,6 @@
       lugar: limpiarTexto(payload.lugar || ""),
       lugar_normalizado: limpiarTexto(payload.lugar_normalizado || payload.lugar || ""),
       tipo_operativo: limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || ""),
-      tipo: limpiarTexto(payload.tipo || payload.tipo_operativo || payload.tipo_corto || ""),
       ordenes_origen: ensureArray(payload.ordenes_origen),
       metadata,
       updated_at: isoAhora(),
@@ -190,7 +189,7 @@
   async function buscarEstadoPorKey({ operativoKey, guardiaFecha }) {
     if (!operativoKey || !guardiaFecha) return null;
     const params = new URLSearchParams({
-      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
+      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
       operativo_key: `eq.${operativoKey}`,
       guardia_fecha: `eq.${guardiaFecha}`,
       order: "updated_at.desc",
@@ -272,7 +271,7 @@
   async function leerOperativosGuardia({ guardiaFecha, limit = 500 } = {}) {
     const gf = guardiaFecha || getGuardiaFecha({});
     const params = new URLSearchParams({
-      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
+      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
       guardia_fecha: `eq.${gf}`,
       order: "hora_desde.asc,updated_at.desc",
       limit: String(limit || 500),

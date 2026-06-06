@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "fix-operativos-repo-wsp-20260606";
+  const WSP_BOOTSTRAP_VERSION = "fix-operativos-repo-sin-tipo-wsp-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
