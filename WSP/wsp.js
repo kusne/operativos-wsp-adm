@@ -1590,6 +1590,39 @@ window.WSP.config = {
     if (el) el.textContent = String(texto || "");
   }
 
+  async function refrescarContextoInformeGenericoWsp(config = {}) {
+    const ui = selectorContextoUiWsp();
+    const elemento = config.elemento || null;
+
+    if (ui && typeof ui.refrescarContextoInforme === "function") {
+      return ui.refrescarContextoInforme({
+        elemento,
+        activo: config.activo,
+        getFranja: () => franjaSeleccionada,
+        seleccionarDefault: config.seleccionarDefault,
+        getInicio: config.obtenerInicio,
+        setTexto: setTextoContextoInformeWsp,
+        resolverTexto: textoContextoInformeInicioWsp,
+        deps: {
+          normalizarLugar,
+          lineaDesdeArray,
+        },
+      });
+    }
+
+    if (!elemento || (typeof config.activo === "function" && !config.activo())) return null;
+    if (!franjaSeleccionada && typeof config.seleccionarDefault === "function") {
+      await config.seleccionarDefault();
+    }
+    if (!franjaSeleccionada) {
+      setTextoContextoInformeWsp(elemento, textoContextoInformeInicioWsp(null, null));
+      return null;
+    }
+    const inicio = typeof config.obtenerInicio === "function" ? await config.obtenerInicio(franjaSeleccionada) : null;
+    setTextoContextoInformeWsp(elemento, textoContextoInformeInicioWsp(inicio, franjaSeleccionada));
+    return inicio;
+  }
+
   function resolverCambioSeleccionOperativoWsp() {
     const mod = selectorEstadoUiWsp();
     if (mod && typeof mod.resolverCambioSeleccion === "function") {
@@ -6462,17 +6495,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function refrescarContextoInformeAlcoholemia() {
-    if (!informeAlcoholemiaContexto || !esInformeAlcoholemiaActivo()) return;
-    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
-    if (!franjaSeleccionada) {
-      setTextoContextoInformeWsp(informeAlcoholemiaContexto, textoContextoInformeInicioWsp(null, null));
-      return;
-    }
-    const inicio = await obtenerInicioParaInformeAlcoholemia();
-    setTextoContextoInformeWsp(
-      informeAlcoholemiaContexto,
-      textoContextoInformeInicioWsp(inicio, franjaSeleccionada)
-    );
+    return refrescarContextoInformeGenericoWsp({
+      elemento: informeAlcoholemiaContexto,
+      activo: esInformeAlcoholemiaActivo,
+      seleccionarDefault: seleccionarOperativoAlcoholemiaPorDefecto,
+      obtenerInicio: obtenerInicioParaInformeAlcoholemia,
+    });
   }
 
   function setUIInformeAlcoholemiaActiva(activa) {
@@ -6933,17 +6961,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function refrescarContextoInformeDecto460() {
-    if (!informeDecto460Contexto || !esInformeDecto460Activo()) return;
-    if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
-    if (!franjaSeleccionada) {
-      setTextoContextoInformeWsp(informeDecto460Contexto, textoContextoInformeInicioWsp(null, null));
-      return;
-    }
-    const inicio = await obtenerInicioParaInformeDecto460();
-    setTextoContextoInformeWsp(
-      informeDecto460Contexto,
-      textoContextoInformeInicioWsp(inicio, franjaSeleccionada)
-    );
+    return refrescarContextoInformeGenericoWsp({
+      elemento: informeDecto460Contexto,
+      activo: esInformeDecto460Activo,
+      seleccionarDefault: seleccionarOperativoDecto460PorDefecto,
+      obtenerInicio: obtenerInicioParaInformeDecto460,
+    });
   }
 
   function setUIInformeDecto460Activa(activa) {

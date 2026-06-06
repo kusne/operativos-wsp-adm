@@ -70,6 +70,43 @@
     el.textContent = limpiarTextoSimple(texto);
   }
 
+
+  async function refrescarContextoInforme(config = {}) {
+    const elemento = config.elemento || config.el || null;
+    if (!elemento) return { ok: false, skipped: true, motivo: "sin_elemento" };
+
+    const estaActivo = typeof config.activo === "function" ? !!config.activo() : config.activo !== false;
+    if (!estaActivo) return { ok: false, skipped: true, motivo: "inactivo" };
+
+    const getFranja = typeof config.getFranja === "function" ? config.getFranja : (() => config.franja || null);
+    let franja = getFranja();
+
+    if (!franja && typeof config.seleccionarDefault === "function") {
+      await config.seleccionarDefault();
+      franja = getFranja();
+    }
+
+    const mensajes = { ...MENSAJES_DEFAULT, ...(config.mensajes || {}) };
+    const deps = config.deps || {};
+    const setTexto = typeof config.setTexto === "function" ? config.setTexto : setTextoContexto;
+    const resolverTexto = typeof config.resolverTexto === "function"
+      ? config.resolverTexto
+      : (inicio, franjaActual) => resolverTextoContextoInforme({ inicio, franja: franjaActual, mensajes, deps });
+
+    if (!franja) {
+      const texto = resolverTexto(null, null);
+      setTexto(elemento, texto);
+      return { ok: false, skipped: false, motivo: "sin_franja", texto };
+    }
+
+    const inicio = typeof config.getInicio === "function" ? await config.getInicio(franja) : (config.inicio || null);
+    const texto = resolverTexto(inicio, franja);
+    setTexto(elemento, texto);
+
+    return { ok: !!inicio, skipped: false, motivo: inicio ? "ok" : "sin_inicio", inicio, franja, texto };
+  }
+
+
   const api = {
     MENSAJES_DEFAULT,
     limpiarTextoSimple,
@@ -79,6 +116,7 @@
     construirLugarInicio,
     resolverTextoContextoInforme,
     setTextoContexto,
+    refrescarContextoInforme,
   };
 
   window.WSP.ui.selectorContexto = api;
