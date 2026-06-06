@@ -2317,7 +2317,35 @@ window.WSP.config = {
   // ======================================================
   // ===== CONTROL DE MÓVILES ==============================
   // ======================================================
+  function modoUiWsp() {
+    return window.WSP?.ui?.modo || window.WSP?.modules?.modoUi || null;
+  }
+
+  function refsModoUiWsp() {
+    return {
+      selTipo,
+      tipoInforme,
+      bloqueInformeSelector,
+    };
+  }
+
+  function configModoUiWsp() {
+    return {
+      INFORMES_TIPO,
+      INFORME_CONTROL_SUPERIOR_TIPO,
+      INFORME_ALCOHOLEMIA_TIPO,
+      INFORME_DECRETO_460_TIPO,
+      CONTROL_MOVILES_TIPO: "CONTROL MOVILES",
+      FINALIZA_TIPO: "FINALIZA",
+      INICIA_TIPO: "INICIA",
+    };
+  }
+
   function esControlMovilesActivo() {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.esControlMovilesActivo === "function") {
+      return mod.esControlMovilesActivo(refsModoUiWsp(), configModoUiWsp());
+    }
     return selTipo?.value === "CONTROL MOVILES";
   }
 
@@ -4300,16 +4328,28 @@ window.WSP.config = {
   }
 
   function estaEnMenuInformes() {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.estaEnMenuInformes === "function") {
+      return mod.estaEnMenuInformes(refsModoUiWsp(), configModoUiWsp());
+    }
     return selTipo?.value === INFORMES_TIPO;
   }
 
   function getTipoInformeActivo() {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.getTipoInformeActivo === "function") {
+      return mod.getTipoInformeActivo(refsModoUiWsp(), configModoUiWsp());
+    }
     if (estaEnMenuInformes()) return tipoInforme?.value || "";
     // Compatibilidad por si queda algún valor viejo guardado o seleccionado.
     return selTipo?.value || "";
   }
 
   function setSelectorInformesVisible(visible) {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.setSelectorInformesVisible === "function") {
+      return mod.setSelectorInformesVisible(refsModoUiWsp(), visible);
+    }
     if (bloqueInformeSelector) bloqueInformeSelector.classList.toggle("hidden", !visible);
     if (!visible && tipoInforme) tipoInforme.value = "";
   }
@@ -5110,7 +5150,12 @@ ${bold(`Moviles ${organismo}:`)}`)
   function esControlSuperiorActivo() {
     // CONTROL SUPERIOR ya no vive como opción principal: debe ejecutarse dentro de INFORMES.
     // Se mantiene compatibilidad si algún HTML viejo todavía trae CONTROL SUPERIOR en el selector principal.
-    if (getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO) return true;
+    const mod = modoUiWsp();
+    if (mod && typeof mod.esControlSuperiorActivo === "function") {
+      if (mod.esControlSuperiorActivo(refsModoUiWsp(), configModoUiWsp())) return true;
+    } else if (getTipoInformeActivo() === INFORME_CONTROL_SUPERIOR_TIPO) {
+      return true;
+    }
     try {
       if (window.ControlSuperior && typeof window.ControlSuperior.isActive === "function") {
         return !!window.ControlSuperior.isActive();
@@ -5978,10 +6023,18 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function esInformeAlcoholemiaActivo() {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.esInformeAlcoholemiaActivo === "function") {
+      return mod.esInformeAlcoholemiaActivo(refsModoUiWsp(), configModoUiWsp());
+    }
     return getTipoInformeActivo() === INFORME_ALCOHOLEMIA_TIPO;
   }
 
   function esInformeDecto460Activo() {
+    const mod = modoUiWsp();
+    if (mod && typeof mod.esInformeDecto460Activo === "function") {
+      return mod.esInformeDecto460Activo(refsModoUiWsp(), configModoUiWsp());
+    }
     return getTipoInformeActivo() === INFORME_DECRETO_460_TIPO;
   }
 
