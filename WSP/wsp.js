@@ -1807,6 +1807,30 @@ window.WSP.config = {
   }
 
 
+  async function resolverInicioRequeridoInformeModularWsp(config = {}) {
+    const ui = selectorContextoUiWsp();
+    if (!ui || typeof ui.resolverInicioRequeridoInforme !== "function") return null;
+
+    try {
+      return await ui.resolverInicioRequeridoInforme({
+        getFranja: () => franjaSeleccionada,
+        seleccionarDefault: config.seleccionarDefault,
+        leerInicio: leerInicioDesdeSupabase,
+        cargarInicioGuardadoCoincidente,
+        cargarInicioLocal,
+        refrescarContexto: config.refrescarContexto,
+        mensaje: config.mensaje,
+        mostrarAlerta: config.mostrarAlerta,
+        alert,
+        obtenerInicio: config.obtenerInicio,
+      });
+    } catch (error) {
+      console.warn("[WSP] Resolución modular de INICIO requerido para informe falló. Se usa fallback legacy.", error);
+      return null;
+    }
+  }
+
+
   function resolverCambioSeleccionOperativoWsp() {
     const mod = selectorEstadoUiWsp();
     if (mod && typeof mod.resolverCambioSeleccion === "function") {
@@ -7010,14 +7034,27 @@ ${bold(`Moviles ${organismo}:`)}`)
     actualizarReglasInformeAlcoholemia();
     if (!validarInformeAlcoholemia()) return;
 
-    const inicioReq = await requerirInicioSeleccionadoInformeModularWsp({
+    const inicioRes = await resolverInicioRequeridoInformeModularWsp({
       seleccionarDefault: seleccionarOperativoAlcoholemiaPorDefecto,
       refrescarContexto: refrescarContextoInformeAlcoholemia,
+      obtenerInicio: obtenerInicioParaInformeAlcoholemia,
       mensaje: "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.",
     });
-    if (inicioReq && !inicioReq.ok) return;
 
-    const inicio = inicioReq?.inicio || await obtenerInicioParaInformeAlcoholemia();
+    let inicio = null;
+    if (inicioRes) {
+      if (!inicioRes.ok) return;
+      inicio = inicioRes.inicio;
+    } else {
+      const inicioReq = await requerirInicioSeleccionadoInformeModularWsp({
+        seleccionarDefault: seleccionarOperativoAlcoholemiaPorDefecto,
+        refrescarContexto: refrescarContextoInformeAlcoholemia,
+        mensaje: "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.",
+      });
+      if (inicioReq && !inicioReq.ok) return;
+      inicio = inicioReq?.inicio || await obtenerInicioParaInformeAlcoholemia();
+    }
+
     if (!inicio) {
       alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
       return;
@@ -7411,14 +7448,27 @@ ${bold(`Moviles ${organismo}:`)}`)
   async function enviarInformeDecto460() {
     aplicarMayusculasInputsDecto460();
     if (!validarInformeDecto460()) return;
-    const inicioReq = await requerirInicioSeleccionadoInformeModularWsp({
+    const inicioRes = await resolverInicioRequeridoInformeModularWsp({
       seleccionarDefault: seleccionarOperativoDecto460PorDefecto,
       refrescarContexto: refrescarContextoInformeDecto460,
+      obtenerInicio: obtenerInicioParaInformeDecto460,
       mensaje: "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.",
     });
-    if (inicioReq && !inicioReq.ok) return;
 
-    const inicio = inicioReq?.inicio || await obtenerInicioParaInformeDecto460();
+    let inicio = null;
+    if (inicioRes) {
+      if (!inicioRes.ok) return;
+      inicio = inicioRes.inicio;
+    } else {
+      const inicioReq = await requerirInicioSeleccionadoInformeModularWsp({
+        seleccionarDefault: seleccionarOperativoDecto460PorDefecto,
+        refrescarContexto: refrescarContextoInformeDecto460,
+        mensaje: "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.",
+      });
+      if (inicioReq && !inicioReq.ok) return;
+      inicio = inicioReq?.inicio || await obtenerInicioParaInformeDecto460();
+    }
+
     if (!inicio) {
       alert("No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal.");
       return;
@@ -7928,14 +7978,27 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esControlSuperiorActivo()) {
-      const inicioControlSuperiorReq = await requerirInicioSeleccionadoInformeModularWsp({
+      const inicioControlSuperiorRes = await resolverInicioRequeridoInformeModularWsp({
         seleccionarDefault: seleccionarOperativoControlSuperiorPorDefecto,
         refrescarContexto: refrescarContextoControlSuperior,
+        obtenerInicio: obtenerInicioParaControlSuperior,
         mensaje: "No hay datos de inicio guardados para este operativo.",
       });
-      if (inicioControlSuperiorReq && !inicioControlSuperiorReq.ok) return;
 
-      const inicioControlSuperior = inicioControlSuperiorReq?.inicio || await obtenerInicioParaControlSuperior();
+      let inicioControlSuperior = null;
+      if (inicioControlSuperiorRes) {
+        if (!inicioControlSuperiorRes.ok) return;
+        inicioControlSuperior = inicioControlSuperiorRes.inicio;
+      } else {
+        const inicioControlSuperiorReq = await requerirInicioSeleccionadoInformeModularWsp({
+          seleccionarDefault: seleccionarOperativoControlSuperiorPorDefecto,
+          refrescarContexto: refrescarContextoControlSuperior,
+          mensaje: "No hay datos de inicio guardados para este operativo.",
+        });
+        if (inicioControlSuperiorReq && !inicioControlSuperiorReq.ok) return;
+        inicioControlSuperior = inicioControlSuperiorReq?.inicio || await obtenerInicioParaControlSuperior();
+      }
+
       if (!inicioControlSuperior) {
         alert("No hay datos de inicio guardados para este operativo.");
         return;

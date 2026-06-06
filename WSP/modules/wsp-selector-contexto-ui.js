@@ -226,6 +226,51 @@
   }
 
 
+  async function resolverInicioRequeridoInforme(config = {}) {
+    const mensaje = limpiarTextoSimple(
+      config.mensaje ||
+      config.mensajeSinInicio ||
+      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
+    );
+
+    const requerir = typeof config.requerirInicio === "function"
+      ? await config.requerirInicio({ ...config, mensaje })
+      : await requerirInicioSeleccionadoInforme({ ...config, mensaje });
+
+    if (requerir && requerir.ok && requerir.inicio) {
+      return { ok: true, inicio: requerir.inicio, motivo: requerir.motivo || "ok", requerir };
+    }
+
+    if (requerir && requerir.ok === false) {
+      return {
+        ok: false,
+        inicio: null,
+        motivo: requerir.motivo || "sin_inicio",
+        mensaje: limpiarTextoSimple(requerir.mensaje || mensaje),
+        requerir,
+      };
+    }
+
+    let inicio = null;
+    if (typeof config.obtenerInicio === "function") {
+      try { inicio = await config.obtenerInicio(); } catch {}
+    }
+
+    if (inicio) return { ok: true, inicio, motivo: "obtener_inicio" };
+
+    if (typeof config.refrescarContexto === "function") {
+      try { await config.refrescarContexto(); } catch {}
+    }
+
+    if (config.mostrarAlerta !== false) {
+      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
+      if (alertFn) alertFn(mensaje);
+    }
+
+    return { ok: false, inicio: null, motivo: "sin_inicio", mensaje };
+  }
+
+
 
   async function seleccionarOperativoIniciadoPorDefecto(config = {}) {
     const selHorario = config.selHorario || null;
@@ -342,6 +387,7 @@
     refrescarContextosActivos,
     obtenerInicioSeleccionadoInforme,
     requerirInicioSeleccionadoInforme,
+    resolverInicioRequeridoInforme,
     seleccionarOperativoIniciadoPorDefecto,
   };
 
