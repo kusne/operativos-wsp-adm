@@ -169,6 +169,108 @@
   }
 
 
+
+  async function seleccionarOperativoIniciadoPorDefecto(config = {}) {
+    const selHorario = config.selHorario || null;
+    if (!selHorario) return { ok: false, motivo: "sin_selector" };
+
+    const getOperativos = typeof config.getOperativos === "function"
+      ? config.getOperativos
+      : (() => Array.isArray(config.operativos) ? config.operativos : []);
+    const cargarOperativos = typeof config.cargarOperativos === "function" ? config.cargarOperativos : null;
+    const getFranjaSeleccionada = typeof config.getFranjaSeleccionada === "function"
+      ? config.getFranjaSeleccionada
+      : (() => config.franjaSeleccionada || null);
+    const seleccionarFranja = typeof config.seleccionarFranja === "function"
+      ? config.seleccionarFranja
+      : ((franja) => {
+          if (!franja) return;
+          selHorario.value = franja.__key || "";
+        });
+    const leerInicio = typeof config.leerInicio === "function" ? config.leerInicio : null;
+    const ordenarCandidatos = typeof config.ordenarCandidatos === "function"
+      ? config.ordenarCandidatos
+      : ((items) => Array.isArray(items) ? items.slice() : []);
+    const afterSelect = typeof config.afterSelect === "function" ? config.afterSelect : null;
+    const fallbackUnico = config.fallbackUnico !== false;
+    const fallbackPrimero = config.fallbackPrimero === true;
+    const usarInicioLocal = config.usarInicioLocal === true;
+    const cargarInicioLocal = typeof config.cargarInicioLocal === "function" ? config.cargarInicioLocal : null;
+    const puntuarCoincidenciaInicio = typeof config.puntuarCoincidenciaInicio === "function"
+      ? config.puntuarCoincidenciaInicio
+      : (() => -1);
+
+    let operativos = getOperativos();
+    const faltaCacheInicio = !Array.isArray(operativos) || !operativos.length || !operativos.some((op) => op && op.__desdeInicioGuardado);
+
+    if (faltaCacheInicio && cargarOperativos) {
+      await cargarOperativos(selHorario.value || "");
+      operativos = getOperativos();
+    }
+
+    if (!Array.isArray(operativos) || !operativos.length) {
+      return { ok: false, motivo: "sin_operativos" };
+    }
+
+    const franjaActual = getFranjaSeleccionada();
+    if (franjaActual && leerInicio) {
+      try {
+        const inicioActual = await leerInicio(franjaActual);
+        if (inicioActual) return { ok: true, motivo: "actual_con_inicio", franja: franjaActual, inicio: inicioActual };
+      } catch {}
+    }
+
+    const candidatos = ordenarCandidatos(operativos);
+
+    if (leerInicio) {
+      for (const candidato of candidatos) {
+        try {
+          const inicio = await leerInicio(candidato);
+          if (!inicio) continue;
+          seleccionarFranja(candidato, { motivo: "inicio_supabase", inicio });
+          if (afterSelect) afterSelect(candidato, { motivo: "inicio_supabase", inicio });
+          return { ok: true, motivo: "inicio_supabase", franja: candidato, inicio };
+        } catch {}
+      }
+    }
+
+    if (usarInicioLocal && cargarInicioLocal) {
+      const inicioLocal = cargarInicioLocal();
+      if (inicioLocal) {
+        let mejor = null;
+        let mejorPuntaje = -1;
+        candidatos.forEach((candidato) => {
+          const puntaje = puntuarCoincidenciaInicio(inicioLocal, candidato);
+          if (puntaje > mejorPuntaje) {
+            mejor = candidato;
+            mejorPuntaje = puntaje;
+          }
+        });
+        if (mejor && (mejorPuntaje >= 90 || candidatos.length === 1)) {
+          seleccionarFranja(mejor, { motivo: "inicio_local", inicio: inicioLocal, puntaje: mejorPuntaje });
+          if (afterSelect) afterSelect(mejor, { motivo: "inicio_local", inicio: inicioLocal, puntaje: mejorPuntaje });
+          return { ok: true, motivo: "inicio_local", franja: mejor, inicio: inicioLocal, puntaje: mejorPuntaje };
+        }
+      }
+    }
+
+    if (fallbackPrimero && candidatos.length) {
+      const candidato = candidatos[0];
+      seleccionarFranja(candidato, { motivo: "fallback_primero" });
+      if (afterSelect) afterSelect(candidato, { motivo: "fallback_primero" });
+      return { ok: true, motivo: "fallback_primero", franja: candidato };
+    }
+
+    if (fallbackUnico && candidatos.length === 1) {
+      const candidato = candidatos[0];
+      seleccionarFranja(candidato, { motivo: "fallback_unico" });
+      if (afterSelect) afterSelect(candidato, { motivo: "fallback_unico" });
+      return { ok: true, motivo: "fallback_unico", franja: candidato };
+    }
+
+    return { ok: false, motivo: "sin_seleccion", candidatos };
+  }
+
   const api = {
     MENSAJES_DEFAULT,
     limpiarTextoSimple,
@@ -181,6 +283,7 @@
     asegurarElementoContexto,
     refrescarContextoInforme,
     refrescarContextosActivos,
+    seleccionarOperativoIniciadoPorDefecto,
   };
 
   window.WSP.ui.selectorContexto = api;

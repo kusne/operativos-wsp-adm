@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso50-contextos-activos-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso51-selector-informe-default-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

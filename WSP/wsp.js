@@ -1637,6 +1637,15 @@ window.WSP.config = {
   }
 
   async function seleccionarOperativoControlSuperiorPorDefecto() {
+    const seleccionModular = await seleccionarOperativoInformePorDefectoModularWsp({
+      ordenarCandidatos: typeof ordenarCandidatosInformeAlcoholemia === "function"
+        ? ordenarCandidatosInformeAlcoholemia
+        : ((items) => Array.isArray(items) ? items.slice() : []),
+      fallbackUnico: true,
+      fallbackPrimero: false,
+    });
+    if (seleccionModular !== null) return seleccionModular;
+
     if (!selHorario) return false;
     if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
       await cargarOperativosIniciadosParaInformes(selHorario.value || "");
@@ -1713,6 +1722,43 @@ window.WSP.config = {
       console.warn("[WSP] No se pudieron refrescar contextos activos de informes.", error);
       return [];
     });
+  }
+
+
+  async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
+    const ui = selectorContextoUiWsp();
+    if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
+
+    try {
+      const resultado = await ui.seleccionarOperativoIniciadoPorDefecto({
+        selHorario,
+        getOperativos: () => operativosCache,
+        cargarOperativos: async (valorSeleccionado) => {
+          await cargarOperativosIniciadosParaInformes(valorSeleccionado || "");
+          return operativosCache;
+        },
+        getFranjaSeleccionada: () => franjaSeleccionada,
+        seleccionarFranja: (franja) => {
+          if (!franja) return;
+          if (selHorario) selHorario.value = franja.__key || "";
+          franjaSeleccionada = franja;
+          ordenSeleccionada = null;
+        },
+        leerInicio: leerInicioDesdeSupabase,
+        ordenarCandidatos: config.ordenarCandidatos,
+        afterSelect: config.afterSelect,
+        fallbackUnico: config.fallbackUnico !== false,
+        fallbackPrimero: !!config.fallbackPrimero,
+        usarInicioLocal: !!config.usarInicioLocal,
+        cargarInicioLocal: config.usarInicioLocal ? cargarInicioLocal : null,
+        puntuarCoincidenciaInicio,
+      });
+
+      return !!(resultado && resultado.ok);
+    } catch (error) {
+      console.warn("[WSP] Selector modular de informes falló. Se usa fallback legacy.", error);
+      return null;
+    }
   }
 
 
@@ -6517,6 +6563,15 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function seleccionarOperativoAlcoholemiaPorDefecto() {
+    const seleccionModular = await seleccionarOperativoInformePorDefectoModularWsp({
+      ordenarCandidatos: ordenarCandidatosInformeAlcoholemia,
+      usarInicioLocal: true,
+      fallbackUnico: true,
+      fallbackPrimero: false,
+      afterSelect: completarDestinoRemisionSiVacio,
+    });
+    if (seleccionModular !== null) return seleccionModular;
+
     if (!selHorario) return false;
     if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
       await cargarOperativosIniciadosParaInformes(selHorario.value || "");
@@ -7004,6 +7059,14 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function seleccionarOperativoDecto460PorDefecto() {
+    const seleccionModular = await seleccionarOperativoInformePorDefectoModularWsp({
+      ordenarCandidatos: ordenarCandidatosInformeDecto460,
+      fallbackUnico: true,
+      fallbackPrimero: true,
+      afterSelect: completarDestinoDecto460SiVacio,
+    });
+    if (seleccionModular !== null) return seleccionModular;
+
     if (!selHorario) return false;
     if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
       await cargarOperativosIniciadosParaInformes(selHorario.value || "");
