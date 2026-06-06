@@ -1687,6 +1687,11 @@ window.WSP.config = {
   }
 
   async function obtenerInicioParaControlSuperior() {
+    const inicioModular = await obtenerInicioSeleccionadoInformeModularWsp({
+      seleccionarDefault: seleccionarOperativoControlSuperiorPorDefecto,
+    });
+    if (inicioModular !== null) return inicioModular;
+
     if (!franjaSeleccionada) await seleccionarOperativoControlSuperiorPorDefecto();
     if (!franjaSeleccionada) return null;
     return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
@@ -1757,6 +1762,24 @@ window.WSP.config = {
       return !!(resultado && resultado.ok);
     } catch (error) {
       console.warn("[WSP] Selector modular de informes falló. Se usa fallback legacy.", error);
+      return null;
+    }
+  }
+
+  async function obtenerInicioSeleccionadoInformeModularWsp(config = {}) {
+    const ui = selectorContextoUiWsp();
+    if (!ui || typeof ui.obtenerInicioSeleccionadoInforme !== "function") return null;
+
+    try {
+      return await ui.obtenerInicioSeleccionadoInforme({
+        getFranja: () => franjaSeleccionada,
+        seleccionarDefault: config.seleccionarDefault,
+        leerInicio: leerInicioDesdeSupabase,
+        cargarInicioGuardadoCoincidente,
+        cargarInicioLocal,
+      });
+    } catch (error) {
+      console.warn("[WSP] Obtención modular de INICIO de informe falló. Se usa fallback legacy.", error);
       return null;
     }
   }
@@ -6634,6 +6657,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function obtenerInicioParaInformeAlcoholemia() {
+    const inicioModular = await obtenerInicioSeleccionadoInformeModularWsp({
+      seleccionarDefault: seleccionarOperativoAlcoholemiaPorDefecto,
+    });
+    if (inicioModular !== null) return inicioModular;
+
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) return null;
     return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
@@ -7108,6 +7136,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function obtenerInicioParaInformeDecto460() {
+    const inicioModular = await obtenerInicioSeleccionadoInformeModularWsp({
+      seleccionarDefault: seleccionarOperativoDecto460PorDefecto,
+    });
+    if (inicioModular !== null) return inicioModular;
+
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) return null;
     return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();

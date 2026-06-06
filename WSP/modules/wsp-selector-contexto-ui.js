@@ -169,6 +169,38 @@
   }
 
 
+  async function obtenerInicioSeleccionadoInforme(config = {}) {
+    const getFranja = typeof config.getFranja === "function"
+      ? config.getFranja
+      : (() => config.franja || null);
+    const seleccionarDefault = typeof config.seleccionarDefault === "function" ? config.seleccionarDefault : null;
+
+    let franja = getFranja();
+    if (!franja && seleccionarDefault) {
+      await seleccionarDefault();
+      franja = getFranja();
+    }
+
+    if (!franja) return null;
+    if (franja.__inicioGuardadoPayload) return franja.__inicioGuardadoPayload;
+
+    const lectores = [
+      config.leerInicio,
+      config.cargarInicioGuardadoCoincidente,
+      config.cargarInicioLocal,
+    ].filter((fn) => typeof fn === "function");
+
+    for (const leer of lectores) {
+      try {
+        const inicio = await leer(franja);
+        if (inicio) return inicio;
+      } catch {}
+    }
+
+    return null;
+  }
+
+
 
   async function seleccionarOperativoIniciadoPorDefecto(config = {}) {
     const selHorario = config.selHorario || null;
@@ -283,6 +315,7 @@
     asegurarElementoContexto,
     refrescarContextoInforme,
     refrescarContextosActivos,
+    obtenerInicioSeleccionadoInforme,
     seleccionarOperativoIniciadoPorDefecto,
   };
 
