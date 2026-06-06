@@ -137,6 +137,22 @@
     return { ok: true, modo: "INFORMES_MENU" };
   }
 
+  function resetearInformesUI(config = {}) {
+    const desactivarPantallas = typeof config.desactivarPantallasInformes === "function"
+      ? config.desactivarPantallasInformes
+      : (() => desactivarPantallasInformes(config));
+
+    desactivarPantallas();
+
+    if (typeof config.resetControlSuperior === "function") config.resetControlSuperior();
+    if (typeof config.limpiarInformeAlcoholemia === "function") config.limpiarInformeAlcoholemia();
+    if (typeof config.limpiarInformeDecto460 === "function") config.limpiarInformeDecto460();
+    if (typeof config.setObservacionesVisible === "function") config.setObservacionesVisible(true);
+
+    return { ok: true, accion: "resetear_informes_ui" };
+  }
+
+
   const api = {
     sincronizarWidgetsAuxiliares,
     cargarOperativosYRefrescar,
@@ -145,6 +161,7 @@
     activarPantallaInforme,
     activarPantallaInformePorTipo,
     prepararMenuInformes,
+    resetearInformesUI,
   };
 
   window.WSP.ui.informesFlujo = api;

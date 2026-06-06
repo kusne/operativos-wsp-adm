@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso63-menu-informes-ui-modulo-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso64-reset-informes-ui-modulo-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

@@ -1899,6 +1899,33 @@ window.WSP.config = {
   }
 
 
+  function resetearInformesUIWsp() {
+    const ui = informesFlujoUiWsp();
+    const config = {
+      desactivarPantallasInformes: desactivarPantallasInformesWsp,
+      resetControlSuperior: () => {
+        if (window.ControlSuperior && typeof window.ControlSuperior.reset === "function") {
+          window.ControlSuperior.reset();
+        }
+      },
+      limpiarInformeAlcoholemia,
+      limpiarInformeDecto460,
+      setObservacionesVisible,
+    };
+
+    if (ui && typeof ui.resetearInformesUI === "function") {
+      return ui.resetearInformesUI(config);
+    }
+
+    desactivarPantallasInformesWsp();
+    config.resetControlSuperior();
+    limpiarInformeAlcoholemia();
+    limpiarInformeDecto460();
+    setObservacionesVisible(true);
+    return { ok: true, accion: "resetear_informes_ui" };
+  }
+
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -5863,21 +5890,13 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     limpiarFormularioDomWsp();
 
-    if (window.ControlSuperior && typeof window.ControlSuperior.reset === "function") {
-      window.ControlSuperior.reset();
-    }
+    resetearInformesUIWsp();
 
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
 
     ocultarBloquesDinamicosFinalizaWsp();
-    setControlSuperiorVisible(false);
-    setUIInformeAlcoholemiaActiva(false);
-    limpiarInformeAlcoholemia();
-    setUIInformeDecto460Activa(false);
-    limpiarInformeDecto460();
     setUIControlMovilesActiva(false);
-    setObservacionesVisible(true);
 
     limpiarGraduaciones(graduacionesSancionable);
     limpiarGraduaciones(graduacionesNoSancionable);
