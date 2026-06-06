@@ -182,12 +182,20 @@
     return ejecutarModoBasicoSeleccionPrincipal(modoSeguro, config);
   }
 
-  function actualizarTipoPrincipal(config = {}) {
+  function crearConfigNormalizadaSeleccionPrincipal(config = {}) {
     const estado = crearEstadoSeleccionPrincipal(config);
-    const configNormalizada = { ...config, __estadoSeleccionPrincipal: estado };
+    return { ...config, __estadoSeleccionPrincipal: estado };
+  }
+
+  function ejecutarSeleccionPrincipalDesdeConfig(config = {}) {
+    const configNormalizada = crearConfigNormalizadaSeleccionPrincipal(config);
     prepararCambioSeleccionPrincipal(configNormalizada);
     const modo = resolverModoSeleccionPrincipal(configNormalizada);
     return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
+  }
+
+  function actualizarTipoPrincipal(config = {}) {
+    return ejecutarSeleccionPrincipalDesdeConfig(config);
   }
 
   const api = {
@@ -211,6 +219,8 @@
     resolverModoSeleccionPrincipal,
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
+    crearConfigNormalizadaSeleccionPrincipal,
+    ejecutarSeleccionPrincipalDesdeConfig,
     actualizarTipoPrincipal,
   };
 

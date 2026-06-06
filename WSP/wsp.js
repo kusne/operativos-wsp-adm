@@ -2080,6 +2080,51 @@ window.WSP.config = {
     };
   }
 
+  function actualizarTipoPrincipalLegacyWsp(config) {
+    setSelectorInformesVisible(config.enInformes);
+    if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+
+    if (config.controlMoviles) {
+      activarPantallaControlMovilesWsp();
+      return { ok: true, modo: "CONTROL_MOVILES", legacy: true };
+    }
+
+    setUIControlMovilesActiva(false);
+
+    if (config.fin) {
+      activarPantallaFinalizaWsp();
+      return { ok: true, modo: "FINALIZA", legacy: true };
+    }
+
+    if (config.enInformes && !config.tipoInformeActivo) {
+      prepararMenuInformesWsp();
+      return { ok: true, modo: "INFORMES_MENU", legacy: true };
+    }
+
+    if (config.informeDecto460) {
+      activarPantallaInformePorTipoWsp("DECTO460", refrescarContextoInformeDecto460);
+      return { ok: true, modo: "DECTO460", legacy: true };
+    }
+
+    if (config.informeAlcoholemia) {
+      activarPantallaInformePorTipoWsp("ALCOHOLEMIA", refrescarContextoInformeAlcoholemia, {
+        postActivar: actualizarReglasInformeAlcoholemia,
+      });
+      return { ok: true, modo: "ALCOHOLEMIA", legacy: true };
+    }
+
+    setUIInformeAlcoholemiaActiva(false);
+    setUIInformeDecto460Activa(false);
+
+    if (config.controlSuperior) {
+      activarPantallaInformePorTipoWsp("CONTROL_SUPERIOR", refrescarContextoControlSuperior);
+      return { ok: true, modo: "CONTROL_SUPERIOR", legacy: true };
+    }
+
+    activarPantallaIniciaWsp();
+    return { ok: true, modo: "INICIA", legacy: true };
+  }
+
   function actualizarTipoPrincipalWsp() {
     const ui = seleccionPrincipalFlujoUiWsp();
     const config = configSeleccionPrincipalFlujoWsp();
@@ -2088,47 +2133,7 @@ window.WSP.config = {
       return ui.actualizarTipoPrincipal(config);
     }
 
-    setSelectorInformesVisible(config.enInformes);
-    if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
-
-    if (config.controlMoviles) {
-      activarPantallaControlMovilesWsp();
-      return;
-    }
-
-    setUIControlMovilesActiva(false);
-
-    if (config.fin) {
-      activarPantallaFinalizaWsp();
-      return;
-    }
-
-    if (config.enInformes && !config.tipoInformeActivo) {
-      prepararMenuInformesWsp();
-      return;
-    }
-
-    if (config.informeDecto460) {
-      activarPantallaInformePorTipoWsp("DECTO460", refrescarContextoInformeDecto460);
-      return;
-    }
-
-    if (config.informeAlcoholemia) {
-      activarPantallaInformePorTipoWsp("ALCOHOLEMIA", refrescarContextoInformeAlcoholemia, {
-        postActivar: actualizarReglasInformeAlcoholemia,
-      });
-      return;
-    }
-
-    setUIInformeAlcoholemiaActiva(false);
-    setUIInformeDecto460Activa(false);
-
-    if (config.controlSuperior) {
-      activarPantallaInformePorTipoWsp("CONTROL_SUPERIOR", refrescarContextoControlSuperior);
-      return;
-    }
-
-    activarPantallaIniciaWsp();
+    return actualizarTipoPrincipalLegacyWsp(config);
   }
 
 
