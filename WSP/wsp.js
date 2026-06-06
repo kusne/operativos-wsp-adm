@@ -2480,8 +2480,39 @@ window.WSP.config = {
     } catch {}
   }
 
-  function setSelectorOperativosVisibleWsp(visible) {
+  function crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto = {}) {
     const mostrar = !!visible;
+    return {
+      ...(contexto && typeof contexto === "object" ? contexto : {}),
+      visible: mostrar,
+      motivo: limpiarTextoSimple(contexto?.motivo || (mostrar ? "visible" : "oculto")),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  function guardarEstadoVisibilidadSelectorOperativosWsp(estado) {
+    if (!estado || typeof estado !== "object") return estado;
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.selectorOperativosVisibilidad = estado;
+    return estado;
+  }
+
+  function registrarLimpiezaSelectorOperativosWsp(contexto = {}) {
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.selectorOperativosUltimaLimpieza = {
+      ...(contexto && typeof contexto === "object" ? contexto : {}),
+      motivo: limpiarTextoSimple(contexto?.motivo || "selector_oculto"),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  function setSelectorOperativosVisibleWsp(visible, contexto = {}) {
+    const estadoVisibilidad = guardarEstadoVisibilidadSelectorOperativosWsp(
+      crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto)
+    );
+    const mostrar = !!estadoVisibilidad.visible;
 
     const aplicarVisibilidad = (el) => {
       if (!el) return;
@@ -2508,7 +2539,8 @@ window.WSP.config = {
     return mostrar;
   }
 
-  function limpiarSelectorOperativosOcultoWsp() {
+  function limpiarSelectorOperativosOcultoWsp(contexto = {}) {
+    registrarLimpiezaSelectorOperativosWsp(contexto);
     operativosCache = [];
     franjaSeleccionada = null;
     ordenSeleccionada = null;
@@ -2525,11 +2557,26 @@ window.WSP.config = {
     return !(config.enInformes && !config.tipoInformeActivo);
   }
 
+  function motivoVisibilidadSelectorOperativosDesdeConfigWsp(config = {}) {
+    if (config.enInformes && !config.tipoInformeActivo) return "informes_menu_sin_tipo";
+    if (config.enInformes && config.tipoInformeActivo) return "informe_con_tipo";
+    if (config.fin) return "finaliza";
+    if (config.controlMoviles) return "control_moviles";
+    return "operativos_publicados";
+  }
+
+  function crearEstadoVisibilidadSelectorOperativosDesdeConfigWsp(config = {}) {
+    return crearEstadoVisibilidadSelectorOperativosWsp(
+      debeMostrarSelectorOperativosDesdeConfigWsp(config),
+      { motivo: motivoVisibilidadSelectorOperativosDesdeConfigWsp(config) }
+    );
+  }
+
   function aplicarVisibilidadSelectorOperativosDesdeConfigWsp(config = {}) {
-    const visible = debeMostrarSelectorOperativosDesdeConfigWsp(config);
-    if (!visible) limpiarSelectorOperativosOcultoWsp();
-    setSelectorOperativosVisibleWsp(visible);
-    return visible;
+    const estadoVisibilidad = crearEstadoVisibilidadSelectorOperativosDesdeConfigWsp(config);
+    if (!estadoVisibilidad.visible) limpiarSelectorOperativosOcultoWsp(estadoVisibilidad);
+    setSelectorOperativosVisibleWsp(estadoVisibilidad.visible, estadoVisibilidad);
+    return estadoVisibilidad.visible;
   }
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso82-selector-operativos-visibilidad-centralizada-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso83-selector-operativos-estado-trazable-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

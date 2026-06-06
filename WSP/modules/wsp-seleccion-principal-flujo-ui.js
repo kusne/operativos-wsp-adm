@@ -175,20 +175,36 @@
   }
 
   function crearEstadoVisibilidadSelectorOperativos(estado = {}) {
-    return {
+    return normalizarEstadoVisibilidadSelectorOperativos({
       visible: debeMostrarSelectorOperativos(estado),
       motivo: motivoVisibilidadSelectorOperativos(estado),
+    });
+  }
+
+  function normalizarEstadoVisibilidadSelectorOperativos(visibilidad = {}) {
+    const visible = !!visibilidad.visible;
+    return {
+      ...visibilidad,
+      visible,
+      motivo: normalizarTexto(visibilidad.motivo || (visible ? "visible" : "oculto")),
     };
+  }
+
+  function aplicarEstadoVisibilidadSelectorOperativos(config = {}, visibilidad = {}) {
+    const estadoVisibilidad = normalizarEstadoVisibilidadSelectorOperativos(visibilidad);
+
+    if (!estadoVisibilidad.visible) ejecutar(config.limpiarSelectorOperativosOculto, estadoVisibilidad);
+    ejecutar(config.setSelectorOperativosVisible, estadoVisibilidad.visible, estadoVisibilidad);
+
+    return estadoVisibilidad;
   }
 
   function aplicarVisibilidadSelectorOperativosSeleccionPrincipal(config = {}) {
     const estado = estadoDesdeConfig(config);
-    const visibilidad = crearEstadoVisibilidadSelectorOperativos(estado);
-
-    if (!visibilidad.visible) ejecutar(config.limpiarSelectorOperativosOculto, visibilidad);
-    ejecutar(config.setSelectorOperativosVisible, visibilidad.visible, visibilidad);
-
-    return visibilidad;
+    return aplicarEstadoVisibilidadSelectorOperativos(
+      config,
+      crearEstadoVisibilidadSelectorOperativos(estado)
+    );
   }
 
   function prepararCambioSeleccionPrincipal(config = {}) {
@@ -372,6 +388,8 @@
     debeMostrarSelectorOperativos,
     motivoVisibilidadSelectorOperativos,
     crearEstadoVisibilidadSelectorOperativos,
+    normalizarEstadoVisibilidadSelectorOperativos,
+    aplicarEstadoVisibilidadSelectorOperativos,
     aplicarVisibilidadSelectorOperativosSeleccionPrincipal,
     prepararEjecucionModoSeleccionPrincipal,
     modoEsInformeSeleccionPrincipal,
