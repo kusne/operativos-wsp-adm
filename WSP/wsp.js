@@ -2347,6 +2347,75 @@ window.WSP.config = {
     };
   }
 
+  function pantallasUiWsp() {
+    return window.WSP?.ui?.pantallas || window.WSP?.modules?.pantallasUi || null;
+  }
+
+  function refsPantallasUiWsp() {
+    return {
+      bloqueInformeSelector,
+      bloqueInformeAlcoholemia,
+      bloqueInformeDecto460,
+      bloqueControlSuperior,
+      bloqueControlMoviles,
+      divFinaliza,
+      divDetalles,
+      divMismosElementos,
+      bloquePresenciaActiva,
+      chkPresenciaActiva,
+      chkMostrarResultadosFinaliza,
+      bloqueMostrarResultadosFinaliza,
+      tituloResultadosFinaliza,
+      contenidoResultadosFinaliza,
+      bloquePositivosAlcoholimetro,
+      wrapGraduacionesSancionable,
+      wrapGraduacionesNoSancionable,
+      unitGraduacionesSancionable,
+      unitGraduacionesNoSancionable,
+      wrapQrzCasilleros,
+      wrapDominioCasilleros,
+      labelObs,
+      textareaObs,
+      btnEnviar,
+      bloquePersonal: document.getElementById("bloquePersonal"),
+      bloqueMovil: document.getElementById("bloqueMovil"),
+      bloqueEscopeta: document.getElementById("bloqueEscopeta"),
+      bloqueHT: document.getElementById("bloqueHT"),
+      bloquePDA: document.getElementById("bloquePDA"),
+      bloqueImpresora: document.getElementById("bloqueImpresora"),
+      bloqueAlometro: document.getElementById("bloqueAlometro"),
+      bloqueAlcoholimetro: document.getElementById("bloqueAlcoholimetro"),
+    };
+  }
+
+  function aplicarPantallaExclusivaWsp(modo, opts = {}) {
+    const ui = pantallasUiWsp();
+    if (ui && typeof ui.aplicarPantallaExclusiva === "function") {
+      return ui.aplicarPantallaExclusiva(modo, refsPantallasUiWsp(), opts);
+    }
+
+    // Fallback legacy mínimo: evita superposición de pantallas si el módulo nuevo no cargó.
+    const modoFinal = String(modo || "INICIA").toUpperCase();
+    const mostrarControlMoviles = modoFinal === "CONTROL_MOVILES";
+    const mostrarAlcoholemia = modoFinal === "ALCOHOLEMIA";
+    const mostrarDecto460 = modoFinal === "DECTO460";
+    const mostrarControlSuperior = modoFinal === "CONTROL_SUPERIOR";
+    const mostrarFinaliza = modoFinal === "FINALIZA";
+
+    if (bloqueControlMoviles) bloqueControlMoviles.classList.toggle("hidden", !mostrarControlMoviles);
+    if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.toggle("hidden", !mostrarAlcoholemia);
+    if (bloqueInformeDecto460) bloqueInformeDecto460.classList.toggle("hidden", !mostrarDecto460);
+    if (bloqueControlSuperior) bloqueControlSuperior.classList.toggle("hidden", !mostrarControlSuperior);
+    if (divFinaliza) divFinaliza.classList.toggle("hidden", !mostrarFinaliza);
+    if (!mostrarFinaliza) {
+      if (divDetalles) divDetalles.classList.add("hidden");
+      if (divMismosElementos) divMismosElementos.classList.add("hidden");
+      if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+      if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+      if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+    }
+  }
+
   function setTextoEstadoControlMoviles(texto) {
     const ui = controlMovilesUiWsp();
     if (ui && typeof ui.setTextoEstado === "function") return ui.setTextoEstado(texto, refsControlMovilesWsp());
@@ -4139,6 +4208,7 @@ window.WSP.config = {
     }
 
     if (activa) {
+      aplicarPantallaExclusivaWsp("CONTROL_MOVILES");
       // Evita superposición de pantallas al cambiar desde INFORMES
       // hacia CONTROL DE MÓVILES sin recargar el navegador.
       setUIControlSuperiorActiva(false);
@@ -4301,6 +4371,7 @@ window.WSP.config = {
     setUIControlMovilesActiva(false);
 
     if (fin) {
+      aplicarPantallaExclusivaWsp("FINALIZA");
       // FINALIZA debe trabajar sobre la misma fuente real que INFORMES:
       // operativos iniciados/en curso desde Supabase, nunca operativos publicados ni cache vieja.
       setUIControlSuperiorActiva(false);
@@ -4323,6 +4394,7 @@ window.WSP.config = {
     }
 
     if (enInformes && !getTipoInformeActivo()) {
+      aplicarPantallaExclusivaWsp("INFORMES_MENU");
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
       setUIInformeDecto460Activa(false);
@@ -4385,6 +4457,7 @@ window.WSP.config = {
 
     setUIControlSuperiorActiva(false);
     setUIInformeAlcoholemiaActiva(false);
+    aplicarPantallaExclusivaWsp(fin ? "FINALIZA" : "INICIA", { mostrarFormularioBase: !fin });
     setTituloOperativosIniciados(false);
     cargarOperativosDisponibles(selHorario?.value || "");
     actualizarDatosFranja();
@@ -5061,6 +5134,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setUIControlSuperiorActiva(activa) {
+    if (activa) aplicarPantallaExclusivaWsp("CONTROL_SUPERIOR");
     setControlSuperiorVisible(activa);
 
     document.body.classList.toggle("modo-control-superior", !!activa);
@@ -5176,6 +5250,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     firmaInformesIntermediosAplicadosFinalizado = "";
 
     selTipo.value = "INICIA";
+    aplicarPantallaExclusivaWsp("INICIA", { mostrarFormularioBase: true });
     limpiarSeleccionOperativo();
 
     document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
@@ -6193,6 +6268,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setUIInformeAlcoholemiaActiva(activa) {
+    if (activa) aplicarPantallaExclusivaWsp("ALCOHOLEMIA");
     if (bloqueInformeAlcoholemia) bloqueInformeAlcoholemia.classList.toggle("hidden", !activa);
     document.body.classList.toggle("modo-informe-alcoholemia", !!activa);
     setControlSuperiorVisible(false);
@@ -6667,6 +6743,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function setUIInformeDecto460Activa(activa) {
+    if (activa) aplicarPantallaExclusivaWsp("DECTO460");
     if (bloqueInformeDecto460) bloqueInformeDecto460.classList.toggle("hidden", !activa);
     document.body.classList.toggle("modo-informe-decto460", !!activa);
     setControlSuperiorVisible(false);

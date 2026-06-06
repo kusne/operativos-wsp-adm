@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso41-fix-control-moviles-refresco-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso42-pantallas-exclusivas-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -33,6 +33,7 @@
     "./modules/wsp-control-moviles.js",
     "./modules/wsp-estadisticas-ui.js",
     "./modules/wsp-operativo-ui.js",
+    "./modules/wsp-pantallas-ui.js",
     "./modules/wsp-selector-operativo-ui.js",
     "./modules/wsp-texto-operativo.js",
     "./modules/wsp-mensajes-operativo.js",
