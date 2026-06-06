@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso57-flujo-activacion-informes-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso58-informes-flujo-ui-modulo-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -40,6 +40,7 @@
     "./modules/wsp-selector-carga-ui.js",
     "./modules/wsp-selector-estado-ui.js",
     "./modules/wsp-selector-contexto-ui.js",
+    "./modules/wsp-informes-flujo-ui.js",
     "./modules/wsp-texto-operativo.js",
     "./modules/wsp-mensajes-operativo.js",
     "./modules/wsp-formulario-operativo.js",

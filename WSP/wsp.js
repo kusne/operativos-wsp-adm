@@ -1553,6 +1553,10 @@ window.WSP.config = {
     return window.WSP?.modules?.selectorContextoUi || window.WSP?.ui?.selectorContexto || null;
   }
 
+  function informesFlujoUiWsp() {
+    return window.WSP?.modules?.informesFlujoUi || window.WSP?.ui?.informesFlujo || null;
+  }
+
   function textoContextoInformeInicioWsp(inicio, franja, opts = {}) {
     const ui = selectorContextoUiWsp();
     const mensajes = {
@@ -1731,11 +1735,29 @@ window.WSP.config = {
 
 
   function sincronizarWidgetsAuxiliaresInformesWsp() {
+    const ui = informesFlujoUiWsp();
+    if (ui && typeof ui.sincronizarWidgetsAuxiliares === "function") {
+      return ui.sincronizarWidgetsAuxiliares({
+        sincronizarUIAlcoholimetro,
+        sincronizarUIQrzDominio,
+      });
+    }
+
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
   }
 
   function cargarOperativosYRefrescarInformeWsp(refrescarContexto) {
+    const ui = informesFlujoUiWsp();
+    if (ui && typeof ui.cargarOperativosYRefrescar === "function") {
+      return ui.cargarOperativosYRefrescar({
+        valorSeleccionado: selHorario?.value || "",
+        cargarOperativos: cargarOperativosIniciadosParaInformes,
+        actualizarDatosFranja,
+        refrescarContexto,
+      });
+    }
+
     return cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
       actualizarDatosFranja();
       if (typeof refrescarContexto === "function") return refrescarContexto();
