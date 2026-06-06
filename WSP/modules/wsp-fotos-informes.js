@@ -35,11 +35,12 @@
   }
 
   function getDeps(deps = {}) {
-    const historialService = window.WSP?.services?.historial || null;
+    const wspConfig = window.WSP?.config || {};
+    const historialService = window.WSP?.services?.historialOperativo || window.WSP?.services?.historial || window.WSP?.services?.supabaseRest || window.WSP?.modules?.historialService || null;
     const fetchFn = deps.fetch || window.fetch;
 
     return {
-      SUPABASE_URL: deps.SUPABASE_URL || deps.supabaseUrl || "",
+      SUPABASE_URL: deps.SUPABASE_URL || deps.supabaseUrl || wspConfig.supabaseUrl || window.SUPABASE_URL || "",
       HISTORIAL_FOTOS_BUCKET: deps.HISTORIAL_FOTOS_BUCKET || deps.bucket || DEFAULT_BUCKET,
       HISTORIAL_FOTOS_TABLE: deps.HISTORIAL_FOTOS_TABLE || deps.table || DEFAULT_TABLE,
       headersSupabase: typeof deps.headersSupabase === "function"

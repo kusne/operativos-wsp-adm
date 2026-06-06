@@ -23,8 +23,9 @@
   }
 
   function assertConfig(config = {}) {
-    const supabaseUrl = limpiarTextoSimple(config.supabaseUrl || config.url || "").replace(/\/+$/, "");
-    const anonKey = limpiarTextoSimple(config.anonKey || config.supabaseAnonKey || config.key || "");
+    const wspConfig = window.WSP?.config || {};
+    const supabaseUrl = limpiarTextoSimple(config.supabaseUrl || config.url || wspConfig.supabaseUrl || window.SUPABASE_URL || "").replace(/\/+$/, "");
+    const anonKey = limpiarTextoSimple(config.anonKey || config.supabaseAnonKey || config.key || wspConfig.supabaseAnonKey || window.SUPABASE_ANON_KEY || "");
 
     if (!supabaseUrl) throw new Error("Falta supabaseUrl para historial operativo.");
     if (!anonKey) throw new Error("Falta anonKey para historial operativo.");
@@ -163,6 +164,11 @@
   };
 
   window.WSP.services.historialOperativo = api;
+
+  // Paso 41: alias explícitos para que los módulos nuevos no dependan de un único nombre histórico.
+  // Mantiene compatibilidad con nombres anteriores y futuros sin tocar el flujo legacy de wsp.js.
+  window.WSP.services.historial = api;
+  window.WSP.services.supabaseRest = api;
   window.WSP.modules.historialService = api;
 
   console.log("[WSP historial service] cargado");

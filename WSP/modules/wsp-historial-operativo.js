@@ -52,9 +52,11 @@
   }
 
   function getDeps(deps = {}) {
+    const wspConfig = window.WSP?.config || {};
+
     return {
-      SUPABASE_URL: deps.SUPABASE_URL || window.SUPABASE_URL || "",
-      SUPABASE_ANON_KEY: deps.SUPABASE_ANON_KEY || window.SUPABASE_ANON_KEY || "",
+      SUPABASE_URL: deps.SUPABASE_URL || deps.supabaseUrl || wspConfig.supabaseUrl || window.SUPABASE_URL || "",
+      SUPABASE_ANON_KEY: deps.SUPABASE_ANON_KEY || deps.supabaseAnonKey || wspConfig.supabaseAnonKey || window.SUPABASE_ANON_KEY || "",
       getGuardiaFechaISO: typeof deps.getGuardiaFechaISO === "function" ? deps.getGuardiaFechaISO : (() => ""),
       construirOperativoKeysPosibles: typeof deps.construirOperativoKeysPosibles === "function" ? deps.construirOperativoKeysPosibles : (() => []),
       puntuarCoincidenciaInicio: typeof deps.puntuarCoincidenciaInicio === "function" ? deps.puntuarCoincidenciaInicio : (() => -1),
