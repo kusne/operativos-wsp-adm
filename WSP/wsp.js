@@ -1858,6 +1858,47 @@ window.WSP.config = {
   }
 
 
+  function prepararMenuInformesWsp() {
+    const ui = informesFlujoUiWsp();
+    const limpiarSeleccionMenuInformes = () => {
+      operativosCache = [];
+      franjaSeleccionada = null;
+      ordenSeleccionada = null;
+    };
+
+    const config = {
+      aplicarPantallaExclusiva: aplicarPantallaExclusivaWsp,
+      desactivarPantallasInformes: desactivarPantallasInformesWsp,
+      setPersonalVisible,
+      setMovilidadVisible,
+      setElementosVisibles,
+      setObservacionesVisible,
+      setTituloOperativosIniciados,
+      limpiarSeleccion: limpiarSeleccionMenuInformes,
+      prepararSelectorInformesMenu: prepararSelectorInformesMenuWsp,
+      divFinaliza,
+      divDetalles,
+    };
+
+    if (ui && typeof ui.prepararMenuInformes === "function") {
+      return ui.prepararMenuInformes(config);
+    }
+
+    aplicarPantallaExclusivaWsp("INFORMES_MENU");
+    desactivarPantallasInformesWsp();
+    setPersonalVisible(false);
+    setMovilidadVisible(false);
+    setElementosVisibles(false);
+    setObservacionesVisible(false);
+    setTituloOperativosIniciados(true);
+    limpiarSeleccionMenuInformes();
+    prepararSelectorInformesMenuWsp();
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divDetalles) divDetalles.classList.add("hidden");
+    return { ok: true, modo: "INFORMES_MENU" };
+  }
+
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -4993,19 +5034,7 @@ window.WSP.config = {
     }
 
     if (enInformes && !getTipoInformeActivo()) {
-      aplicarPantallaExclusivaWsp("INFORMES_MENU");
-      desactivarPantallasInformesWsp();
-      setPersonalVisible(false);
-      setMovilidadVisible(false);
-      setElementosVisibles(false);
-      setObservacionesVisible(false);
-      setTituloOperativosIniciados(true);
-      operativosCache = [];
-      franjaSeleccionada = null;
-      ordenSeleccionada = null;
-      prepararSelectorInformesMenuWsp();
-      if (divFinaliza) divFinaliza.classList.add("hidden");
-      if (divDetalles) divDetalles.classList.add("hidden");
+      prepararMenuInformesWsp();
       return;
     }
 

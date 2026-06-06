@@ -106,6 +106,37 @@
     });
   }
 
+
+  function prepararMenuInformes(config = {}) {
+    const aplicarPantallaExclusiva = typeof config.aplicarPantallaExclusiva === "function"
+      ? config.aplicarPantallaExclusiva
+      : null;
+    const desactivarPantallas = typeof config.desactivarPantallasInformes === "function"
+      ? config.desactivarPantallasInformes
+      : (() => desactivarPantallasInformes(config));
+
+    if (aplicarPantallaExclusiva) {
+      aplicarPantallaExclusiva("INFORMES_MENU");
+    }
+
+    desactivarPantallas();
+
+    if (typeof config.setPersonalVisible === "function") config.setPersonalVisible(false);
+    if (typeof config.setMovilidadVisible === "function") config.setMovilidadVisible(false);
+    if (typeof config.setElementosVisibles === "function") config.setElementosVisibles(false);
+    if (typeof config.setObservacionesVisible === "function") config.setObservacionesVisible(false);
+    if (typeof config.setTituloOperativosIniciados === "function") config.setTituloOperativosIniciados(true);
+    if (typeof config.limpiarSeleccion === "function") config.limpiarSeleccion();
+    if (typeof config.prepararSelectorInformesMenu === "function") config.prepararSelectorInformesMenu();
+
+    const divFinaliza = config.divFinaliza || null;
+    const divDetalles = config.divDetalles || null;
+    if (divFinaliza?.classList) divFinaliza.classList.add("hidden");
+    if (divDetalles?.classList) divDetalles.classList.add("hidden");
+
+    return { ok: true, modo: "INFORMES_MENU" };
+  }
+
   const api = {
     sincronizarWidgetsAuxiliares,
     cargarOperativosYRefrescar,
@@ -113,6 +144,7 @@
     desactivarPantallasInformes,
     activarPantallaInforme,
     activarPantallaInformePorTipo,
+    prepararMenuInformes,
   };
 
   window.WSP.ui.informesFlujo = api;
