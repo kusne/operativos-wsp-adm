@@ -2125,20 +2125,50 @@ window.WSP.config = {
     return { ok: true, modo: "INICIA", legacy: true };
   }
 
+  function crearResumenSeleccionPrincipalWsp(ui, config) {
+    if (ui && typeof ui.crearResumenSeleccionPrincipal === "function") {
+      try {
+        return ui.crearResumenSeleccionPrincipal(config);
+      } catch (error) {
+        console.warn("[WSP] No se pudo crear resumen modular de selección principal.", error);
+      }
+    }
+    return null;
+  }
+
+  function obtenerEjecutorSeleccionPrincipalWsp(ui) {
+    if (!ui || typeof ui.actualizarTipoPrincipal !== "function") return null;
+    return ui.actualizarTipoPrincipal;
+  }
+
+  function normalizarResultadoSeleccionPrincipalWsp(ui, resultado, modoFallback) {
+    if (ui && typeof ui.normalizarResultadoSeleccionPrincipal === "function") {
+      try {
+        return ui.normalizarResultadoSeleccionPrincipal(resultado, modoFallback);
+      } catch (error) {
+        console.warn("[WSP] No se pudo normalizar resultado modular de selección principal. Se usa resultado crudo.", error);
+      }
+    }
+    return resultado;
+  }
+
   function actualizarTipoPrincipalModularWsp(ui, config) {
-    if (!ui) return null;
-
-    const ejecutarModular = typeof ui.actualizarTipoPrincipal === "function"
-      ? ui.actualizarTipoPrincipal
-      : null;
-
+    const ejecutarModular = obtenerEjecutorSeleccionPrincipalWsp(ui);
     if (!ejecutarModular) return null;
 
+    const resumen = crearResumenSeleccionPrincipalWsp(ui, config);
+
     try {
-      return ejecutarModular(config);
+      const resultado = ejecutarModular(config);
+      return normalizarResultadoSeleccionPrincipalWsp(ui, resultado, resumen?.modo || "INICIA");
     } catch (error) {
       console.error("[WSP] Falló selección principal modular. Se usa fallback legacy.", error);
-      return { ok: false, motivo: "error_modulo_seleccion_principal", error: String(error?.message || error || "") };
+      return {
+        ok: false,
+        modo: resumen?.modo || "INICIA",
+        motivo: "error_modulo_seleccion_principal",
+        error: String(error?.message || error || ""),
+      };
     }
   }
 

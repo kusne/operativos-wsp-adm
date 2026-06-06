@@ -77,6 +77,26 @@
     };
   }
 
+  function resultadoSeleccionPrincipalTieneModoValido(resultado) {
+    return resultadoSeleccionPrincipalEsValido(resultado) &&
+      modoEsValidoSeleccionPrincipal(resultado.modo);
+  }
+
+  function normalizarResultadoSeleccionPrincipal(resultado, modoFallback = MODOS.INICIA) {
+    const modoSeguro = normalizarModoSeleccionPrincipal(modoFallback);
+
+    if (!resultadoSeleccionPrincipalEsValido(resultado)) {
+      return crearResultadoFallbackSeleccionPrincipal(modoSeguro, "resultado_modular_invalido");
+    }
+
+    return {
+      ...resultado,
+      modo: resultadoSeleccionPrincipalTieneModoValido(resultado)
+        ? resultado.modo
+        : modoSeguro,
+    };
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -224,20 +244,31 @@
     return { ...config, __estadoSeleccionPrincipal: estado };
   }
 
-  function ejecutarSeleccionPrincipalDesdeConfig(config = {}) {
+  function crearResumenSeleccionPrincipal(config = {}) {
     const configNormalizada = crearConfigNormalizadaSeleccionPrincipal(config);
-    prepararCambioSeleccionPrincipal(configNormalizada);
     const modo = resolverModoSeleccionPrincipal(configNormalizada);
-    return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
+    return {
+      modo,
+      estado: configNormalizada.__estadoSeleccionPrincipal,
+      configNormalizada,
+    };
+  }
+
+  function ejecutarSeleccionPrincipalDesdeConfig(config = {}) {
+    const resumen = crearResumenSeleccionPrincipal(config);
+    prepararCambioSeleccionPrincipal(resumen.configNormalizada);
+    const resultado = ejecutarModoSeleccionPrincipal(resumen.modo, resumen.configNormalizada);
+    return normalizarResultadoSeleccionPrincipal(resultado, resumen.modo);
   }
 
   function ejecutarSeleccionPrincipalSeguro(config = {}) {
     let modo = MODOS.INICIA;
     try {
-      const configNormalizada = crearConfigNormalizadaSeleccionPrincipal(config);
-      modo = resolverModoSeleccionPrincipal(configNormalizada);
-      prepararCambioSeleccionPrincipal(configNormalizada);
-      return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
+      const resumen = crearResumenSeleccionPrincipal(config);
+      modo = resumen.modo;
+      prepararCambioSeleccionPrincipal(resumen.configNormalizada);
+      const resultado = ejecutarModoSeleccionPrincipal(modo, resumen.configNormalizada);
+      return normalizarResultadoSeleccionPrincipal(resultado, modo);
     } catch (error) {
       console.error("[WSP] Error en selección principal modular.", error);
       return crearResultadoErrorSeleccionPrincipal(modo, error);
@@ -260,6 +291,8 @@
     resultadoSeleccionPrincipalEsOk,
     resultadoSeleccionPrincipalDebeFallback,
     crearResultadoFallbackSeleccionPrincipal,
+    resultadoSeleccionPrincipalTieneModoValido,
+    normalizarResultadoSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,
@@ -276,6 +309,7 @@
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
     crearConfigNormalizadaSeleccionPrincipal,
+    crearResumenSeleccionPrincipal,
     ejecutarSeleccionPrincipalDesdeConfig,
     ejecutarSeleccionPrincipalSeguro,
     actualizarTipoPrincipal,
