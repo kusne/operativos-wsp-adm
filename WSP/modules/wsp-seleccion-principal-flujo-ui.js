@@ -128,28 +128,41 @@
     return ejecutar(config.activarInformePorTipo, tipoPantalla, refrescarContexto, opciones) || { ok: true, modo };
   }
 
+  function modoEsBasicoSeleccionPrincipal(modo) {
+    return modo === MODOS.CONTROL_MOVILES ||
+      modo === MODOS.FINALIZA ||
+      modo === MODOS.INFORMES_MENU ||
+      modo === MODOS.INICIA;
+  }
+
+  function ejecutorModoBasicoDesdeModo(modo, config = {}) {
+    switch (modo) {
+      case MODOS.CONTROL_MOVILES:
+        return config.activarControlMoviles;
+      case MODOS.FINALIZA:
+        return config.activarFinaliza;
+      case MODOS.INFORMES_MENU:
+        return config.prepararMenuInformes;
+      case MODOS.INICIA:
+      default:
+        return config.activarInicia;
+    }
+  }
+
+  function ejecutarModoBasicoSeleccionPrincipal(modo, config = {}) {
+    const modoSeguro = modoEsBasicoSeleccionPrincipal(modo) ? modo : MODOS.INICIA;
+    const ejecutarModo = ejecutorModoBasicoDesdeModo(modoSeguro, config);
+    return ejecutar(ejecutarModo) || { ok: true, modo: modoSeguro };
+  }
+
   function ejecutarModoSeleccionPrincipal(modo, config = {}) {
     prepararEjecucionModoSeleccionPrincipal(modo, config);
 
-    switch (modo) {
-      case MODOS.CONTROL_MOVILES:
-        return ejecutar(config.activarControlMoviles) || { ok: true, modo };
-
-      case MODOS.FINALIZA:
-        return ejecutar(config.activarFinaliza) || { ok: true, modo };
-
-      case MODOS.INFORMES_MENU:
-        return ejecutar(config.prepararMenuInformes) || { ok: true, modo };
-
-      case MODOS.DECTO460:
-      case MODOS.ALCOHOLEMIA:
-      case MODOS.CONTROL_SUPERIOR:
-        return ejecutarInformeSeleccionPrincipal(modo, config);
-
-      case MODOS.INICIA:
-      default:
-        return ejecutar(config.activarInicia) || { ok: true, modo: MODOS.INICIA };
+    if (modoEsInformeSeleccionPrincipal(modo)) {
+      return ejecutarInformeSeleccionPrincipal(modo, config);
     }
+
+    return ejecutarModoBasicoSeleccionPrincipal(modo, config);
   }
 
   function actualizarTipoPrincipal(config = {}) {
@@ -171,6 +184,9 @@
     opcionesInformeDesdeModo,
     prepararInformeAntesDeActivar,
     ejecutarInformeSeleccionPrincipal,
+    modoEsBasicoSeleccionPrincipal,
+    ejecutorModoBasicoDesdeModo,
+    ejecutarModoBasicoSeleccionPrincipal,
     resolverModoSeleccionPrincipal,
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
