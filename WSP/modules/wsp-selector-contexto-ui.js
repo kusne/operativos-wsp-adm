@@ -201,6 +201,31 @@
   }
 
 
+  async function requerirInicioSeleccionadoInforme(config = {}) {
+    const inicio = await obtenerInicioSeleccionadoInforme(config);
+    if (inicio) {
+      return { ok: true, inicio, motivo: "ok" };
+    }
+
+    const mensaje = limpiarTextoSimple(
+      config.mensaje ||
+      config.mensajeSinInicio ||
+      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
+    );
+
+    if (typeof config.refrescarContexto === "function") {
+      try { await config.refrescarContexto(); } catch {}
+    }
+
+    if (config.mostrarAlerta !== false) {
+      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
+      if (alertFn) alertFn(mensaje);
+    }
+
+    return { ok: false, inicio: null, motivo: "sin_inicio", mensaje };
+  }
+
+
 
   async function seleccionarOperativoIniciadoPorDefecto(config = {}) {
     const selHorario = config.selHorario || null;
@@ -316,6 +341,7 @@
     refrescarContextoInforme,
     refrescarContextosActivos,
     obtenerInicioSeleccionadoInforme,
+    requerirInicioSeleccionadoInforme,
     seleccionarOperativoIniciadoPorDefecto,
   };
 
