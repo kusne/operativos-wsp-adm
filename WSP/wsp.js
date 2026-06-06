@@ -1549,6 +1549,47 @@ window.WSP.config = {
     return window.WSP?.modules?.selectorEstadoUi || window.WSP?.ui?.selectorEstado || null;
   }
 
+  function selectorContextoUiWsp() {
+    return window.WSP?.modules?.selectorContextoUi || window.WSP?.ui?.selectorContexto || null;
+  }
+
+  function textoContextoInformeInicioWsp(inicio, franja, opts = {}) {
+    const ui = selectorContextoUiWsp();
+    const mensajes = {
+      sinFranja: "No hay operativos iniciados para vincular el informe.",
+      sinInicio: "No hay INICIO guardado para este operativo. Envíe primero el INICIA.",
+      ...(opts.mensajes || {}),
+    };
+
+    if (ui && typeof ui.resolverTextoContextoInforme === "function") {
+      return ui.resolverTextoContextoInforme({
+        inicio,
+        franja,
+        mensajes,
+        deps: {
+          normalizarLugar,
+          lineaDesdeArray,
+        },
+      });
+    }
+
+    if (!franja) return mensajes.sinFranja;
+    if (!inicio) return mensajes.sinInicio;
+
+    const moviles = lineaDesdeArray(inicio.moviles, "/");
+    const motos = lineaDesdeArray(inicio.motos, "/");
+    const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
+    return `Lugar: ${normalizarLugar(inicio.lugar || franja.lugar)} | Móviles: ${movilidad}`;
+  }
+
+  function setTextoContextoInformeWsp(el, texto) {
+    const ui = selectorContextoUiWsp();
+    if (ui && typeof ui.setTextoContexto === "function") {
+      return ui.setTextoContexto(el, texto);
+    }
+    if (el) el.textContent = String(texto || "");
+  }
+
   function resolverCambioSeleccionOperativoWsp() {
     const mod = selectorEstadoUiWsp();
     if (mod && typeof mod.resolverCambioSeleccion === "function") {
@@ -6424,18 +6465,14 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!informeAlcoholemiaContexto || !esInformeAlcoholemiaActivo()) return;
     if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
     if (!franjaSeleccionada) {
-      informeAlcoholemiaContexto.textContent = "No hay operativos iniciados para vincular el informe.";
+      setTextoContextoInformeWsp(informeAlcoholemiaContexto, textoContextoInformeInicioWsp(null, null));
       return;
     }
     const inicio = await obtenerInicioParaInformeAlcoholemia();
-    if (!inicio) {
-      informeAlcoholemiaContexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
-      return;
-    }
-    const moviles = lineaDesdeArray(inicio.moviles, "/");
-    const motos = lineaDesdeArray(inicio.motos, "/");
-    const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeAlcoholemiaContexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    setTextoContextoInformeWsp(
+      informeAlcoholemiaContexto,
+      textoContextoInformeInicioWsp(inicio, franjaSeleccionada)
+    );
   }
 
   function setUIInformeAlcoholemiaActiva(activa) {
@@ -6899,18 +6936,14 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!informeDecto460Contexto || !esInformeDecto460Activo()) return;
     if (!franjaSeleccionada) await seleccionarOperativoDecto460PorDefecto();
     if (!franjaSeleccionada) {
-      informeDecto460Contexto.textContent = "No hay operativos iniciados para vincular el informe.";
+      setTextoContextoInformeWsp(informeDecto460Contexto, textoContextoInformeInicioWsp(null, null));
       return;
     }
     const inicio = await obtenerInicioParaInformeDecto460();
-    if (!inicio) {
-      informeDecto460Contexto.textContent = "No hay INICIO guardado para este operativo. Envíe primero el INICIA.";
-      return;
-    }
-    const moviles = lineaDesdeArray(inicio.moviles, "/");
-    const motos = lineaDesdeArray(inicio.motos, "/");
-    const movilidad = [moviles, motos].filter((v) => v && v !== "/").join(" / ") || "/";
-    informeDecto460Contexto.textContent = `Lugar: ${normalizarLugar(inicio.lugar || franjaSeleccionada.lugar)} | Móviles: ${movilidad}`;
+    setTextoContextoInformeWsp(
+      informeDecto460Contexto,
+      textoContextoInformeInicioWsp(inicio, franjaSeleccionada)
+    );
   }
 
   function setUIInformeDecto460Activa(activa) {
