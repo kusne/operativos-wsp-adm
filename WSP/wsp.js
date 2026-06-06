@@ -1545,6 +1545,32 @@ window.WSP.config = {
     return window.WSP?.modules?.selectorCargaUi || window.WSP?.ui?.selectorCarga || null;
   }
 
+  function selectorEstadoUiWsp() {
+    return window.WSP?.modules?.selectorEstadoUi || window.WSP?.ui?.selectorEstado || null;
+  }
+
+  function resolverCambioSeleccionOperativoWsp() {
+    const mod = selectorEstadoUiWsp();
+    if (mod && typeof mod.resolverCambioSeleccion === "function") {
+      return mod.resolverCambioSeleccion({
+        selHorario,
+        operativos: operativosCache,
+        chkMostrarResultadosFinaliza,
+        chkPresenciaActiva,
+      });
+    }
+
+    const key = selHorario?.value || "";
+    if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+    if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
+
+    return {
+      key,
+      franjaSeleccionada: operativosCache.find((item) => item.__key === key) || null,
+      ordenSeleccionada: null,
+    };
+  }
+
   function crearOpcionHorarioWsp(operativo) {
     const ui = selectorOperativoUiWsp();
     if (ui && typeof ui.crearOpcionHorario === "function") {
@@ -4476,16 +4502,9 @@ window.WSP.config = {
   }
 
   function actualizarDatosFranja() {
-    const key = selHorario?.value || "";
-    franjaSeleccionada = operativosCache.find((item) => item.__key === key) || null;
-    ordenSeleccionada = null;
-
-    if (chkMostrarResultadosFinaliza) {
-      chkMostrarResultadosFinaliza.checked = false;
-    }
-    if (chkPresenciaActiva) {
-      chkPresenciaActiva.checked = false;
-    }
+    const estadoSeleccion = resolverCambioSeleccionOperativoWsp();
+    franjaSeleccionada = estadoSeleccion?.franjaSeleccionada || null;
+    ordenSeleccionada = estadoSeleccion?.ordenSeleccionada || null;
 
     actualizarVisibilidadBloquePresenciaActiva();
     actualizarVisibilidadResultadosFinaliza();
