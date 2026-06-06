@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso40-fotos-informes-20260605";
+  const WSP_BOOTSTRAP_VERSION = "paso41-fix-control-moviles-refresco-20260605";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

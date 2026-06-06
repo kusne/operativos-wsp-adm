@@ -2,6 +2,15 @@
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
+// Paso 41: configuración compartida para módulos.
+// No cambia la fuente de verdad; solo evita que cada módulo dependa de wrappers legacy de wsp.js.
+window.WSP = window.WSP || {};
+window.WSP.config = {
+  ...(window.WSP.config || {}),
+  supabaseUrl: SUPABASE_URL,
+  supabaseAnonKey: SUPABASE_ANON_KEY,
+};
+
 (function () {
   // ===== DOM refs =====
   const selTipo = document.getElementById("tipo");
@@ -4130,7 +4139,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (activa) {
+      // Evita superposición de pantallas al cambiar desde INFORMES
+      // hacia CONTROL DE MÓVILES sin recargar el navegador.
       setUIControlSuperiorActiva(false);
+      setUIInformeAlcoholemiaActiva(false);
+      setUIInformeDecto460Activa(false);
       setControlSuperiorVisible(false);
       setPersonalVisible(false);
       setMovilidadVisible(false);
@@ -4271,6 +4284,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     }
 
     if (controlMoviles) {
+      // Control de Móviles es una pantalla exclusiva: al entrar debe cerrar
+      // cualquier formulario de INFORMES que hubiera quedado visible.
+      setUIControlSuperiorActiva(false);
+      setUIInformeAlcoholemiaActiva(false);
+      setUIInformeDecto460Activa(false);
       setTituloOperativosIniciados(false);
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
