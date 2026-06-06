@@ -271,6 +271,39 @@
   }
 
 
+  async function resolverInicioParaEnvioInforme(config = {}) {
+    const mensaje = limpiarTextoSimple(
+      config.mensaje ||
+      config.mensajeSinInicio ||
+      "No hay INICIO guardado para este operativo. Envíe primero el INICIA para autocompletar lugar, móviles y personal."
+    );
+
+    const resolver = typeof config.resolverInicioRequerido === "function"
+      ? config.resolverInicioRequerido
+      : resolverInicioRequeridoInforme;
+
+    const resultado = await resolver({ ...config, mensaje });
+    if (resultado && resultado.ok && resultado.inicio) return resultado.inicio;
+    if (resultado && resultado.ok === false) return null;
+
+    let inicio = null;
+    if (typeof config.obtenerInicio === "function") {
+      try { inicio = await config.obtenerInicio(); } catch {}
+    }
+
+    if (inicio) return inicio;
+
+    if (typeof config.refrescarContexto === "function") {
+      try { await config.refrescarContexto(); } catch {}
+    }
+
+    if (config.mostrarAlerta !== false) {
+      const alertFn = typeof config.alert === "function" ? config.alert : (window.alert ? window.alert.bind(window) : null);
+      if (alertFn) alertFn(mensaje);
+    }
+
+    return null;
+  }
 
   async function seleccionarOperativoIniciadoPorDefecto(config = {}) {
     const selHorario = config.selHorario || null;
@@ -388,6 +421,7 @@
     obtenerInicioSeleccionadoInforme,
     requerirInicioSeleccionadoInforme,
     resolverInicioRequeridoInforme,
+    resolverInicioParaEnvioInforme,
     seleccionarOperativoIniciadoPorDefecto,
   };
 
