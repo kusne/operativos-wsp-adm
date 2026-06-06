@@ -24,21 +24,37 @@
     return String(valor || "").trim();
   }
 
-  function resolverModoSeleccionPrincipal(config = {}) {
-    const enInformes = !!config.enInformes;
-    const tipoInformeActivo = normalizarTexto(config.tipoInformeActivo);
+  function crearEstadoSeleccionPrincipal(config = {}) {
+    return {
+      enInformes: !!config.enInformes,
+      tipoInformeActivo: normalizarTexto(config.tipoInformeActivo),
+      controlMoviles: !!config.controlMoviles,
+      fin: !!config.fin,
+      controlSuperior: !!config.controlSuperior,
+      informeAlcoholemia: !!config.informeAlcoholemia,
+      informeDecto460: !!config.informeDecto460,
+    };
+  }
 
-    if (config.controlMoviles) return MODOS.CONTROL_MOVILES;
-    if (config.fin) return MODOS.FINALIZA;
-    if (enInformes && !tipoInformeActivo) return MODOS.INFORMES_MENU;
-    if (config.informeDecto460) return MODOS.DECTO460;
-    if (config.informeAlcoholemia) return MODOS.ALCOHOLEMIA;
-    if (config.controlSuperior) return MODOS.CONTROL_SUPERIOR;
+  function estadoDesdeConfig(config = {}) {
+    return config.__estadoSeleccionPrincipal || crearEstadoSeleccionPrincipal(config);
+  }
+
+  function resolverModoSeleccionPrincipal(config = {}) {
+    const estado = estadoDesdeConfig(config);
+
+    if (estado.controlMoviles) return MODOS.CONTROL_MOVILES;
+    if (estado.fin) return MODOS.FINALIZA;
+    if (estado.enInformes && !estado.tipoInformeActivo) return MODOS.INFORMES_MENU;
+    if (estado.informeDecto460) return MODOS.DECTO460;
+    if (estado.informeAlcoholemia) return MODOS.ALCOHOLEMIA;
+    if (estado.controlSuperior) return MODOS.CONTROL_SUPERIOR;
     return MODOS.INICIA;
   }
 
   function prepararCambioSeleccionPrincipal(config = {}) {
-    ejecutar(config.setSelectorInformesVisible, !!config.enInformes);
+    const estado = estadoDesdeConfig(config);
+    ejecutar(config.setSelectorInformesVisible, estado.enInformes);
     ejecutar(config.resetPresenciaActiva);
   }
 
@@ -82,13 +98,16 @@
   }
 
   function actualizarTipoPrincipal(config = {}) {
-    prepararCambioSeleccionPrincipal(config);
-    const modo = resolverModoSeleccionPrincipal(config);
-    return ejecutarModoSeleccionPrincipal(modo, config);
+    const estado = crearEstadoSeleccionPrincipal(config);
+    const configNormalizada = { ...config, __estadoSeleccionPrincipal: estado };
+    prepararCambioSeleccionPrincipal(configNormalizada);
+    const modo = resolverModoSeleccionPrincipal(configNormalizada);
+    return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
   }
 
   const api = {
     MODOS,
+    crearEstadoSeleccionPrincipal,
     resolverModoSeleccionPrincipal,
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
