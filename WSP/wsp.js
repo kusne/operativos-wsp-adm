@@ -2480,12 +2480,19 @@ window.WSP.config = {
     } catch {}
   }
 
+  function normalizarTipoSelectorOperativosWsp(tipo, visible = true) {
+    const valor = limpiarTextoSimple(tipo || "").toLowerCase();
+    if (["oculto", "iniciados", "publicados"].includes(valor)) return valor;
+    return visible ? "publicados" : "oculto";
+  }
+
   function crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto = {}) {
     const mostrar = !!visible;
     return {
       ...(contexto && typeof contexto === "object" ? contexto : {}),
       visible: mostrar,
       motivo: limpiarTextoSimple(contexto?.motivo || (mostrar ? "visible" : "oculto")),
+      tipoSelector: normalizarTipoSelectorOperativosWsp(contexto?.tipoSelector, mostrar),
       timestamp: new Date().toISOString(),
     };
   }
@@ -2550,6 +2557,12 @@ window.WSP.config = {
 
     aplicarVisibilidadElementosSelectorOperativosWsp(mostrar);
 
+    if (mostrar && estadoVisibilidad.tipoSelector === "iniciados") {
+      setTituloOperativosIniciados(true);
+    } else if (mostrar && estadoVisibilidad.tipoSelector === "publicados") {
+      setTituloOperativosIniciados(false);
+    }
+
     if (selHorario) {
       if (!mostrar) {
         selHorario.value = "";
@@ -2588,10 +2601,19 @@ window.WSP.config = {
     return "operativos_publicados";
   }
 
+  function tipoSelectorOperativosDesdeConfigWsp(config = {}) {
+    if (!debeMostrarSelectorOperativosDesdeConfigWsp(config)) return "oculto";
+    if (config.enInformes && config.tipoInformeActivo) return "iniciados";
+    return "publicados";
+  }
+
   function crearEstadoVisibilidadSelectorOperativosDesdeConfigWsp(config = {}) {
     return crearEstadoVisibilidadSelectorOperativosWsp(
       debeMostrarSelectorOperativosDesdeConfigWsp(config),
-      { motivo: motivoVisibilidadSelectorOperativosDesdeConfigWsp(config) }
+      {
+        motivo: motivoVisibilidadSelectorOperativosDesdeConfigWsp(config),
+        tipoSelector: tipoSelectorOperativosDesdeConfigWsp(config),
+      }
     );
   }
 
@@ -2603,7 +2625,10 @@ window.WSP.config = {
   }
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
-    setSelectorOperativosVisibleWsp(true);
+    setSelectorOperativosVisibleWsp(true, {
+      motivo: "cargar_operativos_iniciados_informes",
+      tipoSelector: "iniciados",
+    });
     if (!selHorario) return [];
 
     const uiCarga = selectorCargaUiWsp();

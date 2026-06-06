@@ -166,6 +166,20 @@
     return !(estado.enInformes && !estado.tipoInformeActivo);
   }
 
+  function selectorOperativosUsaIniciados(estado = {}) {
+    return !!(estado.enInformes && estado.tipoInformeActivo);
+  }
+
+  function selectorOperativosUsaPublicados(estado = {}) {
+    return debeMostrarSelectorOperativos(estado) && !selectorOperativosUsaIniciados(estado);
+  }
+
+  function tipoSelectorOperativos(estado = {}) {
+    if (!debeMostrarSelectorOperativos(estado)) return "oculto";
+    if (selectorOperativosUsaIniciados(estado)) return "iniciados";
+    return "publicados";
+  }
+
   function motivoVisibilidadSelectorOperativos(estado = {}) {
     if (estado.enInformes && !estado.tipoInformeActivo) return "informes_menu_sin_tipo";
     if (estado.enInformes && estado.tipoInformeActivo) return "informe_con_tipo";
@@ -178,15 +192,21 @@
     return normalizarEstadoVisibilidadSelectorOperativos({
       visible: debeMostrarSelectorOperativos(estado),
       motivo: motivoVisibilidadSelectorOperativos(estado),
+      tipoSelector: tipoSelectorOperativos(estado),
     });
   }
 
   function normalizarEstadoVisibilidadSelectorOperativos(visibilidad = {}) {
     const visible = !!visibilidad.visible;
+    const tipoCrudo = normalizarTexto(visibilidad.tipoSelector);
+    const tipoSelector = ["oculto", "iniciados", "publicados"].includes(tipoCrudo)
+      ? tipoCrudo
+      : (visible ? "publicados" : "oculto");
     return {
       ...visibilidad,
       visible,
       motivo: normalizarTexto(visibilidad.motivo || (visible ? "visible" : "oculto")),
+      tipoSelector,
     };
   }
 
@@ -392,6 +412,9 @@
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     debeMostrarSelectorOperativos,
+    selectorOperativosUsaIniciados,
+    selectorOperativosUsaPublicados,
+    tipoSelectorOperativos,
     motivoVisibilidadSelectorOperativos,
     crearEstadoVisibilidadSelectorOperativos,
     normalizarEstadoVisibilidadSelectorOperativos,
