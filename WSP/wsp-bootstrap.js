@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso48-contexto-informes-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso49-contexto-control-superior-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

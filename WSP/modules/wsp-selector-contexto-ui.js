@@ -70,6 +70,42 @@
     el.textContent = limpiarTextoSimple(texto);
   }
 
+  function asegurarElementoContexto(config = {}) {
+    const existente = config.elemento || config.el || null;
+    if (existente) return existente;
+
+    const contenedor = config.contenedor || config.parent || null;
+    if (!contenedor || !contenedor.querySelector) return null;
+
+    const id = limpiarTextoSimple(config.id || "");
+    if (id) {
+      const porId = contenedor.querySelector(`#${id}`) || document.getElementById(id);
+      if (porId) return porId;
+    }
+
+    const selector = limpiarTextoSimple(config.selector || "");
+    if (selector) {
+      const porSelector = contenedor.querySelector(selector);
+      if (porSelector) return porSelector;
+    }
+
+    if (config.crear === false) return null;
+
+    const el = document.createElement(config.tag || "div");
+    if (id) el.id = id;
+    el.className = limpiarTextoSimple(config.className || "informe-contexto");
+    el.textContent = limpiarTextoSimple(config.textoInicial || "");
+
+    const insertarAntesDe = config.insertarAntesDe || contenedor.firstElementChild || null;
+    if (insertarAntesDe && insertarAntesDe.parentNode === contenedor) {
+      contenedor.insertBefore(el, insertarAntesDe);
+    } else {
+      contenedor.prepend ? contenedor.prepend(el) : contenedor.appendChild(el);
+    }
+
+    return el;
+  }
+
 
   async function refrescarContextoInforme(config = {}) {
     const elemento = config.elemento || config.el || null;
@@ -116,6 +152,7 @@
     construirLugarInicio,
     resolverTextoContextoInforme,
     setTextoContexto,
+    asegurarElementoContexto,
     refrescarContextoInforme,
   };
 

@@ -1623,6 +1623,76 @@ window.WSP.config = {
     return inicio;
   }
 
+  function obtenerElementoContextoControlSuperiorWsp() {
+    const ui = selectorContextoUiWsp();
+    if (ui && typeof ui.asegurarElementoContexto === "function") {
+      return ui.asegurarElementoContexto({
+        contenedor: bloqueControlSuperior,
+        id: "controlSuperiorContexto",
+        className: "informe-contexto control-superior-contexto",
+        textoInicial: "",
+      });
+    }
+    return document.getElementById("controlSuperiorContexto");
+  }
+
+  async function seleccionarOperativoControlSuperiorPorDefecto() {
+    if (!selHorario) return false;
+    if (!Array.isArray(operativosCache) || !operativosCache.length || !operativosCache.some((op) => op?.__desdeInicioGuardado)) {
+      await cargarOperativosIniciadosParaInformes(selHorario.value || "");
+    }
+    if (!Array.isArray(operativosCache) || !operativosCache.length) return false;
+
+    if (franjaSeleccionada) {
+      try {
+        const inicioActual = await leerInicioDesdeSupabase(franjaSeleccionada);
+        if (inicioActual) return true;
+      } catch {}
+    }
+
+    const ordenar = typeof ordenarCandidatosInformeAlcoholemia === "function"
+      ? ordenarCandidatosInformeAlcoholemia
+      : ((items) => Array.isArray(items) ? items.slice() : []);
+    const candidatos = ordenar(operativosCache);
+
+    for (const candidato of candidatos) {
+      try {
+        const inicio = await leerInicioDesdeSupabase(candidato);
+        if (!inicio) continue;
+        selHorario.value = candidato.__key || "";
+        franjaSeleccionada = candidato;
+        ordenSeleccionada = null;
+        return true;
+      } catch {}
+    }
+
+    if (!franjaSeleccionada && candidatos.length === 1) {
+      const candidato = candidatos[0];
+      selHorario.value = candidato.__key || "";
+      franjaSeleccionada = candidato;
+      ordenSeleccionada = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  async function obtenerInicioParaControlSuperior() {
+    if (!franjaSeleccionada) await seleccionarOperativoControlSuperiorPorDefecto();
+    if (!franjaSeleccionada) return null;
+    return franjaSeleccionada.__inicioGuardadoPayload || await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+  }
+
+  async function refrescarContextoControlSuperior() {
+    const elemento = obtenerElementoContextoControlSuperiorWsp();
+    return refrescarContextoInformeGenericoWsp({
+      elemento,
+      activo: esControlSuperiorActivo,
+      seleccionarDefault: seleccionarOperativoControlSuperiorPorDefecto,
+      obtenerInicio: obtenerInicioParaControlSuperior,
+    });
+  }
+
   function resolverCambioSeleccionOperativoWsp() {
     const mod = selectorEstadoUiWsp();
     if (mod && typeof mod.resolverCambioSeleccion === "function") {
@@ -4592,6 +4662,9 @@ window.WSP.config = {
     if (esInformeDecto460Activo()) {
       refrescarContextoInformeDecto460();
     }
+    if (esControlSuperiorActivo()) {
+      refrescarContextoControlSuperior();
+    }
   }
 
   function actualizarTipo() {
@@ -4699,6 +4772,7 @@ window.WSP.config = {
       setUIControlSuperiorActiva(true);
       cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
         actualizarDatosFranja();
+        refrescarContextoControlSuperior();
       });
       sincronizarUIAlcoholimetro();
       sincronizarUIQrzDominio();
@@ -5411,6 +5485,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       if (chkMismoPersonal) chkMismoPersonal.checked = false;
       if (chkMismoMovil) chkMismoMovil.checked = false;
       if (chkMismosElementos) chkMismosElementos.checked = false;
+      refrescarContextoControlSuperior();
     }
   }
 
@@ -7706,7 +7781,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esControlSuperiorActivo()) {
-      const inicioControlSuperior = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
+      const inicioControlSuperior = await obtenerInicioParaControlSuperior();
       if (!inicioControlSuperior) {
         alert("No hay datos de inicio guardados para este operativo.");
         return;
