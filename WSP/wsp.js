@@ -1925,6 +1925,51 @@ window.WSP.config = {
     return { ok: true, accion: "resetear_informes_ui" };
   }
 
+  function finalizaFlujoUiWsp() {
+    return window.WSP?.ui?.finalizaFlujo || window.WSP?.modules?.finalizaFlujoUi || null;
+  }
+
+  function activarPantallaFinalizaWsp() {
+    const ui = finalizaFlujoUiWsp();
+    const config = {
+      valorSeleccionado: selHorario?.value || "",
+      aplicarPantallaExclusiva: aplicarPantallaExclusivaWsp,
+      desactivarPantallasInformes: desactivarPantallasInformesWsp,
+      setSelectorInformesVisible,
+      setTituloOperativosIniciados,
+      divFinaliza,
+      divMismosElementos,
+      actualizarVisibilidadBloquePresenciaActiva,
+      actualizarVisibilidadResultadosFinaliza,
+      desactivarControlesMismos,
+      sincronizarUIAlcoholimetro,
+      sincronizarUIQrzDominio,
+      cargarOperativosIniciados: cargarOperativosIniciadosParaInformes,
+      actualizarDatosFranja,
+      sincronizarInicioGuardadoSegunContexto,
+    };
+
+    if (ui && typeof ui.activarFinaliza === "function") {
+      return ui.activarFinaliza(config);
+    }
+
+    aplicarPantallaExclusivaWsp("FINALIZA");
+    desactivarPantallasInformesWsp();
+    setSelectorInformesVisible(false);
+    setTituloOperativosIniciados(true);
+    if (divFinaliza) divFinaliza.classList.remove("hidden");
+    if (divMismosElementos) divMismosElementos.classList.remove("hidden");
+    actualizarVisibilidadBloquePresenciaActiva();
+    actualizarVisibilidadResultadosFinaliza();
+    desactivarControlesMismos({ limpiar: true });
+    sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
+    return cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+      actualizarDatosFranja();
+      sincronizarInicioGuardadoSegunContexto();
+    });
+  }
+
 
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
@@ -5040,23 +5085,9 @@ window.WSP.config = {
     setUIControlMovilesActiva(false);
 
     if (fin) {
-      aplicarPantallaExclusivaWsp("FINALIZA");
       // FINALIZA debe trabajar sobre la misma fuente real que INFORMES:
       // operativos iniciados/en curso desde Supabase, nunca operativos publicados ni cache vieja.
-      desactivarPantallasInformesWsp();
-      setSelectorInformesVisible(false);
-      setTituloOperativosIniciados(true);
-      if (divFinaliza) divFinaliza.classList.remove("hidden");
-      if (divMismosElementos) divMismosElementos.classList.remove("hidden");
-      actualizarVisibilidadBloquePresenciaActiva();
-      actualizarVisibilidadResultadosFinaliza();
-      desactivarControlesMismos({ limpiar: true });
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
-      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
-        actualizarDatosFranja();
-        sincronizarInicioGuardadoSegunContexto();
-      });
+      activarPantallaFinalizaWsp();
       return;
     }
 
