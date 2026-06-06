@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso56-contexto-inicio-informes-cleanup-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso57-flujo-activacion-informes-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

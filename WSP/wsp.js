@@ -1730,6 +1730,20 @@ window.WSP.config = {
   }
 
 
+  function sincronizarWidgetsAuxiliaresInformesWsp() {
+    sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
+  }
+
+  function cargarOperativosYRefrescarInformeWsp(refrescarContexto) {
+    return cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+      actualizarDatosFranja();
+      if (typeof refrescarContexto === "function") return refrescarContexto();
+      return null;
+    });
+  }
+
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -4893,25 +4907,17 @@ window.WSP.config = {
       setUIControlSuperiorActiva(false);
       setUIInformeAlcoholemiaActiva(false);
       setUIInformeDecto460Activa(true);
-      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
-        actualizarDatosFranja();
-        refrescarContextoInformeDecto460();
-      });
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
+      cargarOperativosYRefrescarInformeWsp(refrescarContextoInformeDecto460);
+      sincronizarWidgetsAuxiliaresInformesWsp();
       return;
     }
 
     if (informeAlcoholemia) {
       setUIInformeDecto460Activa(false);
       setUIInformeAlcoholemiaActiva(true);
-      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
-        actualizarDatosFranja();
-        refrescarContextoInformeAlcoholemia();
-      });
+      cargarOperativosYRefrescarInformeWsp(refrescarContextoInformeAlcoholemia);
       actualizarReglasInformeAlcoholemia();
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
+      sincronizarWidgetsAuxiliaresInformesWsp();
       return;
     }
 
@@ -4920,12 +4926,8 @@ window.WSP.config = {
 
     if (controlSuperior) {
       setUIControlSuperiorActiva(true);
-      cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
-        actualizarDatosFranja();
-        refrescarContextoControlSuperior();
-      });
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
+      cargarOperativosYRefrescarInformeWsp(refrescarContextoControlSuperior);
+      sincronizarWidgetsAuxiliaresInformesWsp();
       return;
     }
 
