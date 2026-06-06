@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso44-transiciones-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso45-selector-carga-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -37,6 +37,7 @@
     "./modules/wsp-pantallas-ui.js",
     "./modules/wsp-transiciones-ui.js",
     "./modules/wsp-selector-operativo-ui.js",
+    "./modules/wsp-selector-carga-ui.js",
     "./modules/wsp-texto-operativo.js",
     "./modules/wsp-mensajes-operativo.js",
     "./modules/wsp-formulario-operativo.js",

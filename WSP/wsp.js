@@ -1541,6 +1541,64 @@ window.WSP.config = {
     return window.WSP?.modules?.selectorOperativoUi || window.WSP?.ui?.selectorOperativo || null;
   }
 
+  function selectorCargaUiWsp() {
+    return window.WSP?.modules?.selectorCargaUi || window.WSP?.ui?.selectorCarga || null;
+  }
+
+  function crearOpcionHorarioWsp(operativo) {
+    const ui = selectorOperativoUiWsp();
+    if (ui && typeof ui.crearOpcionHorario === "function") {
+      return ui.crearOpcionHorario(operativo);
+    }
+
+    const opt = document.createElement("option");
+    opt.value = operativo.__key;
+    opt.text = construirTextoOpcionHorario(operativo);
+    opt.title = construirTextoOpcionHorario(operativo);
+    return opt;
+  }
+
+  function renderizarSelectorOperativosWsp(operativos = [], opts = {}) {
+    const lista = Array.isArray(operativos) ? operativos : [];
+    const ui = selectorCargaUiWsp();
+
+    if (ui && typeof ui.renderizarSelectorOperativos === "function") {
+      return ui.renderizarSelectorOperativos({
+        selHorario,
+        operativos: lista,
+        placeholderConItems: opts.placeholderConItems || "Seleccionar Operativo",
+        placeholderVacio: opts.placeholderVacio || opts.placeholderConItems || "Seleccionar Operativo",
+        valorSeleccionado: opts.valorSeleccionado || "",
+        selectorDefault: opts.selectorDefault,
+        actualizarContadorOperativosWsp,
+        deps: {
+          crearOpcionHorario: crearOpcionHorarioWsp,
+          construirTextoOpcionHorario,
+        },
+      });
+    }
+
+    if (!selHorario) return "";
+
+    selHorario.innerHTML = lista.length
+      ? `<option value="">${opts.placeholderConItems || "Seleccionar Operativo"}</option>`
+      : `<option value="">${opts.placeholderVacio || opts.placeholderConItems || "Seleccionar Operativo"}</option>`;
+
+    lista.forEach((operativo) => selHorario.appendChild(crearOpcionHorarioWsp(operativo)));
+
+    if (opts.valorSeleccionado && lista.some((item) => item.__key === opts.valorSeleccionado)) {
+      selHorario.value = opts.valorSeleccionado;
+    } else if (typeof opts.selectorDefault === "function") {
+      const seleccionado = opts.selectorDefault(lista);
+      selHorario.value = typeof seleccionado === "string" ? seleccionado : (seleccionado?.__key || "");
+    } else {
+      selHorario.value = "";
+    }
+
+    actualizarContadorOperativosWsp(lista.length);
+    return selHorario.value || "";
+  }
+
   function setTituloOperativosIniciados(modoIniciados) {
     const ui = selectorOperativoUiWsp();
     if (ui && typeof ui.setTituloOperativosIniciados === "function") {
@@ -1554,47 +1612,42 @@ window.WSP.config = {
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
     if (!selHorario) return [];
-    setTituloOperativosIniciados(true);
-    selHorario.disabled = true;
-    selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
+
+    const uiCarga = selectorCargaUiWsp();
+    if (uiCarga && typeof uiCarga.prepararBusquedaIniciados === "function") {
+      uiCarga.prepararBusquedaIniciados({
+        selHorario,
+        setTituloOperativosIniciados,
+        actualizarContadorOperativosWsp,
+      });
+    } else {
+      setTituloOperativosIniciados(true);
+      selHorario.disabled = true;
+      selHorario.innerHTML = '<option value="">Buscando operativos iniciados...</option>';
+      actualizarContadorOperativosWsp(0);
+    }
+
     operativosCache = [];
     franjaSeleccionada = null;
     ordenSeleccionada = null;
-    actualizarContadorOperativosWsp(0);
 
     const inicios = await leerIniciosGuardiaDesdeSupabase();
     const candidatos = ordenarCandidatosInformeAlcoholemia(
       inicios.map(construirFranjaInformeDesdeInicio).filter(Boolean)
     );
 
-    selHorario.innerHTML = candidatos.length
-      ? '<option value="">Seleccionar Operativo Iniciado</option>'
-      : '<option value="">No hay operativos iniciados</option>';
+    operativosCache = candidatos.slice();
 
-    candidatos.forEach((operativo) => {
-      operativosCache.push(operativo);
-      const ui = selectorOperativoUiWsp();
-      const option = ui && typeof ui.crearOpcionHorario === "function"
-        ? ui.crearOpcionHorario(operativo)
-        : (() => {
-          const opt = document.createElement("option");
-          opt.value = operativo.__key;
-          opt.text = construirTextoOpcionHorario(operativo);
-          opt.title = construirTextoOpcionHorario(operativo);
-          return opt;
-        })();
-      selHorario.appendChild(option);
+    renderizarSelectorOperativosWsp(operativosCache, {
+      placeholderConItems: "Seleccionar Operativo Iniciado",
+      placeholderVacio: "No hay operativos iniciados",
+      valorSeleccionado,
+      selectorDefault: (items) => {
+        if (items.length === 1) return items[0].__key;
+        if (items.length > 1) return ordenarCandidatosInformeAlcoholemia(items)[0].__key;
+        return "";
+      },
     });
-
-    if (valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
-      selHorario.value = valorSeleccionado;
-    } else if (operativosCache.length === 1) {
-      selHorario.value = operativosCache[0].__key;
-    } else if (operativosCache.length > 1) {
-      selHorario.value = ordenarCandidatosInformeAlcoholemia(operativosCache)[0].__key;
-    } else {
-      selHorario.value = "";
-    }
 
     franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
     ordenSeleccionada = null;
@@ -1901,13 +1954,18 @@ window.WSP.config = {
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
-    setTituloOperativosIniciados(false);
-    const ordenes = cargarOrdenesSeguro();
-
-    operativosCache = [];
-    if (selHorario) {
-      selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
+    const uiCarga = selectorCargaUiWsp();
+    if (uiCarga && typeof uiCarga.prepararSelectorDisponibles === "function") {
+      uiCarga.prepararSelectorDisponibles({ selHorario, setTituloOperativosIniciados });
+    } else {
+      setTituloOperativosIniciados(false);
+      if (selHorario) {
+        selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
+      }
     }
+
+    const ordenes = cargarOrdenesSeguro();
+    operativosCache = [];
 
     ordenes.forEach((orden, idxOrden) => {
       const franjasOrdenadas = (orden.franjas || [])
@@ -1927,25 +1985,14 @@ window.WSP.config = {
 
       prepararFranjasParaModoWsp(operativosOrden).forEach((operativo) => {
         operativosCache.push(operativo);
-
-        if (!selHorario) return;
-        const ui = selectorOperativoUiWsp();
-        const option = ui && typeof ui.crearOpcionHorario === "function"
-          ? ui.crearOpcionHorario(operativo)
-          : (() => {
-            const opt = document.createElement("option");
-            opt.value = operativo.__key;
-            opt.text = construirTextoOpcionHorario(operativo);
-            opt.title = construirTextoOpcionHorario(operativo);
-            return opt;
-          })();
-        selHorario.appendChild(option);
       });
     });
 
-    if (selHorario && valorSeleccionado && operativosCache.some((item) => item.__key === valorSeleccionado)) {
-      selHorario.value = valorSeleccionado;
-    }
+    renderizarSelectorOperativosWsp(operativosCache, {
+      placeholderConItems: "Seleccionar Operativo",
+      placeholderVacio: "Seleccionar Operativo",
+      valorSeleccionado,
+    });
 
     actualizarContadorOperativosWsp(operativosCache.length);
   }
