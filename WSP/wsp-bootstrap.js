@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso61-visibilidad-informes-modulo-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso62-cierre-pantallas-informes-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

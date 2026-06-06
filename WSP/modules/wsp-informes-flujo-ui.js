@@ -57,6 +57,13 @@
     };
   }
 
+  function desactivarPantallasInformes(config = {}) {
+    return aplicarVisibilidadPantallaInforme({
+      ...config,
+      tipoPantalla: config.tipoPantalla || config.tipo || "",
+    });
+  }
+
   function cargarOperativosYRefrescar(config = {}) {
     const cargarOperativos = typeof config.cargarOperativos === "function"
       ? config.cargarOperativos
@@ -103,6 +110,7 @@
     sincronizarWidgetsAuxiliares,
     cargarOperativosYRefrescar,
     aplicarVisibilidadPantallaInforme,
+    desactivarPantallasInformes,
     activarPantallaInforme,
     activarPantallaInformePorTipo,
   };

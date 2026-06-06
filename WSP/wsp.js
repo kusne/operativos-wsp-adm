@@ -1823,6 +1823,17 @@ window.WSP.config = {
     return { tipo, esControlSuperior, esAlcoholemia, esDecto460 };
   }
 
+  function desactivarPantallasInformesWsp() {
+    const ui = informesFlujoUiWsp();
+    const deps = configVisibilidadPantallaInformeWsp("");
+
+    if (ui && typeof ui.desactivarPantallasInformes === "function") {
+      return ui.desactivarPantallasInformes(deps);
+    }
+
+    return aplicarVisibilidadPantallaInformeWsp("");
+  }
+
   function activarPantallaInformePorTipoWsp(tipoPantalla, refrescarContexto, opts = {}) {
     const ui = informesFlujoUiWsp();
 
@@ -4805,9 +4816,7 @@ window.WSP.config = {
       aplicarPantallaExclusivaWsp("CONTROL_MOVILES");
       // Evita superposición de pantallas al cambiar desde INFORMES
       // hacia CONTROL DE MÓVILES sin recargar el navegador.
-      setUIControlSuperiorActiva(false);
-      setUIInformeAlcoholemiaActiva(false);
-      setUIInformeDecto460Activa(false);
+      desactivarPantallasInformesWsp();
       setControlSuperiorVisible(false);
       setPersonalVisible(false);
       setMovilidadVisible(false);
@@ -4950,9 +4959,7 @@ window.WSP.config = {
     if (controlMoviles) {
       // Control de Móviles es una pantalla exclusiva: al entrar debe cerrar
       // cualquier formulario de INFORMES que hubiera quedado visible.
-      setUIControlSuperiorActiva(false);
-      setUIInformeAlcoholemiaActiva(false);
-      setUIInformeDecto460Activa(false);
+      desactivarPantallasInformesWsp();
       setTituloOperativosIniciados(false);
       cargarOperativosDisponibles(selHorario?.value || "");
       actualizarDatosFranja();
@@ -4968,9 +4975,7 @@ window.WSP.config = {
       aplicarPantallaExclusivaWsp("FINALIZA");
       // FINALIZA debe trabajar sobre la misma fuente real que INFORMES:
       // operativos iniciados/en curso desde Supabase, nunca operativos publicados ni cache vieja.
-      setUIControlSuperiorActiva(false);
-      setUIInformeAlcoholemiaActiva(false);
-      setUIInformeDecto460Activa(false);
+      desactivarPantallasInformesWsp();
       setSelectorInformesVisible(false);
       setTituloOperativosIniciados(true);
       if (divFinaliza) divFinaliza.classList.remove("hidden");
@@ -4989,9 +4994,7 @@ window.WSP.config = {
 
     if (enInformes && !getTipoInformeActivo()) {
       aplicarPantallaExclusivaWsp("INFORMES_MENU");
-      setUIControlSuperiorActiva(false);
-      setUIInformeAlcoholemiaActiva(false);
-      setUIInformeDecto460Activa(false);
+      desactivarPantallasInformesWsp();
       setPersonalVisible(false);
       setMovilidadVisible(false);
       setElementosVisibles(false);
@@ -5026,8 +5029,7 @@ window.WSP.config = {
       return;
     }
 
-    setUIControlSuperiorActiva(false);
-    setUIInformeAlcoholemiaActiva(false);
+    desactivarPantallasInformesWsp();
     aplicarPantallaExclusivaWsp(fin ? "FINALIZA" : "INICIA", { mostrarFormularioBase: !fin });
     setTituloOperativosIniciados(false);
     cargarOperativosDisponibles(selHorario?.value || "");
