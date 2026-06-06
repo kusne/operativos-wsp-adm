@@ -56,6 +56,63 @@
     return valor && typeof valor === "object" && !Array.isArray(valor) ? valor : {};
   }
 
+  function limpiarMarkdownTitulo(valor) {
+    return limpiarTexto(String(valor || "").replace(/\*/g, "").replace(/_/g, " "));
+  }
+
+  function claveTipo(valor) {
+    return limpiarTexto(valor).toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  function esTipoGenerico(valor) {
+    const clave = claveTipo(valor);
+    return !clave || ["control", "operativo", "operativoiniciado", "iniciado", "inicio", "finalizado"].includes(clave);
+  }
+
+  function agregarCandidatoTipo(out, valor) {
+    const clean = limpiarTexto(valor || "");
+    if (!clean) return;
+    const key = claveTipo(clean);
+    if (!out.some((item) => claveTipo(item) === key)) out.push(clean);
+  }
+
+  function extraerTipoDesdeTextoGenerado(texto) {
+    const raw = String(texto || "");
+    if (!raw.trim()) return "";
+    const lineas = raw.split(/\r?\n/).map(limpiarMarkdownTitulo).filter(Boolean);
+    for (const linea of lineas) {
+      const m = linea.match(/^Inicia\s+(.+)$/i);
+      if (m && limpiarTexto(m[1])) return limpiarTexto(m[1]);
+    }
+    const m = raw.replace(/\*/g, "").match(/(?:^|\n)\s*Inicia\s+([^\n]+)/i);
+    return m ? limpiarTexto(m[1]) : "";
+  }
+
+  function resolverTipoInicioDesdePayload(payload = {}) {
+    const candidatos = [];
+    agregarCandidatoTipo(candidatos, payload.tipo_operativo_inicio_texto);
+    agregarCandidatoTipo(candidatos, extraerTipoDesdeTextoGenerado(payload.texto_generado));
+    agregarCandidatoTipo(candidatos, payload.tipo_operativo_inicio);
+
+    const franja = payload?.payload_completo?.franja || payload?.franja || null;
+    if (franja && typeof franja === "object") {
+      agregarCandidatoTipo(candidatos, franja.tipo_operativo_inicio_texto);
+      agregarCandidatoTipo(candidatos, franja.__tipoPublicado);
+      agregarCandidatoTipo(candidatos, franja.tipo_operativo);
+      agregarCandidatoTipo(candidatos, franja.tipo);
+      agregarCandidatoTipo(candidatos, franja.titulo);
+    }
+
+    agregarCandidatoTipo(candidatos, payload.tipo_operativo);
+    agregarCandidatoTipo(candidatos, payload.tipo_corto);
+    agregarCandidatoTipo(candidatos, payload.titulo);
+
+    return candidatos.find((v) => !esTipoGenerico(v)) || candidatos[0] || "";
+  }
+
   function isoAhora() {
     return new Date().toISOString();
   }
@@ -85,11 +142,13 @@
   }
 
   function estadoBaseDesdePayload(payload = {}) {
+    const tipoInicio = resolverTipoInicioDesdePayload(payload) || limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || "");
     const metadata = {
       ...(asObject(payload.metadata)),
       texto_ref: limpiarTexto(payload.texto_ref || payload.titulo || ""),
       orden_num: ensureArray(payload.ordenes_origen).join(" / "),
-      tipo_operativo: limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || ""),
+      tipo_operativo: tipoInicio,
+      tipo_operativo_inicio_texto: tipoInicio,
       personal_inicio: ensureArray(payload.personal),
       moviles_inicio: ensureArray(payload.moviles),
       motos_inicio: ensureArray(payload.motos),
@@ -106,7 +165,7 @@
       hora_hasta: limpiarTexto(payload.hora_hasta || ""),
       lugar: limpiarTexto(payload.lugar || ""),
       lugar_normalizado: limpiarTexto(payload.lugar_normalizado || payload.lugar || ""),
-      tipo_operativo: limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || ""),
+      tipo_operativo: tipoInicio,
       ordenes_origen: ensureArray(payload.ordenes_origen),
       metadata,
       updated_at: isoAhora(),
@@ -116,6 +175,7 @@
   function eventoBaseDesdePayload(tipoEvento, payload = {}, estadoId = null) {
     const tipo = normalizarTipo(tipoEvento || payload.tipo_evento || "INFORME");
     const alimentaFinalizado = ["ALCOHOLEMIA_POSITIVA", "DECTO_460_22", "DECRETO_460_22"].includes(tipo);
+    const tipoInicio = resolverTipoInicioDesdePayload(payload) || limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || "");
 
     return {
       operativo_estado_id: estadoId || payload.operativo_estado_id || null,
@@ -130,7 +190,7 @@
       observaciones: payload.observaciones ?? "",
       horario: getHorario(payload),
       lugar: limpiarTexto(payload.lugar || ""),
-      tipo_operativo: limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || ""),
+      tipo_operativo: tipoInicio,
       alimenta_finalizado: !!payload.alimenta_finalizado || alimentaFinalizado,
     };
   }

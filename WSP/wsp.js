@@ -1240,10 +1240,95 @@ window.WSP.config = {
     return true;
   }
 
+  function limpiarMarkdownTituloWsp(valor) {
+    return limpiarTextoSimple(String(valor || "").replace(/\*/g, "").replace(/_/g, " "));
+  }
+
+  function claveTipoOperativoWsp(valor) {
+    return normalizarBasicoSinAcentos(valor).replace(/[^a-z0-9]+/g, "");
+  }
+
+  function esTipoOperativoGenericoWsp(valor) {
+    const clave = claveTipoOperativoWsp(valor);
+    return !clave || [
+      "control",
+      "operativo",
+      "operativoiniciado",
+      "iniciado",
+      "finalizado",
+      "inicio",
+      "sinoperativo",
+    ].includes(clave);
+  }
+
+  function extraerTipoDesdeTextoGeneradoInicioWsp(texto) {
+    const raw = String(texto || "");
+    if (!raw.trim()) return "";
+
+    const lineas = raw.split(/\r?\n/).map(limpiarMarkdownTituloWsp).filter(Boolean);
+    for (const linea of lineas) {
+      const m = linea.match(/^Inicia\s+(.+)$/i);
+      if (m && limpiarTextoSimple(m[1])) return limpiarTextoSimple(m[1]);
+    }
+
+    const m = raw.replace(/\*/g, "").match(/(?:^|\n)\s*Inicia\s+([^\n]+)/i);
+    return m ? limpiarTextoSimple(m[1]) : "";
+  }
+
+  function obtenerFranjaDesdePayloadInicioWsp(payload = {}) {
+    if (payload?.payload_completo?.franja) return payload.payload_completo.franja;
+    if (payload?.franja) return payload.franja;
+    if (payload?.metadata?.franja) return payload.metadata.franja;
+    return null;
+  }
+
+  function agregarCandidatoTipoInicioWsp(out, valor) {
+    const clean = limpiarTextoSimple(valor || "");
+    if (!clean) return;
+    if (!out.some((item) => claveTipoOperativoWsp(item) === claveTipoOperativoWsp(clean))) out.push(clean);
+  }
+
+  function resolverTipoInicioDesdePayloadWsp(payload = {}) {
+    const candidatos = [];
+    agregarCandidatoTipoInicioWsp(candidatos, extraerTipoDesdeTextoGeneradoInicioWsp(payload?.texto_generado));
+    agregarCandidatoTipoInicioWsp(candidatos, payload?.tipo_operativo_inicio_texto);
+    agregarCandidatoTipoInicioWsp(candidatos, payload?.tipo_operativo_inicio);
+
+    const franja = obtenerFranjaDesdePayloadInicioWsp(payload);
+    if (franja) {
+      try { agregarCandidatoTipoInicioWsp(candidatos, obtenerTipoVisualFranja(franja)); } catch {}
+      try { agregarCandidatoTipoInicioWsp(candidatos, obtenerTipoCortoFranja(franja)); } catch {}
+      agregarCandidatoTipoInicioWsp(candidatos, franja?.tipo_operativo_inicio_texto);
+      agregarCandidatoTipoInicioWsp(candidatos, franja?.__tipoPublicado);
+      agregarCandidatoTipoInicioWsp(candidatos, franja?.tipo_operativo);
+      agregarCandidatoTipoInicioWsp(candidatos, franja?.tipo);
+      agregarCandidatoTipoInicioWsp(candidatos, franja?.titulo);
+    }
+
+    agregarCandidatoTipoInicioWsp(candidatos, payload?.tipo_operativo);
+    agregarCandidatoTipoInicioWsp(candidatos, payload?.tipo_corto);
+    agregarCandidatoTipoInicioWsp(candidatos, payload?.titulo);
+
+    return candidatos.find((v) => !esTipoOperativoGenericoWsp(v)) || candidatos[0] || "";
+  }
+
+  function resolverTipoInicioDesdeEstadoWsp(row = {}, metadataEstado = {}) {
+    const candidatos = [];
+    agregarCandidatoTipoInicioWsp(candidatos, metadataEstado?.tipo_operativo_inicio_texto);
+    agregarCandidatoTipoInicioWsp(candidatos, resolverTipoInicioDesdePayloadWsp(metadataEstado?.ultimo_payload_wsp || {}));
+    agregarCandidatoTipoInicioWsp(candidatos, resolverTipoInicioDesdePayloadWsp(metadataEstado?.payload_inicio || {}));
+    agregarCandidatoTipoInicioWsp(candidatos, row?.tipo_operativo_inicio_texto);
+    agregarCandidatoTipoInicioWsp(candidatos, row?.tipo_operativo);
+    agregarCandidatoTipoInicioWsp(candidatos, metadataEstado?.tipo_operativo);
+    agregarCandidatoTipoInicioWsp(candidatos, metadataEstado?.titulo);
+    return candidatos.find((v) => !esTipoOperativoGenericoWsp(v)) || candidatos[0] || "Operativo iniciado";
+  }
+
   function normalizarInicioDesdeVistaGuardiaWsp(row) {
     if (!row) return null;
     const metadataEstado = parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
     const horario = limpiarTextoSimple(row?.hora_desde && row?.hora_hasta ? `${row.hora_desde} A ${row.hora_hasta}` : row?.horario || metadataEstado?.horario || "");
+    const tipoInicio = resolverTipoInicioDesdeEstadoWsp(row, metadataEstado);
     return normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
       operativo_estado_id: row?.operativo_estado_id || row?.id || "",
@@ -1252,7 +1337,7 @@ window.WSP.config = {
       texto_ref: limpiarTextoSimple(metadataEstado?.texto_ref || metadataEstado?.titulo || metadataEstado?.archivo || "Operativo en curso"),
       horario,
       lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
+      tipo_corto: tipoInicio || row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
       personal: row?.inicio_personal || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
       moviles: row?.inicio_moviles || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
       motos: row?.inicio_motos || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
@@ -1325,6 +1410,7 @@ window.WSP.config = {
     const horario = limpiarTextoSimple(row?.horario || (horaDesde && horaHasta ? `${horaDesde} A ${horaHasta}` : horaDesde || horaHasta));
     const ordenes = normalizarArrayJsonWsp(row?.ordenes_origen);
     const meta = parseJsonObjectWsp(row?.metadata) || {};
+    const tipoInicio = resolverTipoInicioDesdeEstadoWsp(row, meta);
 
     return normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
@@ -1334,7 +1420,7 @@ window.WSP.config = {
       texto_ref: limpiarTextoSimple(meta?.texto_ref || meta?.archivo || "Operativo en curso"),
       horario,
       lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
+      tipo_corto: tipoInicio || row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
       personal: row?.personal || meta?.personal_inicio || meta?.ultimo_personal || meta?.personal || [],
       moviles: row?.moviles || meta?.moviles_inicio || meta?.ultimo_moviles || meta?.moviles || [],
       motos: row?.motos || meta?.motos_inicio || meta?.ultimo_motos || meta?.motos || [],

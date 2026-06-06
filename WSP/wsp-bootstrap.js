@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "fix-operativos-repo-fuente-eventos-wsp-20260606";
+  const WSP_BOOTSTRAP_VERSION = "fix-finalizado-tipo-desde-inicio-wsp-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
