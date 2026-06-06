@@ -2064,6 +2064,8 @@ window.WSP.config = {
       setSelectorInformesVisible,
       setSelectorOperativosVisible: setSelectorOperativosVisibleWsp,
       limpiarSelectorOperativosOculto: limpiarSelectorOperativosOcultoWsp,
+      obtenerEstadoVisibilidadSelectorOperativos: obtenerEstadoVisibilidadSelectorOperativosWsp,
+      limpiarSelectorOperativosCambioFuente: limpiarSelectorOperativosCambioFuenteWsp,
       resetPresenciaActiva: () => {
         if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
       },
@@ -2505,6 +2507,28 @@ window.WSP.config = {
     return estado;
   }
 
+  function obtenerEstadoVisibilidadSelectorOperativosWsp() {
+    return window.WSP?.debug?.selectorOperativosVisibilidad || null;
+  }
+
+  function selectorOperativosCambioFuenteWsp(estadoAnterior = {}, estadoSiguiente = {}) {
+    const anterior = crearEstadoVisibilidadSelectorOperativosWsp(!!estadoAnterior?.visible, estadoAnterior || {});
+    const siguiente = crearEstadoVisibilidadSelectorOperativosWsp(!!estadoSiguiente?.visible, estadoSiguiente || {});
+
+    if (!anterior.visible || !siguiente.visible) return false;
+    return anterior.tipoSelector !== siguiente.tipoSelector;
+  }
+
+  function guardarCambioFuenteSelectorOperativosWsp(estadoAnterior = {}, estadoSiguiente = {}) {
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.selectorOperativosUltimoCambioFuente = {
+      anterior: estadoAnterior || null,
+      siguiente: estadoSiguiente || null,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   function guardarEstadoElementosSelectorOperativosWsp(visible, cantidad = 0) {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
@@ -2550,9 +2574,18 @@ window.WSP.config = {
   }
 
   function setSelectorOperativosVisibleWsp(visible, contexto = {}) {
-    const estadoVisibilidad = guardarEstadoVisibilidadSelectorOperativosWsp(
-      crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto)
-    );
+    const estadoAnterior = obtenerEstadoVisibilidadSelectorOperativosWsp();
+    const estadoSiguiente = crearEstadoVisibilidadSelectorOperativosWsp(visible, contexto);
+
+    if (selectorOperativosCambioFuenteWsp(estadoAnterior, estadoSiguiente)) {
+      limpiarSelectorOperativosCambioFuenteWsp({
+        motivo: "cambio_fuente_selector_operativos",
+        anterior: estadoAnterior,
+        siguiente: estadoSiguiente,
+      });
+    }
+
+    const estadoVisibilidad = guardarEstadoVisibilidadSelectorOperativosWsp(estadoSiguiente);
     const mostrar = !!estadoVisibilidad.visible;
 
     aplicarVisibilidadElementosSelectorOperativosWsp(mostrar);
@@ -2587,6 +2620,17 @@ window.WSP.config = {
     }
 
     actualizarContadorOperativosWsp(0);
+  }
+
+  function limpiarSelectorOperativosCambioFuenteWsp(contexto = {}) {
+    const anterior = contexto?.anterior || obtenerEstadoVisibilidadSelectorOperativosWsp();
+    const siguiente = contexto?.siguiente || contexto || {};
+
+    guardarCambioFuenteSelectorOperativosWsp(anterior, siguiente);
+    limpiarSelectorOperativosOcultoWsp({
+      ...(contexto && typeof contexto === "object" ? contexto : {}),
+      motivo: limpiarTextoSimple(contexto?.motivo || "cambio_fuente_selector_operativos"),
+    });
   }
 
   function debeMostrarSelectorOperativosDesdeConfigWsp(config = {}) {

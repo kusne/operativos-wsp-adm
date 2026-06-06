@@ -214,8 +214,33 @@
     return !normalizarEstadoVisibilidadSelectorOperativos(estadoVisibilidad).visible;
   }
 
+  function tipoSelectorDesdeEstadoVisibilidad(estadoVisibilidad = {}) {
+    return normalizarEstadoVisibilidadSelectorOperativos(estadoVisibilidad).tipoSelector;
+  }
+
+  function selectorOperativosCambioFuente(estadoAnterior = {}, estadoSiguiente = {}) {
+    const anterior = normalizarEstadoVisibilidadSelectorOperativos(estadoAnterior || {});
+    const siguiente = normalizarEstadoVisibilidadSelectorOperativos(estadoSiguiente || {});
+
+    if (!anterior.visible || !siguiente.visible) return false;
+    return tipoSelectorDesdeEstadoVisibilidad(anterior) !== tipoSelectorDesdeEstadoVisibilidad(siguiente);
+  }
+
+  function selectorOperativosDebeLimpiarsePorCambioFuente(estadoAnterior = {}, estadoSiguiente = {}) {
+    return selectorOperativosCambioFuente(estadoAnterior, estadoSiguiente);
+  }
+
   function aplicarEstadoVisibilidadSelectorOperativos(config = {}, visibilidad = {}) {
     const estadoVisibilidad = normalizarEstadoVisibilidadSelectorOperativos(visibilidad);
+    const estadoAnterior = ejecutar(config.obtenerEstadoVisibilidadSelectorOperativos);
+
+    if (selectorOperativosDebeLimpiarsePorCambioFuente(estadoAnterior, estadoVisibilidad)) {
+      ejecutar(config.limpiarSelectorOperativosCambioFuente, {
+        motivo: "cambio_fuente_selector_operativos",
+        anterior: estadoAnterior,
+        siguiente: estadoVisibilidad,
+      });
+    }
 
     if (selectorOperativosDebeLimpiarse(estadoVisibilidad)) {
       ejecutar(config.limpiarSelectorOperativosOculto, estadoVisibilidad);
@@ -419,6 +444,9 @@
     crearEstadoVisibilidadSelectorOperativos,
     normalizarEstadoVisibilidadSelectorOperativos,
     selectorOperativosDebeLimpiarse,
+    tipoSelectorDesdeEstadoVisibilidad,
+    selectorOperativosCambioFuente,
+    selectorOperativosDebeLimpiarsePorCambioFuente,
     aplicarEstadoVisibilidadSelectorOperativos,
     aplicarVisibilidadSelectorOperativosSeleccionPrincipal,
     prepararEjecucionModoSeleccionPrincipal,
