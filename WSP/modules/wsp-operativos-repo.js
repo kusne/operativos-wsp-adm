@@ -121,6 +121,7 @@
       operativo_estado_id: estadoId || payload.operativo_estado_id || null,
       operativo_key: getOperativoKey(payload),
       guardia_fecha: getGuardiaFecha(payload),
+      fuente: limpiarTexto(payload.fuente || payload.origen || "WSP"),
       tipo_evento: tipo,
       resultados: asObject(payload.resultados),
       medidas_cautelares: asObject(payload.medidas_cautelares),
