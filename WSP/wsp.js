@@ -1971,6 +1971,49 @@ window.WSP.config = {
   }
 
 
+  function iniciaFlujoUiWsp() {
+    return window.WSP?.ui?.iniciaFlujo || window.WSP?.modules?.iniciaFlujoUi || null;
+  }
+
+  function activarPantallaIniciaWsp() {
+    const ui = iniciaFlujoUiWsp();
+    const config = {
+      valorSeleccionado: selHorario?.value || "",
+      aplicarPantallaExclusiva: aplicarPantallaExclusivaWsp,
+      desactivarPantallasInformes: desactivarPantallasInformesWsp,
+      setTituloOperativosIniciados,
+      divFinaliza,
+      divMismosElementos,
+      chkMostrarResultadosFinaliza,
+      actualizarVisibilidadBloquePresenciaActiva,
+      actualizarVisibilidadResultadosFinaliza,
+      desactivarControlesMismos,
+      ocultarResumenInformesIntermediosFinalizado,
+      sincronizarUIAlcoholimetro,
+      cargarOperativosDisponibles,
+      actualizarDatosFranja,
+    };
+
+    if (ui && typeof ui.activarInicia === "function") {
+      return ui.activarInicia(config);
+    }
+
+    desactivarPantallasInformesWsp();
+    aplicarPantallaExclusivaWsp("INICIA", { mostrarFormularioBase: true });
+    setTituloOperativosIniciados(false);
+    cargarOperativosDisponibles(selHorario?.value || "");
+    actualizarDatosFranja();
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
+    actualizarVisibilidadBloquePresenciaActiva();
+    actualizarVisibilidadResultadosFinaliza();
+    desactivarControlesMismos();
+    ocultarResumenInformesIntermediosFinalizado();
+    sincronizarUIAlcoholimetro();
+    return { ok: true, modo: "INICIA" };
+  }
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -5116,33 +5159,8 @@ window.WSP.config = {
       return;
     }
 
-    desactivarPantallasInformesWsp();
-    aplicarPantallaExclusivaWsp(fin ? "FINALIZA" : "INICIA", { mostrarFormularioBase: !fin });
-    setTituloOperativosIniciados(false);
-    cargarOperativosDisponibles(selHorario?.value || "");
-    actualizarDatosFranja();
-    divFinaliza.classList.toggle("hidden", !fin);
-
-    if (divMismosElementos) divMismosElementos.classList.toggle("hidden", !fin);
-
-    if (!fin) {
-      if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
-      actualizarVisibilidadBloquePresenciaActiva();
-      actualizarVisibilidadResultadosFinaliza();
-      desactivarControlesMismos();
-      ocultarResumenInformesIntermediosFinalizado();
-      sincronizarUIAlcoholimetro();
-      return;
-    }
-
-    if (chkMostrarResultadosFinaliza && !esFinalizaConResultadosOpcionales()) {
-      chkMostrarResultadosFinaliza.checked = false;
-    }
-    actualizarVisibilidadBloquePresenciaActiva();
-    actualizarVisibilidadResultadosFinaliza();
-    desactivarControlesMismos({ limpiar: true });
-    sincronizarUIAlcoholimetro();
-    sincronizarInicioGuardadoSegunContexto();
+    activarPantallaIniciaWsp();
+    return;
   }
 
   // ======================================================
