@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso66-inicia-flujo-ui-modulo-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso67-control-moviles-flujo-ui-modulo-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -43,6 +43,7 @@
     "./modules/wsp-informes-flujo-ui.js",
     "./modules/wsp-finaliza-flujo-ui.js",
     "./modules/wsp-inicia-flujo-ui.js",
+    "./modules/wsp-control-moviles-flujo-ui.js",
     "./modules/wsp-texto-operativo.js",
     "./modules/wsp-mensajes-operativo.js",
     "./modules/wsp-formulario-operativo.js",

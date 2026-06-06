@@ -2014,6 +2014,38 @@ window.WSP.config = {
     return { ok: true, modo: "INICIA" };
   }
 
+  function controlMovilesFlujoUiWsp() {
+    return window.WSP?.ui?.controlMovilesFlujo || window.WSP?.modules?.controlMovilesFlujoUi || null;
+  }
+
+  function activarPantallaControlMovilesWsp() {
+    const ui = controlMovilesFlujoUiWsp();
+    const config = {
+      valorSeleccionado: selHorario?.value || "",
+      desactivarPantallasInformes: desactivarPantallasInformesWsp,
+      setTituloOperativosIniciados,
+      cargarOperativosDisponibles,
+      actualizarDatosFranja,
+      setUIControlMovilesActiva,
+      sincronizarUIAlcoholimetro,
+      sincronizarUIQrzDominio,
+    };
+
+    if (ui && typeof ui.activarControlMoviles === "function") {
+      return ui.activarControlMoviles(config);
+    }
+
+    desactivarPantallasInformesWsp();
+    setTituloOperativosIniciados(false);
+    cargarOperativosDisponibles(selHorario?.value || "");
+    actualizarDatosFranja();
+    setUIControlMovilesActiva(true);
+    sincronizarUIAlcoholimetro();
+    sincronizarUIQrzDominio();
+    return { ok: true, modo: "CONTROL_MOVILES" };
+  }
+
+
   async function seleccionarOperativoInformePorDefectoModularWsp(config = {}) {
     const ui = selectorContextoUiWsp();
     if (!ui || typeof ui.seleccionarOperativoIniciadoPorDefecto !== "function") return null;
@@ -5115,13 +5147,7 @@ window.WSP.config = {
     if (controlMoviles) {
       // Control de Móviles es una pantalla exclusiva: al entrar debe cerrar
       // cualquier formulario de INFORMES que hubiera quedado visible.
-      desactivarPantallasInformesWsp();
-      setTituloOperativosIniciados(false);
-      cargarOperativosDisponibles(selHorario?.value || "");
-      actualizarDatosFranja();
-      setUIControlMovilesActiva(true);
-      sincronizarUIAlcoholimetro();
-      sincronizarUIQrzDominio();
+      activarPantallaControlMovilesWsp();
       return;
     }
 
