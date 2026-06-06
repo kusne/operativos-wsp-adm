@@ -2443,6 +2443,80 @@ window.WSP.config = {
       if (chkMostrarResultadosFinaliza) chkMostrarResultadosFinaliza.checked = false;
     }
   }
+  function transicionesUiWsp() {
+    return window.WSP?.ui?.transiciones || window.WSP?.modules?.transicionesUi || null;
+  }
+
+  function refsTransicionesUiWsp() {
+    return {
+      selHorario,
+      textareaObs,
+      btnEnviar,
+      divFinaliza,
+      divDetalles,
+      divMismosElementos,
+      bloquePresenciaActiva,
+      chkPresenciaActiva,
+      chkMostrarResultadosFinaliza,
+      bloquePositivosAlcoholimetro,
+      wrapGraduacionesSancionable,
+      wrapGraduacionesNoSancionable,
+      unitGraduacionesSancionable,
+      unitGraduacionesNoSancionable,
+      wrapQrzCasilleros,
+      wrapDominioCasilleros,
+    };
+  }
+
+  function limpiarFormularioDomWsp() {
+    const ui = transicionesUiWsp();
+    if (ui && typeof ui.limpiarFormularioDom === "function") {
+      return ui.limpiarFormularioDom(refsTransicionesUiWsp());
+    }
+
+    document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
+    document
+      .querySelectorAll('input[type="number"], input[type="text"], textarea')
+      .forEach((i) => {
+        i.value = "";
+        limpiarErrorCampo(i);
+      });
+  }
+
+  function ocultarBloquesDinamicosFinalizaWsp() {
+    const ui = transicionesUiWsp();
+    if (ui && typeof ui.ocultarBloquesDinamicosFinaliza === "function") {
+      return ui.ocultarBloquesDinamicosFinaliza(refsTransicionesUiWsp());
+    }
+
+    if (divFinaliza) divFinaliza.classList.add("hidden");
+    if (divDetalles) divDetalles.classList.add("hidden");
+    if (divMismosElementos) divMismosElementos.classList.add("hidden");
+    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
+    if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
+    if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
+    if (unitGraduacionesSancionable) unitGraduacionesSancionable.classList.add("hidden");
+    if (unitGraduacionesNoSancionable) unitGraduacionesNoSancionable.classList.add("hidden");
+    if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
+    if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
+  }
+
+  function prepararSelectorInformesMenuWsp() {
+    const ui = transicionesUiWsp();
+    if (ui && typeof ui.prepararSelectorInformesMenu === "function") {
+      return ui.prepararSelectorInformesMenu(refsTransicionesUiWsp(), {
+        actualizarContador: actualizarContadorOperativosWsp,
+      });
+    }
+
+    if (selHorario) {
+      selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
+      selHorario.value = "";
+    }
+    actualizarContadorOperativosWsp(0);
+  }
+
 
   function setTextoEstadoControlMoviles(texto) {
     const ui = controlMovilesUiWsp();
@@ -4446,11 +4520,7 @@ window.WSP.config = {
       operativosCache = [];
       franjaSeleccionada = null;
       ordenSeleccionada = null;
-      if (selHorario) {
-        selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
-        selHorario.value = "";
-      }
-      actualizarContadorOperativosWsp(0);
+      prepararSelectorInformesMenuWsp();
       if (divFinaliza) divFinaliza.classList.add("hidden");
       if (divDetalles) divDetalles.classList.add("hidden");
       return;
@@ -5298,14 +5368,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     aplicarPantallaExclusivaWsp("INICIA", { mostrarFormularioBase: true });
     limpiarSeleccionOperativo();
 
-    document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
-
-    document
-      .querySelectorAll('input[type="number"], input[type="text"], textarea')
-      .forEach((i) => {
-        i.value = "";
-        limpiarErrorCampo(i);
-      });
+    limpiarFormularioDomWsp();
 
     if (window.ControlSuperior && typeof window.ControlSuperior.reset === "function") {
       window.ControlSuperior.reset();
@@ -5314,11 +5377,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const obs = document.getElementById("obs");
     if (obs) obs.value = "";
 
-    divFinaliza.classList.add("hidden");
-    divDetalles.classList.add("hidden");
-
-    if (divMismosElementos) divMismosElementos.classList.add("hidden");
-    if (bloquePresenciaActiva) bloquePresenciaActiva.classList.add("hidden");
+    ocultarBloquesDinamicosFinalizaWsp();
     setControlSuperiorVisible(false);
     setUIInformeAlcoholemiaActiva(false);
     limpiarInformeAlcoholemia();
@@ -5331,13 +5390,6 @@ ${bold(`Moviles ${organismo}:`)}`)
     limpiarGraduaciones(graduacionesNoSancionable);
     limpiarListaDinamica(qrzCasilleros);
     limpiarListaDinamica(dominioCasilleros);
-    if (bloquePositivosAlcoholimetro) bloquePositivosAlcoholimetro.classList.add("hidden");
-    if (wrapGraduacionesSancionable) wrapGraduacionesSancionable.classList.add("hidden");
-    if (wrapGraduacionesNoSancionable) wrapGraduacionesNoSancionable.classList.add("hidden");
-    if (unitGraduacionesSancionable) unitGraduacionesSancionable.classList.add("hidden");
-    if (unitGraduacionesNoSancionable) unitGraduacionesNoSancionable.classList.add("hidden");
-    if (wrapQrzCasilleros) wrapQrzCasilleros.classList.add("hidden");
-    if (wrapDominioCasilleros) wrapDominioCasilleros.classList.add("hidden");
 
     desactivarControlesMismos();
     actualizarTipo();
