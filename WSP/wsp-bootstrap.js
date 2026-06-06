@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso86-selector-operativos-cambio-fuente-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "fix-operativos-repo-wsp-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -50,6 +50,7 @@
     "./modules/wsp-formulario-operativo.js",
     "./modules/wsp-payload-operativo.js",
     "./modules/wsp-historial-service.js",
+    "./modules/wsp-operativos-repo.js",
     "./modules/wsp-historial-operativo.js",
     "./modules/wsp-historial-informes.js",
     "./modules/wsp-fotos-informes.js",
