@@ -40,6 +40,21 @@
     return { ok: true, modo: normalizarModoSeleccionPrincipal(modo), ...extra };
   }
 
+  function serializarErrorSeleccionPrincipal(error) {
+    if (!error) return "";
+    return error?.message ? String(error.message) : String(error);
+  }
+
+  function crearResultadoErrorSeleccionPrincipal(modo, error, extra = {}) {
+    return {
+      ok: false,
+      modo: normalizarModoSeleccionPrincipal(modo),
+      motivo: "error_ejecucion_seleccion_principal",
+      error: serializarErrorSeleccionPrincipal(error),
+      ...extra,
+    };
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -194,8 +209,21 @@
     return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
   }
 
+  function ejecutarSeleccionPrincipalSeguro(config = {}) {
+    let modo = MODOS.INICIA;
+    try {
+      const configNormalizada = crearConfigNormalizadaSeleccionPrincipal(config);
+      modo = resolverModoSeleccionPrincipal(configNormalizada);
+      prepararCambioSeleccionPrincipal(configNormalizada);
+      return ejecutarModoSeleccionPrincipal(modo, configNormalizada);
+    } catch (error) {
+      console.error("[WSP] Error en selección principal modular.", error);
+      return crearResultadoErrorSeleccionPrincipal(modo, error);
+    }
+  }
+
   function actualizarTipoPrincipal(config = {}) {
-    return ejecutarSeleccionPrincipalDesdeConfig(config);
+    return ejecutarSeleccionPrincipalSeguro(config);
   }
 
   const api = {
@@ -204,6 +232,8 @@
     modoEsValidoSeleccionPrincipal,
     normalizarModoSeleccionPrincipal,
     crearResultadoSeleccionPrincipal,
+    serializarErrorSeleccionPrincipal,
+    crearResultadoErrorSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,
@@ -221,6 +251,7 @@
     ejecutarModoSeleccionPrincipal,
     crearConfigNormalizadaSeleccionPrincipal,
     ejecutarSeleccionPrincipalDesdeConfig,
+    ejecutarSeleccionPrincipalSeguro,
     actualizarTipoPrincipal,
   };
 

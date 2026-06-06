@@ -2125,12 +2125,34 @@ window.WSP.config = {
     return { ok: true, modo: "INICIA", legacy: true };
   }
 
+  function actualizarTipoPrincipalModularWsp(ui, config) {
+    if (!ui) return null;
+
+    const ejecutarModular = typeof ui.actualizarTipoPrincipal === "function"
+      ? ui.actualizarTipoPrincipal
+      : null;
+
+    if (!ejecutarModular) return null;
+
+    try {
+      return ejecutarModular(config);
+    } catch (error) {
+      console.error("[WSP] Falló selección principal modular. Se usa fallback legacy.", error);
+      return { ok: false, motivo: "error_modulo_seleccion_principal", error: String(error?.message || error || "") };
+    }
+  }
+
   function actualizarTipoPrincipalWsp() {
     const ui = seleccionPrincipalFlujoUiWsp();
     const config = configSeleccionPrincipalFlujoWsp();
+    const resultadoModular = actualizarTipoPrincipalModularWsp(ui, config);
 
-    if (ui && typeof ui.actualizarTipoPrincipal === "function") {
-      return ui.actualizarTipoPrincipal(config);
+    if (resultadoModular && resultadoModular.ok !== false) {
+      return resultadoModular;
+    }
+
+    if (resultadoModular && resultadoModular.ok === false) {
+      console.warn("[WSP] Selección principal modular no pudo completarse. Se usa fallback legacy.", resultadoModular);
     }
 
     return actualizarTipoPrincipalLegacyWsp(config);
