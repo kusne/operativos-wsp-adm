@@ -2152,6 +2152,23 @@ window.WSP.config = {
     return resultado;
   }
 
+  function marcarOrigenResultadoSeleccionPrincipalWsp(ui, resultado, origen, extra = {}) {
+    if (ui && typeof ui.marcarOrigenResultadoSeleccionPrincipal === "function") {
+      try {
+        return ui.marcarOrigenResultadoSeleccionPrincipal(resultado, origen, extra);
+      } catch (error) {
+        console.warn("[WSP] No se pudo marcar origen del resultado de selección principal. Se usa resultado crudo.", error);
+      }
+    }
+
+    if (!resultado || typeof resultado !== "object") return resultado;
+    return {
+      ...resultado,
+      origen: resultado.origen || origen,
+      ...extra,
+    };
+  }
+
   function actualizarTipoPrincipalModularWsp(ui, config) {
     const ejecutarModular = obtenerEjecutorSeleccionPrincipalWsp(ui);
     if (!ejecutarModular) return null;
@@ -2160,15 +2177,19 @@ window.WSP.config = {
 
     try {
       const resultado = ejecutarModular(config);
-      return normalizarResultadoSeleccionPrincipalWsp(ui, resultado, resumen?.modo || "INICIA");
+      return marcarOrigenResultadoSeleccionPrincipalWsp(
+        ui,
+        normalizarResultadoSeleccionPrincipalWsp(ui, resultado, resumen?.modo || "INICIA"),
+        "modular"
+      );
     } catch (error) {
       console.error("[WSP] Falló selección principal modular. Se usa fallback legacy.", error);
-      return {
+      return marcarOrigenResultadoSeleccionPrincipalWsp(ui, {
         ok: false,
         modo: resumen?.modo || "INICIA",
         motivo: "error_modulo_seleccion_principal",
         error: String(error?.message || error || ""),
-      };
+      }, "modular");
     }
   }
 
@@ -2202,7 +2223,13 @@ window.WSP.config = {
 
   function ejecutarFallbackSeleccionPrincipalWsp(config, resultadoModular) {
     registrarFallbackSeleccionPrincipalWsp(resultadoModular);
-    return actualizarTipoPrincipalLegacyWsp(config);
+    const ui = seleccionPrincipalFlujoUiWsp();
+    return marcarOrigenResultadoSeleccionPrincipalWsp(
+      ui,
+      actualizarTipoPrincipalLegacyWsp(config),
+      "legacy",
+      { fallbackDe: resultadoModular?.motivo || "modular_no_disponible" }
+    );
   }
 
   function actualizarTipoPrincipalWsp() {

@@ -97,6 +97,15 @@
     };
   }
 
+  function marcarOrigenResultadoSeleccionPrincipal(resultado, origen = "modular", extra = {}) {
+    if (!resultadoSeleccionPrincipalEsValido(resultado)) return resultado;
+    return {
+      ...resultado,
+      origen: normalizarTexto(resultado.origen || origen),
+      ...extra,
+    };
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -258,7 +267,10 @@
     const resumen = crearResumenSeleccionPrincipal(config);
     prepararCambioSeleccionPrincipal(resumen.configNormalizada);
     const resultado = ejecutarModoSeleccionPrincipal(resumen.modo, resumen.configNormalizada);
-    return normalizarResultadoSeleccionPrincipal(resultado, resumen.modo);
+    return marcarOrigenResultadoSeleccionPrincipal(
+      normalizarResultadoSeleccionPrincipal(resultado, resumen.modo),
+      "modular"
+    );
   }
 
   function ejecutarSeleccionPrincipalSeguro(config = {}) {
@@ -268,10 +280,16 @@
       modo = resumen.modo;
       prepararCambioSeleccionPrincipal(resumen.configNormalizada);
       const resultado = ejecutarModoSeleccionPrincipal(modo, resumen.configNormalizada);
-      return normalizarResultadoSeleccionPrincipal(resultado, modo);
+      return marcarOrigenResultadoSeleccionPrincipal(
+        normalizarResultadoSeleccionPrincipal(resultado, modo),
+        "modular"
+      );
     } catch (error) {
       console.error("[WSP] Error en selección principal modular.", error);
-      return crearResultadoErrorSeleccionPrincipal(modo, error);
+      return marcarOrigenResultadoSeleccionPrincipal(
+        crearResultadoErrorSeleccionPrincipal(modo, error),
+        "modular"
+      );
     }
   }
 
@@ -293,6 +311,7 @@
     crearResultadoFallbackSeleccionPrincipal,
     resultadoSeleccionPrincipalTieneModoValido,
     normalizarResultadoSeleccionPrincipal,
+    marcarOrigenResultadoSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,

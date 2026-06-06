@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso78-seleccion-principal-diagnostico-liviano-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso79-seleccion-principal-resultado-trazable-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
