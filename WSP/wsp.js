@@ -2142,20 +2142,49 @@ window.WSP.config = {
     }
   }
 
+  function resultadoSeleccionPrincipalEsOkWsp(ui, resultado) {
+    if (ui && typeof ui.resultadoSeleccionPrincipalEsOk === "function") {
+      try {
+        return ui.resultadoSeleccionPrincipalEsOk(resultado);
+      } catch (error) {
+        console.warn("[WSP] No se pudo validar resultado modular de selección principal. Se usa criterio legacy.", error);
+      }
+    }
+    return !!(resultado && resultado.ok !== false);
+  }
+
+  function debeUsarFallbackSeleccionPrincipalWsp(ui, resultado) {
+    if (!resultado) return true;
+    if (ui && typeof ui.resultadoSeleccionPrincipalDebeFallback === "function") {
+      try {
+        return ui.resultadoSeleccionPrincipalDebeFallback(resultado);
+      } catch (error) {
+        console.warn("[WSP] No se pudo evaluar fallback modular de selección principal. Se usa criterio legacy.", error);
+      }
+    }
+    return !resultadoSeleccionPrincipalEsOkWsp(ui, resultado);
+  }
+
+  function registrarFallbackSeleccionPrincipalWsp(resultado) {
+    if (!resultado || resultado.ok !== false) return;
+    console.warn("[WSP] Selección principal modular no pudo completarse. Se usa fallback legacy.", resultado);
+  }
+
+  function ejecutarFallbackSeleccionPrincipalWsp(config, resultadoModular) {
+    registrarFallbackSeleccionPrincipalWsp(resultadoModular);
+    return actualizarTipoPrincipalLegacyWsp(config);
+  }
+
   function actualizarTipoPrincipalWsp() {
     const ui = seleccionPrincipalFlujoUiWsp();
     const config = configSeleccionPrincipalFlujoWsp();
     const resultadoModular = actualizarTipoPrincipalModularWsp(ui, config);
 
-    if (resultadoModular && resultadoModular.ok !== false) {
+    if (!debeUsarFallbackSeleccionPrincipalWsp(ui, resultadoModular)) {
       return resultadoModular;
     }
 
-    if (resultadoModular && resultadoModular.ok === false) {
-      console.warn("[WSP] Selección principal modular no pudo completarse. Se usa fallback legacy.", resultadoModular);
-    }
-
-    return actualizarTipoPrincipalLegacyWsp(config);
+    return ejecutarFallbackSeleccionPrincipalWsp(config, resultadoModular);
   }
 
 

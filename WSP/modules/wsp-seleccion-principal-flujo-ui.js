@@ -55,6 +55,28 @@
     };
   }
 
+  function resultadoSeleccionPrincipalEsValido(resultado) {
+    return !!(resultado && typeof resultado === "object");
+  }
+
+  function resultadoSeleccionPrincipalEsOk(resultado) {
+    if (!resultadoSeleccionPrincipalEsValido(resultado)) return false;
+    return resultado.ok !== false;
+  }
+
+  function resultadoSeleccionPrincipalDebeFallback(resultado) {
+    return !resultadoSeleccionPrincipalEsOk(resultado);
+  }
+
+  function crearResultadoFallbackSeleccionPrincipal(modo, motivo = "fallback_legacy", extra = {}) {
+    return {
+      ok: false,
+      modo: normalizarModoSeleccionPrincipal(modo),
+      motivo,
+      ...extra,
+    };
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -234,6 +256,10 @@
     crearResultadoSeleccionPrincipal,
     serializarErrorSeleccionPrincipal,
     crearResultadoErrorSeleccionPrincipal,
+    resultadoSeleccionPrincipalEsValido,
+    resultadoSeleccionPrincipalEsOk,
+    resultadoSeleccionPrincipalDebeFallback,
+    crearResultadoFallbackSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,
