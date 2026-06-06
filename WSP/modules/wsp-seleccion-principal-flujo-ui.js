@@ -24,6 +24,22 @@
     return String(valor || "").trim();
   }
 
+  function listaModosSeleccionPrincipal() {
+    return Object.values(MODOS);
+  }
+
+  function modoEsValidoSeleccionPrincipal(modo) {
+    return listaModosSeleccionPrincipal().includes(modo);
+  }
+
+  function normalizarModoSeleccionPrincipal(modo) {
+    return modoEsValidoSeleccionPrincipal(modo) ? modo : MODOS.INICIA;
+  }
+
+  function crearResultadoSeleccionPrincipal(modo, extra = {}) {
+    return { ok: true, modo: normalizarModoSeleccionPrincipal(modo), ...extra };
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -125,7 +141,7 @@
     const refrescarContexto = refrescarContextoInformeDesdeModo(modo, config);
     const opciones = opcionesInformeDesdeModo(modo, config);
 
-    return ejecutar(config.activarInformePorTipo, tipoPantalla, refrescarContexto, opciones) || { ok: true, modo };
+    return ejecutar(config.activarInformePorTipo, tipoPantalla, refrescarContexto, opciones) || crearResultadoSeleccionPrincipal(modo);
   }
 
   function modoEsBasicoSeleccionPrincipal(modo) {
@@ -152,17 +168,18 @@
   function ejecutarModoBasicoSeleccionPrincipal(modo, config = {}) {
     const modoSeguro = modoEsBasicoSeleccionPrincipal(modo) ? modo : MODOS.INICIA;
     const ejecutarModo = ejecutorModoBasicoDesdeModo(modoSeguro, config);
-    return ejecutar(ejecutarModo) || { ok: true, modo: modoSeguro };
+    return ejecutar(ejecutarModo) || crearResultadoSeleccionPrincipal(modoSeguro);
   }
 
   function ejecutarModoSeleccionPrincipal(modo, config = {}) {
-    prepararEjecucionModoSeleccionPrincipal(modo, config);
+    const modoSeguro = normalizarModoSeleccionPrincipal(modo);
+    prepararEjecucionModoSeleccionPrincipal(modoSeguro, config);
 
-    if (modoEsInformeSeleccionPrincipal(modo)) {
-      return ejecutarInformeSeleccionPrincipal(modo, config);
+    if (modoEsInformeSeleccionPrincipal(modoSeguro)) {
+      return ejecutarInformeSeleccionPrincipal(modoSeguro, config);
     }
 
-    return ejecutarModoBasicoSeleccionPrincipal(modo, config);
+    return ejecutarModoBasicoSeleccionPrincipal(modoSeguro, config);
   }
 
   function actualizarTipoPrincipal(config = {}) {
@@ -175,6 +192,10 @@
 
   const api = {
     MODOS,
+    listaModosSeleccionPrincipal,
+    modoEsValidoSeleccionPrincipal,
+    normalizarModoSeleccionPrincipal,
+    crearResultadoSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,

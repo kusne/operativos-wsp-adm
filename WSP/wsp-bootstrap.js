@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso73-seleccion-principal-modos-basicos-ui-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso74-seleccion-principal-modo-seguro-ui-20260606";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
