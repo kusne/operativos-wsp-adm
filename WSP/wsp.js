@@ -1787,7 +1787,23 @@ window.WSP.config = {
     return tarea;
   }
 
+  function configVisibilidadPantallaInformeWsp(tipoPantalla) {
+    return {
+      tipoPantalla,
+      setControlSuperiorActiva: setUIControlSuperiorActiva,
+      setAlcoholemiaActiva: setUIInformeAlcoholemiaActiva,
+      setDecto460Activa: setUIInformeDecto460Activa,
+    };
+  }
+
   function aplicarVisibilidadPantallaInformeWsp(tipoPantalla) {
+    const ui = informesFlujoUiWsp();
+    const deps = configVisibilidadPantallaInformeWsp(tipoPantalla);
+
+    if (ui && typeof ui.aplicarVisibilidadPantallaInforme === "function") {
+      return ui.aplicarVisibilidadPantallaInforme(deps);
+    }
+
     const tipo = limpiarTextoSimple(tipoPantalla).toUpperCase();
     const esControlSuperior = tipo === "CONTROL_SUPERIOR";
     const esAlcoholemia = tipo === "ALCOHOLEMIA";
@@ -1803,9 +1819,26 @@ window.WSP.config = {
     if (esControlSuperior) setUIControlSuperiorActiva(true);
     if (esAlcoholemia) setUIInformeAlcoholemiaActiva(true);
     if (esDecto460) setUIInformeDecto460Activa(true);
+
+    return { tipo, esControlSuperior, esAlcoholemia, esDecto460 };
   }
 
   function activarPantallaInformePorTipoWsp(tipoPantalla, refrescarContexto, opts = {}) {
+    const ui = informesFlujoUiWsp();
+
+    if (ui && typeof ui.activarPantallaInformePorTipo === "function") {
+      return ui.activarPantallaInformePorTipo({
+        valorSeleccionado: selHorario?.value || "",
+        cargarOperativos: cargarOperativosIniciadosParaInformes,
+        actualizarDatosFranja,
+        sincronizarUIAlcoholimetro,
+        sincronizarUIQrzDominio,
+        refrescarContexto,
+        postActivar: opts.postActivar,
+        ...configVisibilidadPantallaInformeWsp(tipoPantalla),
+      });
+    }
+
     return activarPantallaInformeWsp({
       aplicarVisibilidad: () => aplicarVisibilidadPantallaInformeWsp(tipoPantalla),
       refrescarContexto,

@@ -15,6 +15,48 @@
     }
   }
 
+
+  function normalizarTipoPantallaInforme(value) {
+    return String(value || "")
+      .replace(/\s+/g, "_")
+      .trim()
+      .toUpperCase();
+  }
+
+  function aplicarVisibilidadPantallaInforme(config = {}) {
+    const tipo = normalizarTipoPantallaInforme(config.tipoPantalla || config.tipo || "");
+    const esControlSuperior = tipo === "CONTROL_SUPERIOR";
+    const esAlcoholemia = tipo === "ALCOHOLEMIA";
+    const esDecto460 = tipo === "DECTO460" || tipo === "DECTO_460" || tipo === "DECRETO_460";
+
+    const setControlSuperiorActiva = typeof config.setControlSuperiorActiva === "function"
+      ? config.setControlSuperiorActiva
+      : null;
+    const setAlcoholemiaActiva = typeof config.setAlcoholemiaActiva === "function"
+      ? config.setAlcoholemiaActiva
+      : null;
+    const setDecto460Activa = typeof config.setDecto460Activa === "function"
+      ? config.setDecto460Activa
+      : null;
+
+    // Primero se apagan las pantallas que no corresponden y después se activa
+    // la elegida. Evita formularios superpuestos al cambiar entre informes.
+    if (!esControlSuperior && setControlSuperiorActiva) setControlSuperiorActiva(false);
+    if (!esAlcoholemia && setAlcoholemiaActiva) setAlcoholemiaActiva(false);
+    if (!esDecto460 && setDecto460Activa) setDecto460Activa(false);
+
+    if (esControlSuperior && setControlSuperiorActiva) setControlSuperiorActiva(true);
+    if (esAlcoholemia && setAlcoholemiaActiva) setAlcoholemiaActiva(true);
+    if (esDecto460 && setDecto460Activa) setDecto460Activa(true);
+
+    return {
+      tipo,
+      esControlSuperior,
+      esAlcoholemia,
+      esDecto460,
+    };
+  }
+
   function cargarOperativosYRefrescar(config = {}) {
     const cargarOperativos = typeof config.cargarOperativos === "function"
       ? config.cargarOperativos
@@ -50,10 +92,19 @@
     return tarea;
   }
 
+  function activarPantallaInformePorTipo(config = {}) {
+    return activarPantallaInforme({
+      ...config,
+      aplicarVisibilidad: () => aplicarVisibilidadPantallaInforme(config),
+    });
+  }
+
   const api = {
     sincronizarWidgetsAuxiliares,
     cargarOperativosYRefrescar,
+    aplicarVisibilidadPantallaInforme,
     activarPantallaInforme,
+    activarPantallaInformePorTipo,
   };
 
   window.WSP.ui.informesFlujo = api;
