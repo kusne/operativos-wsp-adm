@@ -166,10 +166,35 @@
     return !(estado.enInformes && !estado.tipoInformeActivo);
   }
 
+  function motivoVisibilidadSelectorOperativos(estado = {}) {
+    if (estado.enInformes && !estado.tipoInformeActivo) return "informes_menu_sin_tipo";
+    if (estado.enInformes && estado.tipoInformeActivo) return "informe_con_tipo";
+    if (estado.fin) return "finaliza";
+    if (estado.controlMoviles) return "control_moviles";
+    return "operativos_publicados";
+  }
+
+  function crearEstadoVisibilidadSelectorOperativos(estado = {}) {
+    return {
+      visible: debeMostrarSelectorOperativos(estado),
+      motivo: motivoVisibilidadSelectorOperativos(estado),
+    };
+  }
+
+  function aplicarVisibilidadSelectorOperativosSeleccionPrincipal(config = {}) {
+    const estado = estadoDesdeConfig(config);
+    const visibilidad = crearEstadoVisibilidadSelectorOperativos(estado);
+
+    if (!visibilidad.visible) ejecutar(config.limpiarSelectorOperativosOculto, visibilidad);
+    ejecutar(config.setSelectorOperativosVisible, visibilidad.visible, visibilidad);
+
+    return visibilidad;
+  }
+
   function prepararCambioSeleccionPrincipal(config = {}) {
     const estado = estadoDesdeConfig(config);
     ejecutar(config.setSelectorInformesVisible, estado.enInformes);
-    ejecutar(config.setSelectorOperativosVisible, debeMostrarSelectorOperativos(estado));
+    aplicarVisibilidadSelectorOperativosSeleccionPrincipal(config);
     ejecutar(config.resetPresenciaActiva);
   }
 
@@ -345,6 +370,9 @@
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     debeMostrarSelectorOperativos,
+    motivoVisibilidadSelectorOperativos,
+    crearEstadoVisibilidadSelectorOperativos,
+    aplicarVisibilidadSelectorOperativosSeleccionPrincipal,
     prepararEjecucionModoSeleccionPrincipal,
     modoEsInformeSeleccionPrincipal,
     tipoPantallaInformeDesdeModo,

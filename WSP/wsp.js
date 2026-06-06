@@ -1866,11 +1866,6 @@ window.WSP.config = {
 
   function prepararMenuInformesWsp() {
     const ui = informesFlujoUiWsp();
-    const limpiarSeleccionMenuInformes = () => {
-      operativosCache = [];
-      franjaSeleccionada = null;
-      ordenSeleccionada = null;
-    };
 
     const config = {
       aplicarPantallaExclusiva: aplicarPantallaExclusivaWsp,
@@ -1880,7 +1875,7 @@ window.WSP.config = {
       setElementosVisibles,
       setObservacionesVisible,
       setTituloOperativosIniciados,
-      limpiarSeleccion: limpiarSeleccionMenuInformes,
+      limpiarSeleccion: limpiarSelectorOperativosOcultoWsp,
       prepararSelectorInformesMenu: prepararSelectorInformesMenuWsp,
       setSelectorOperativosVisible: setSelectorOperativosVisibleWsp,
       divFinaliza,
@@ -1898,7 +1893,7 @@ window.WSP.config = {
     setElementosVisibles(false);
     setObservacionesVisible(false);
     setTituloOperativosIniciados(true);
-    limpiarSeleccionMenuInformes();
+    limpiarSelectorOperativosOcultoWsp();
     prepararSelectorInformesMenuWsp();
     if (divFinaliza) divFinaliza.classList.add("hidden");
     if (divDetalles) divDetalles.classList.add("hidden");
@@ -2068,6 +2063,7 @@ window.WSP.config = {
       fin: selTipo.value === "FINALIZA",
       setSelectorInformesVisible,
       setSelectorOperativosVisible: setSelectorOperativosVisibleWsp,
+      limpiarSelectorOperativosOculto: limpiarSelectorOperativosOcultoWsp,
       resetPresenciaActiva: () => {
         if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
       },
@@ -2090,7 +2086,7 @@ window.WSP.config = {
 
   function actualizarTipoPrincipalLegacyWsp(config) {
     setSelectorInformesVisible(config.enInformes);
-    setSelectorOperativosVisibleWsp(!(config.enInformes && !config.tipoInformeActivo));
+    aplicarVisibilidadSelectorOperativosDesdeConfigWsp(config);
     if (chkPresenciaActiva) chkPresenciaActiva.checked = false;
 
     if (config.controlMoviles) {
@@ -2510,6 +2506,30 @@ window.WSP.config = {
     }
 
     return mostrar;
+  }
+
+  function limpiarSelectorOperativosOcultoWsp() {
+    operativosCache = [];
+    franjaSeleccionada = null;
+    ordenSeleccionada = null;
+
+    if (selHorario) {
+      selHorario.value = "";
+      selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
+    }
+
+    actualizarContadorOperativosWsp(0);
+  }
+
+  function debeMostrarSelectorOperativosDesdeConfigWsp(config = {}) {
+    return !(config.enInformes && !config.tipoInformeActivo);
+  }
+
+  function aplicarVisibilidadSelectorOperativosDesdeConfigWsp(config = {}) {
+    const visible = debeMostrarSelectorOperativosDesdeConfigWsp(config);
+    if (!visible) limpiarSelectorOperativosOcultoWsp();
+    setSelectorOperativosVisibleWsp(visible);
+    return visible;
   }
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
