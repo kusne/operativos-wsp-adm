@@ -66,6 +66,68 @@
     ejecutar(config.resetPresenciaActiva);
   }
 
+
+  function modoEsInformeSeleccionPrincipal(modo) {
+    return modo === MODOS.DECTO460 ||
+      modo === MODOS.ALCOHOLEMIA ||
+      modo === MODOS.CONTROL_SUPERIOR;
+  }
+
+  function tipoPantallaInformeDesdeModo(modo) {
+    switch (modo) {
+      case MODOS.DECTO460:
+        return "DECTO460";
+      case MODOS.ALCOHOLEMIA:
+        return "ALCOHOLEMIA";
+      case MODOS.CONTROL_SUPERIOR:
+        return "CONTROL_SUPERIOR";
+      default:
+        return "";
+    }
+  }
+
+  function refrescarContextoInformeDesdeModo(modo, config = {}) {
+    switch (modo) {
+      case MODOS.DECTO460:
+        return config.refrescarContextoDecto460;
+      case MODOS.ALCOHOLEMIA:
+        return config.refrescarContextoAlcoholemia;
+      case MODOS.CONTROL_SUPERIOR:
+        return config.refrescarContextoControlSuperior;
+      default:
+        return null;
+    }
+  }
+
+  function opcionesInformeDesdeModo(modo, config = {}) {
+    if (modo === MODOS.ALCOHOLEMIA) {
+      return { postActivar: config.postActivarAlcoholemia };
+    }
+    return undefined;
+  }
+
+  function prepararInformeAntesDeActivar(modo, config = {}) {
+    if (modo === MODOS.CONTROL_SUPERIOR) {
+      // Compatibilidad con el flujo legacy: antes de entrar a Control Superior
+      // se apagaban explícitamente los formularios de Alcoholemia y Decto.
+      // La visibilidad modular también lo hace, pero se conserva el gesto para
+      // evitar residuos si falta algún módulo.
+      ejecutar(config.limpiarInformesAntesControlSuperior);
+    }
+  }
+
+  function ejecutarInformeSeleccionPrincipal(modo, config = {}) {
+    if (!modoEsInformeSeleccionPrincipal(modo)) return { ok: false, modo, motivo: "modo_no_informe" };
+
+    prepararInformeAntesDeActivar(modo, config);
+
+    const tipoPantalla = tipoPantallaInformeDesdeModo(modo);
+    const refrescarContexto = refrescarContextoInformeDesdeModo(modo, config);
+    const opciones = opcionesInformeDesdeModo(modo, config);
+
+    return ejecutar(config.activarInformePorTipo, tipoPantalla, refrescarContexto, opciones) || { ok: true, modo };
+  }
+
   function ejecutarModoSeleccionPrincipal(modo, config = {}) {
     prepararEjecucionModoSeleccionPrincipal(modo, config);
 
@@ -80,20 +142,9 @@
         return ejecutar(config.prepararMenuInformes) || { ok: true, modo };
 
       case MODOS.DECTO460:
-        return ejecutar(config.activarInformePorTipo, "DECTO460", config.refrescarContextoDecto460) || { ok: true, modo };
-
       case MODOS.ALCOHOLEMIA:
-        return ejecutar(config.activarInformePorTipo, "ALCOHOLEMIA", config.refrescarContextoAlcoholemia, {
-          postActivar: config.postActivarAlcoholemia,
-        }) || { ok: true, modo };
-
       case MODOS.CONTROL_SUPERIOR:
-        // Compatibilidad con el flujo legacy: antes de entrar a Control Superior
-        // se apagaban explícitamente los formularios de Alcoholemia y Decto.
-        // La visibilidad modular también lo hace, pero se conserva el gesto para
-        // evitar residuos si falta algún módulo.
-        ejecutar(config.limpiarInformesAntesControlSuperior);
-        return ejecutar(config.activarInformePorTipo, "CONTROL_SUPERIOR", config.refrescarContextoControlSuperior) || { ok: true, modo };
+        return ejecutarInformeSeleccionPrincipal(modo, config);
 
       case MODOS.INICIA:
       default:
@@ -114,6 +165,12 @@
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,
+    modoEsInformeSeleccionPrincipal,
+    tipoPantallaInformeDesdeModo,
+    refrescarContextoInformeDesdeModo,
+    opcionesInformeDesdeModo,
+    prepararInformeAntesDeActivar,
+    ejecutarInformeSeleccionPrincipal,
     resolverModoSeleccionPrincipal,
     prepararCambioSeleccionPrincipal,
     ejecutarModoSeleccionPrincipal,
