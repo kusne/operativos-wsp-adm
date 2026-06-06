@@ -2169,6 +2169,27 @@ window.WSP.config = {
     };
   }
 
+  function guardarUltimoResultadoSeleccionPrincipalWsp(ui, resultado) {
+    if (ui && typeof ui.guardarUltimoResultadoSeleccionPrincipal === "function") {
+      try {
+        return ui.guardarUltimoResultadoSeleccionPrincipal(resultado, window.WSP);
+      } catch (error) {
+        console.warn("[WSP] No se pudo guardar último resultado modular de selección principal.", error);
+      }
+    }
+
+    if (resultado && typeof resultado === "object") {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.seleccionPrincipalUltimoResultado = {
+        ...resultado,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return resultado;
+  }
+
   function actualizarTipoPrincipalModularWsp(ui, config) {
     const ejecutarModular = obtenerEjecutorSeleccionPrincipalWsp(ui);
     if (!ejecutarModular) return null;
@@ -2238,10 +2259,11 @@ window.WSP.config = {
     const resultadoModular = actualizarTipoPrincipalModularWsp(ui, config);
 
     if (!debeUsarFallbackSeleccionPrincipalWsp(ui, resultadoModular)) {
-      return resultadoModular;
+      return guardarUltimoResultadoSeleccionPrincipalWsp(ui, resultadoModular);
     }
 
-    return ejecutarFallbackSeleccionPrincipalWsp(config, resultadoModular);
+    const resultadoFallback = ejecutarFallbackSeleccionPrincipalWsp(config, resultadoModular);
+    return guardarUltimoResultadoSeleccionPrincipalWsp(ui, resultadoFallback);
   }
 
 

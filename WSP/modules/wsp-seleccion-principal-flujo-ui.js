@@ -106,6 +106,26 @@
     };
   }
 
+  function crearRegistroResultadoSeleccionPrincipal(resultado, extra = {}) {
+    if (!resultadoSeleccionPrincipalEsValido(resultado)) return null;
+    return {
+      ...resultado,
+      ...extra,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  function guardarUltimoResultadoSeleccionPrincipal(resultado, destino = window.WSP) {
+    if (!resultadoSeleccionPrincipalEsValido(resultado)) return resultado;
+
+    if (destino && typeof destino === "object") {
+      destino.debug = destino.debug || {};
+      destino.debug.seleccionPrincipalUltimoResultado = crearRegistroResultadoSeleccionPrincipal(resultado);
+    }
+
+    return resultado;
+  }
+
   function crearEstadoSeleccionPrincipal(config = {}) {
     return {
       enInformes: !!config.enInformes,
@@ -267,10 +287,11 @@
     const resumen = crearResumenSeleccionPrincipal(config);
     prepararCambioSeleccionPrincipal(resumen.configNormalizada);
     const resultado = ejecutarModoSeleccionPrincipal(resumen.modo, resumen.configNormalizada);
-    return marcarOrigenResultadoSeleccionPrincipal(
+    const resultadoFinal = marcarOrigenResultadoSeleccionPrincipal(
       normalizarResultadoSeleccionPrincipal(resultado, resumen.modo),
       "modular"
     );
+    return guardarUltimoResultadoSeleccionPrincipal(resultadoFinal);
   }
 
   function ejecutarSeleccionPrincipalSeguro(config = {}) {
@@ -280,16 +301,18 @@
       modo = resumen.modo;
       prepararCambioSeleccionPrincipal(resumen.configNormalizada);
       const resultado = ejecutarModoSeleccionPrincipal(modo, resumen.configNormalizada);
-      return marcarOrigenResultadoSeleccionPrincipal(
+      const resultadoFinal = marcarOrigenResultadoSeleccionPrincipal(
         normalizarResultadoSeleccionPrincipal(resultado, modo),
         "modular"
       );
+      return guardarUltimoResultadoSeleccionPrincipal(resultadoFinal);
     } catch (error) {
       console.error("[WSP] Error en selección principal modular.", error);
-      return marcarOrigenResultadoSeleccionPrincipal(
+      const resultadoError = marcarOrigenResultadoSeleccionPrincipal(
         crearResultadoErrorSeleccionPrincipal(modo, error),
         "modular"
       );
+      return guardarUltimoResultadoSeleccionPrincipal(resultadoError);
     }
   }
 
@@ -312,6 +335,8 @@
     resultadoSeleccionPrincipalTieneModoValido,
     normalizarResultadoSeleccionPrincipal,
     marcarOrigenResultadoSeleccionPrincipal,
+    crearRegistroResultadoSeleccionPrincipal,
+    guardarUltimoResultadoSeleccionPrincipal,
     crearEstadoSeleccionPrincipal,
     modoDebeCerrarControlMoviles,
     prepararEjecucionModoSeleccionPrincipal,
