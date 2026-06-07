@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso87g-informes-contador-envio-alcoholemia-robusto-20260607";
+  const WSP_BOOTSTRAP_VERSION = "paso87h-alcoholemia-envio-robusto-20260607";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

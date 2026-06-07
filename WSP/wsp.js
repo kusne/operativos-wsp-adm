@@ -159,37 +159,109 @@ window.WSP.config = {
     return svc.programarCierreVentanaWsp();
   }
 
+  function archivosCompartiblesLocalWsp(files) {
+    return (Array.isArray(files) ? files : Array.from(files || []))
+      .filter((file) => file && typeof file === "object" && /^image\//i.test(String(file.type || "")))
+      .slice(0, 4);
+  }
+
   function archivosCompartiblesWsp(files) {
     const svc = window.WSP?.services?.whatsapp;
-    if (!svc || typeof svc.archivosCompartiblesWsp !== "function") return [];
-    return svc.archivosCompartiblesWsp(files);
+    if (svc && typeof svc.archivosCompartiblesWsp === "function") {
+      try {
+        const out = svc.archivosCompartiblesWsp(files);
+        if (Array.isArray(out)) return out;
+      } catch (e) {
+        console.warn("[WSP] WhatsApp archivosCompartibles modular falló. Uso fallback local.", e);
+      }
+    }
+    return archivosCompartiblesLocalWsp(files);
+  }
+
+  function abrirWhatsappTextoFallbackDirectoWsp(texto) {
+    const mensaje = String(texto || "").trim();
+    if (!mensaje) {
+      alert("No se generó texto para enviar por WhatsApp.");
+      return false;
+    }
+
+    const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+
+    try {
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (win) {
+        try { programarCierreVentanaWsp(); } catch {}
+        return true;
+      }
+    } catch (e) {
+      console.warn("[WSP] window.open WhatsApp falló. Intento navegación directa.", e);
+    }
+
+    try {
+      window.location.href = url;
+      return true;
+    } catch (e) {
+      console.error("[WSP] No se pudo abrir WhatsApp por fallback directo.", e);
+      alert("No se pudo abrir WhatsApp. Copie el texto manualmente e intente de nuevo.");
+      return false;
+    }
+  }
+
+  async function compartirWhatsappConFotosFallbackWsp(texto, files = []) {
+    const compartibles = archivosCompartiblesWsp(files);
+    if (compartibles.length && navigator?.share) {
+      try {
+        const data = { text: String(texto || ""), files: compartibles };
+        if (!navigator.canShare || navigator.canShare(data)) {
+          await navigator.share(data);
+          try { programarCierreVentanaWsp(); } catch {}
+          return true;
+        }
+      } catch (e) {
+        if (String(e?.name || "") === "AbortError") return false;
+        console.warn("[WSP] No se pudo compartir con fotos. Se abre WhatsApp solo con texto.", e);
+      }
+    }
+    return abrirWhatsappTextoFallbackDirectoWsp(texto);
   }
 
   function abrirWhatsappTextoWsp(texto) {
     const svc = window.WSP?.services?.whatsapp;
-    if (!svc || typeof svc.abrirWhatsappTextoWsp !== "function") {
-      alert("No se pudo cargar el módulo de WhatsApp.");
-      return false;
+    if (svc && typeof svc.abrirWhatsappTextoWsp === "function") {
+      try {
+        const ok = svc.abrirWhatsappTextoWsp(texto);
+        if (ok) return ok;
+      } catch (e) {
+        console.warn("[WSP] WhatsApp texto modular falló. Uso fallback directo.", e);
+      }
     }
-    return svc.abrirWhatsappTextoWsp(texto);
+    return abrirWhatsappTextoFallbackDirectoWsp(texto);
   }
 
   async function compartirWhatsappConFotosSiCorresponde(texto, files = []) {
     const svc = window.WSP?.services?.whatsapp;
-    if (!svc || typeof svc.compartirWhatsappConFotosSiCorresponde !== "function") {
-      alert("No se pudo cargar el módulo de WhatsApp.");
-      return false;
+    if (svc && typeof svc.compartirWhatsappConFotosSiCorresponde === "function") {
+      try {
+        const ok = await svc.compartirWhatsappConFotosSiCorresponde(texto, files);
+        if (ok) return ok;
+      } catch (e) {
+        console.warn("[WSP] WhatsApp compartir modular falló. Uso fallback robusto.", e);
+      }
     }
-    return svc.compartirWhatsappConFotosSiCorresponde(texto, files);
+    return compartirWhatsappConFotosFallbackWsp(texto, files);
   }
 
-  function abrirWhatsappYCerrarWspLuego(texto, files = []) {
+  async function abrirWhatsappYCerrarWspLuego(texto, files = []) {
     const svc = window.WSP?.services?.whatsapp;
-    if (!svc || typeof svc.abrirWhatsappYCerrarWspLuego !== "function") {
-      alert("No se pudo cargar el módulo de WhatsApp.");
-      return false;
+    if (svc && typeof svc.abrirWhatsappYCerrarWspLuego === "function") {
+      try {
+        const ok = await svc.abrirWhatsappYCerrarWspLuego(texto, files);
+        if (ok) return ok;
+      } catch (e) {
+        console.warn("[WSP] WhatsApp cierre modular falló. Uso fallback robusto.", e);
+      }
     }
-    return svc.abrirWhatsappYCerrarWspLuego(texto, files);
+    return compartirWhatsappConFotosFallbackWsp(texto, files);
   }
 
   const detallesAutocompletadoState = new WeakMap();
@@ -7292,10 +7364,10 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function grupoVehiculoAlcoholemia(value) {
-    const mod = moduloInformeAlcoholemiaWsp();
-    if (mod && typeof mod.grupoVehiculo === "function") return mod.grupoVehiculo(value);
+    // Paso 87H: regla canónica local. No se delega al módulo para evitar
+    // diferencias de cache/versiones viejas en celular.
     const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
-    if (/\bmoto\b|motocicleta|motovehiculo|motovehiculo|ciclomotor/.test(v)) return "moto";
+    if (/\bmoto\b|motocicleta|motovehiculo|ciclomotor/.test(v)) return "moto";
     if (/\bcamion\b|transporte de pasajeros|omnibus|colectivo|chasis con cabina|chasis con chabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
     return "general";
   }
@@ -7308,8 +7380,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function calcularAlcoholemiaInforme(tipoVehiculo, graduacion) {
-    const mod = moduloInformeAlcoholemiaWsp();
-    if (mod && typeof mod.calcular === "function") return mod.calcular(tipoVehiculo, graduacion);
+    // Paso 87H: cálculo canónico local, independiente del módulo cacheado.
     const n = graduacionNumeroInforme(graduacion);
     if (n == null || n <= 0) return null;
     const grupo = grupoVehiculoAlcoholemia(tipoVehiculo);
@@ -7338,14 +7409,59 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (destino) infAlcoCorralon.value = destino;
   }
 
+  function ocultarObservacionExtraAlcoholemiaWsp() {
+    if (!infAlcoObservacionExtra) return;
+    infAlcoObservacionExtra.value = "";
+    infAlcoObservacionExtra.hidden = true;
+    infAlcoObservacionExtra.classList.add("hidden");
+    infAlcoObservacionExtra.style.display = "none";
+    const label = document.querySelector('label[for="infAlcoObservacionExtra"]');
+    if (label) {
+      label.hidden = true;
+      label.classList.add("hidden");
+      label.style.display = "none";
+    }
+  }
+
+  function escribirResultadoAutoAlcoholemiaWsp(calc, grad, tipoVehiculo) {
+    if (!infAlcoResultadoAuto) return;
+    let texto = "";
+    if (calc) {
+      const clase = calc.sancionable ? "ALCOHOLEMIA POSITIVA SANCIONABLE" : "ALCOHOLEMIA POSITIVA NO SANCIONABLE";
+      texto = `${clase} - CÓDIGO ${calc.codigo} - ${normalizarMayusInforme(tipoVehiculo)} - ${grad} G/L`;
+    }
+    if ("value" in infAlcoResultadoAuto) infAlcoResultadoAuto.value = texto;
+    infAlcoResultadoAuto.textContent = texto;
+  }
+
   function actualizarReglasInformeAlcoholemia() {
     const mod = moduloInformeAlcoholemiaWsp();
     if (mod && typeof mod.actualizarReglas === "function") {
-      return mod.actualizarReglas(refsInformeAlcoholemiaWsp(), {
-        completarDestinoRemisionSiVacio,
-        labelTipoVehiculoInforme,
-      });
+      try {
+        mod.actualizarReglas(refsInformeAlcoholemiaWsp(), {
+          completarDestinoRemisionSiVacio,
+          labelTipoVehiculoInforme,
+        });
+      } catch (e) {
+        console.warn("[WSP] Reglas modulares de alcoholemia fallaron. Se aplican reglas 87H locales.", e);
+      }
     }
+
+    ocultarObservacionExtraAlcoholemiaWsp();
+
+    const tipoVehiculo = labelTipoVehiculoInforme();
+    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
+    const calc = calcularAlcoholemiaInforme(tipoVehiculo, grad);
+    escribirResultadoAutoAlcoholemiaWsp(calc, grad, tipoVehiculo);
+
+    const lic = infoLicenciaInformeAlcoholemia();
+    if (infAlcoMedRetencion && lic.retencionAutomatica) infAlcoMedRetencion.checked = true;
+    if ((infAlco460?.checked || infAlcoMedRemision?.checked) && infAlcoMedRemision) {
+      infAlcoMedRemision.checked = true;
+      completarDestinoRemisionSiVacio();
+    }
+
+    return calc;
   }
 
   function aplicarMayusculasInputsInformeAlcoholemia() {
@@ -7556,18 +7672,62 @@ ${bold(`Moviles ${organismo}:`)}`)
     return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
   }
 
+  function validarInformeAlcoholemiaLocal87H() {
+    const tipoVehiculo = labelTipoVehiculoInforme();
+    if (!normalizarMayusInforme(tipoVehiculo) || normalizarMayusInforme(tipoVehiculo) === "OTROS") {
+      if (infAlcoTipoVehiculo?.value === "otros" && !normalizarMayusInforme(infAlcoTipoOtro?.value)) {
+        return marcarErrorCampo(infAlcoTipoOtro, "Complete el tipo de vehículo.");
+      }
+    }
+
+    const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
+    const calc = calcularAlcoholemiaInforme(tipoVehiculo, grad);
+    if (!calc) return marcarErrorCampo(infAlcoGraduacion, "Complete una graduación válida mayor a 0.");
+
+    if (!normalizarMayusInforme(infAlcoMarca?.value)) return marcarErrorCampo(infAlcoMarca, "Complete la marca del vehículo.");
+    if (!normalizarDominioInforme(infAlcoDominio?.value)) return marcarErrorCampo(infAlcoDominio, "Complete el dominio del vehículo.");
+    if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Complete el N° de acta.");
+
+    const otros = parseCodigosInputInforme(infAlcoOtrosCodigos?.value || "");
+    const invalidos = codigosInvalidosNomenclador(otros);
+    if (invalidos.length) return marcarErrorCampo(infAlcoOtrosCodigos, `Código/s no encontrados en nomenclador: ${invalidos.join(", ")}`);
+
+    if ((infAlco460?.checked || infAlcoMedRemision?.checked) && !normalizarMayusInforme(infAlcoCorralon?.value)) {
+      completarDestinoRemisionSiVacio();
+      if (!normalizarMayusInforme(infAlcoCorralon?.value)) {
+        return marcarErrorCampo(infAlcoCorralon, "Complete destino/corralón de remisión.");
+      }
+    }
+
+    limpiarErrorCampo(infAlcoTipoOtro);
+    limpiarErrorCampo(infAlcoGraduacion);
+    limpiarErrorCampo(infAlcoMarca);
+    limpiarErrorCampo(infAlcoDominio);
+    limpiarErrorCampo(infAlcoActa);
+    limpiarErrorCampo(infAlcoOtrosCodigos);
+    limpiarErrorCampo(infAlcoCorralon);
+    return true;
+  }
+
   function validarInformeAlcoholemia() {
+    ocultarObservacionExtraAlcoholemiaWsp();
     const mod = moduloInformeAlcoholemiaWsp();
     if (mod && typeof mod.validar === "function") {
-      return mod.validar(refsInformeAlcoholemiaWsp(), {
-        franjaSeleccionada,
-        selHorario,
-        marcarErrorCampo,
-        labelTipoVehiculoInforme,
-        codigosInvalidosNomenclador,
-      });
+      try {
+        const ok = mod.validar(refsInformeAlcoholemiaWsp(), {
+          franjaSeleccionada,
+          selHorario,
+          marcarErrorCampo,
+          labelTipoVehiculoInforme,
+          codigosInvalidosNomenclador,
+        });
+        if (ok) return true;
+        console.warn("[WSP] Validación modular de alcoholemia rechazó el envío. Se verifica con validación local 87H.");
+      } catch (e) {
+        console.warn("[WSP] Validación modular de alcoholemia falló. Se usa validación local 87H.", e);
+      }
     }
-    return false;
+    return validarInformeAlcoholemiaLocal87H();
   }
 
   function construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora }) {
@@ -7791,10 +7951,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   async function enviarInformeAlcoholemia() {
     aplicarMayusculasInputsInformeAlcoholemia();
-    if (!franjaSeleccionada) await seleccionarOperativoAlcoholemiaPorDefecto();
-    actualizarReglasInformeAlcoholemia();
-    if (!validarInformeAlcoholemia()) return;
+    ocultarObservacionExtraAlcoholemiaWsp();
 
+    // Paso 87H: primero resolver operativo/INICIO. La validación modular vieja podía
+    // cortar el envío antes de sincronizar franjaSeleccionada.
     const inicio = await resolverInicioParaEnvioInformeWsp({
       seleccionarDefault: seleccionarOperativoAlcoholemiaPorDefecto,
       refrescarContexto: refrescarContextoInformeAlcoholemia,
@@ -7803,19 +7963,32 @@ ${bold(`Moviles ${organismo}:`)}`)
     });
     if (!inicio) return;
 
+    actualizarReglasInformeAlcoholemia();
+    if (!validarInformeAlcoholemia()) return;
+
     const now = new Date();
     const fecha = fmtFechaInforme(now);
     const hora = fmtHoraInforme(now);
     const tipoVehiculo = labelTipoVehiculoInforme();
     const grad = normalizarGraduacionInforme(infAlcoGraduacion?.value);
     const calc = calcularAlcoholemiaInforme(tipoVehiculo, grad);
+    if (!calc) return marcarErrorCampo(infAlcoGraduacion, "Complete una graduación válida mayor a 0.");
+
     const codigos = codigosInformeAlcoholemia(calc.codigo);
     const medidas = medidasSeleccionadasInformeAlcoholemia();
     const textoFinal = construirTextoInformeAlcoholemia({ inicio, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const payload = construirPayloadInformeAlcoholemia({ inicio, textoFinal, calc, grad, tipoVehiculo, codigos, medidas, fecha, hora });
     const fotos = fotosSeleccionadasInformeAlcoholemia();
 
-    const resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
+    let resultadoHistorial = null;
+    try {
+      resultadoHistorial = await guardarInformeEventoWsp("ALCOHOLEMIA_POSITIVA", payload, normalizarNumeroActaInforme(infAlcoActa?.value));
+    } catch (e) {
+      console.warn("[WSP] No se pudo guardar el informe de alcoholemia. WhatsApp continúa igual.", e);
+      resultadoHistorial = { supabase_ok: false, motivo_error: String(e?.message || e || "error") };
+      alert("El informe de alcoholemia se enviará por WhatsApp, pero no pudo archivarse en Supabase.");
+    }
+
     if (fotos.length && resultadoHistorial?.supabase_ok && resultadoHistorial?.evento?.id) {
       try {
         await eliminarFotosPreviasInformeWsp(resultadoHistorial);
@@ -9121,7 +9294,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     el.addEventListener("change", actualizarReglasInformeAlcoholemia);
   });
 
-  [infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoLicenciaClase, infAlcoTipoOtro, infAlcoDependenciaRemite, infAlcoCorralon, infAlcoObservacionExtra].forEach((el) => {
+  [infAlcoMarca, infAlcoModelo, infAlcoDominio, infAlcoConductor, infAlcoLicenciaClase, infAlcoTipoOtro, infAlcoDependenciaRemite, infAlcoCorralon].forEach((el) => {
     if (!el) return;
     el.addEventListener("input", () => {
       const pos = el.selectionStart;
