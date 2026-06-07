@@ -10,6 +10,9 @@ window.WSP.config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
 };
+window.WSP.debug = window.WSP.debug || {};
+window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin-tipo-20260607";
+
 
 (function () {
   // ===== DOM refs =====
@@ -1506,7 +1509,7 @@ window.WSP.config = {
     }
 
     const guardiaFecha = getGuardiaFechaISO();
-    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
+    const selectCols = "*";
 
     try {
       const params = new URLSearchParams({

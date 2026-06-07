@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso87d-selector-finaliza-sin-columna-tipo-20260607";
+  const WSP_BOOTSTRAP_VERSION = "paso87e-selector-finaliza-cache-y-legacy-sin-tipo-20260607";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
