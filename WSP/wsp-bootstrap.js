@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "fix-finalizado-tipo-desde-inicio-wsp-20260606";
+  const WSP_BOOTSTRAP_VERSION = "paso87-selector-finaliza-canonico-20260607";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -52,6 +52,7 @@
     "./modules/wsp-historial-service.js",
     "./modules/wsp-operativos-repo.js",
     "./modules/wsp-historial-operativo.js",
+    "./modules/wsp-selector-iniciados-canonico.js",
     "./modules/wsp-historial-informes.js",
     "./modules/wsp-fotos-informes.js",
 
