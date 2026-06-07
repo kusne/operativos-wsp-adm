@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso87-selector-finaliza-canonico-20260607";
+  const WSP_BOOTSTRAP_VERSION = "paso87b-selector-finaliza-en-curso-flexible-20260607";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

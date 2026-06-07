@@ -1,4 +1,3 @@
-
 (function () {
   "use strict";
 
@@ -6,7 +5,7 @@
   window.WSP.services = window.WSP.services || {};
   window.WSP.modules = window.WSP.modules || {};
 
-  const VERSION = "paso87-selector-finaliza-canonico-20260607";
+  const VERSION = "paso87b-selector-finaliza-en-curso-flexible-20260607";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 
@@ -274,13 +273,37 @@
     return {};
   }
 
+  function tieneSnapshotInicioEstado(row) {
+    const meta = parseJsonObject(row?.metadata);
+    return !!(
+      row?.inicio_evento_id ||
+      meta?.inicio_texto_generado ||
+      meta?.ultimo_texto_generado ||
+      meta?.payload_inicio ||
+      meta?.inicio_payload ||
+      meta?.horario_inicio ||
+      meta?.inicio_horario ||
+      meta?.lugar_inicio ||
+      meta?.tipo_operativo_inicio ||
+      (Array.isArray(meta?.personal_inicio) && meta.personal_inicio.length) ||
+      (Array.isArray(meta?.moviles_inicio) && meta.moviles_inicio.length) ||
+      (Array.isArray(meta?.motos_inicio) && meta.motos_inicio.length) ||
+      (row?.hora_desde && row?.hora_hasta && row?.lugar)
+    );
+  }
+
   function estadoEsEnCursoCanonico(row) {
     const estadoTxt = normalizarEstado(row?.estado || "");
     if (!row || estadoEliminado(row)) return false;
-    if (!row?.inicio_evento_id) return false;
     if (row?.finalizado_evento_id) return false;
     if (["FINALIZADO", "CERRADO", "BORRADO"].includes(estadoTxt)) return false;
-    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return true;
+
+    // Paso 87B: no exigir inicio_evento_id físico. Algunas restauraciones desde
+    // Estadísticas dejan el estado EN_CURSO con snapshot de INICIO en metadata o
+    // con hora/lugar, pero sin evento INICIO legible. Si exigimos inicio_evento_id,
+    // FINALIZA queda en cero aunque el operativo esté iniciado.
+    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return tieneSnapshotInicioEstado(row);
+    if (!estadoTxt && row?.inicio_evento_id) return true;
     return false;
   }
 
@@ -403,8 +426,11 @@
       const eventosInicio = await leerEventosPorIds(estados.map((row) => row.inicio_evento_id));
       const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase(deps);
 
+      // Paso 87B: el estado EN_CURSO es la fuente de verdad para el selector.
+      // No excluir por eventos FINALIZADO sueltos: después de eliminar un
+      // FINALIZADO desde Estadísticas puede quedar un evento finalizado histórico
+      // o mal marcado, pero el estado vigente ya volvió a EN_CURSO.
       const items = estados
-        .filter((row) => !finalizados.has(limpiarTextoSimple(row?.operativo_key || "")))
         .map((row) => normalizarItemCanonico(row, eventosInicio.get(String(row.inicio_evento_id)) || null, deps))
         .filter(Boolean);
 
@@ -415,7 +441,8 @@
         guardiaFecha,
         estadosLeidos: Array.isArray(rows) ? rows.length : 0,
         estadosEnCursoCanonicos: estados.length,
-        finalizadosActivos: finalizados.size,
+        finalizadosActivosIgnoradosParaSelector: finalizados.size,
+        regla: "estado_en_curso_manda_no_excluir_por_finalizados_sueltos",
         items: unicos.map((item) => ({
           operativo_key: item.operativo_key,
           horario: item.horario,
