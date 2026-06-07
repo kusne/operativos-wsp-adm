@@ -6,7 +6,7 @@
   window.WSP.modules = window.WSP.modules || {};
   window.WSP.debug = window.WSP.debug || {};
 
-  const VERSION = "paso87c-selector-finaliza-en-curso-robusto-20260607";
+  const VERSION = "paso87d-selector-finaliza-sin-columna-tipo-20260607";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 
@@ -196,7 +196,7 @@
     return limpiarTextoSimple(
       inicioEv?.tipo_operativo || payloadEvento?.tipo_corto || payloadEvento?.tipo_operativo || payloadEvento?.franja?.__tipoPublicado ||
       meta?.tipo_operativo_inicio || meta?.tipo_operativo || payloadInicio?.tipo_corto || payloadInicio?.tipo_operativo ||
-      row?.tipo_operativo || row?.tipo || "Operativo iniciado"
+      row?.tipo_operativo || "Operativo iniciado"
     );
   }
 
@@ -332,7 +332,7 @@
   }
 
   async function leerEstadosEnCurso(guardiaFecha) {
-    const select = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at";
+    const select = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at";
     let rows = [];
     try {
       rows = await leerTabla(TABLA_ESTADOS, {
