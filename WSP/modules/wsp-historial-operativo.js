@@ -246,7 +246,7 @@
 
   async function leerOperativosEnCursoDesdeEstadoSupabase(deps = {}) {
     const d = getDeps(deps);
-    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
 
     try {
       const data = await leerTabla("operativos_estado", {
@@ -256,10 +256,12 @@
         limit: "300",
       }, d);
 
-      const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase(d);
+      // Fuente de verdad para el selector FINALIZA/INFORMES: operativos_estado EN_CURSO.
+      // No excluir por FINALIZADO histórico suelto: al borrar un finalizado desde Estadísticas
+      // el estado vuelve a EN_CURSO y puede conservar eventos finalizados antiguos para auditoría.
       return d.deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
         .map((row) => normalizarEstadoOperativoEnCurso(row, d))
-        .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
+        .filter((item) => item && item.operativo_key));
     } catch (e) {
       console.warn("[WSP historial operativo] Error leyendo operativos EN CURSO desde operativos_estado.", e);
       return null;

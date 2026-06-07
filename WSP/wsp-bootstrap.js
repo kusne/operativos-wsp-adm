@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso87e-selector-finaliza-cache-y-legacy-sin-tipo-20260607";
+  const WSP_BOOTSTRAP_VERSION = "paso87g-informes-contador-envio-alcoholemia-robusto-20260607";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -53,6 +53,7 @@
     "./modules/wsp-operativos-repo.js",
     "./modules/wsp-historial-operativo.js",
     "./modules/wsp-selector-iniciados-canonico.js",
+    "./modules/wsp-informes-operativos-activos.js",
     "./modules/wsp-historial-informes.js",
     "./modules/wsp-fotos-informes.js",
 

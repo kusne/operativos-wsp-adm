@@ -166,8 +166,8 @@
 
   function grupoVehiculo(value) {
     const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
-    if (/\bmoto\b|motovehiculo|motovehiculo/.test(v)) return "moto";
-    if (/\bcamion\b|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
+    if (/\bmoto\b|motocicleta|motovehiculo|motovehiculo|ciclomotor/.test(v)) return "moto";
+    if (/\bcamion\b|transporte de pasajeros|omnibus|colectivo|chasis con cabina|chasis con chabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
     return "general";
   }
 

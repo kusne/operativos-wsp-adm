@@ -10,9 +10,6 @@ window.WSP.config = {
   supabaseUrl: SUPABASE_URL,
   supabaseAnonKey: SUPABASE_ANON_KEY,
 };
-window.WSP.debug = window.WSP.debug || {};
-window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin-tipo-20260607";
-
 
 (function () {
   // ===== DOM refs =====
@@ -773,10 +770,12 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
   async function syncAntesDeSeleccion() {
     if (syncingOrdenes) return;
 
-    // En el menú principal de INFORMES todavía no corresponde elegir operativo.
-    // Primero se selecciona el tipo de informe y recién ahí se cargan/ven
-    // los operativos iniciados.
-    if (estaEnMenuInformes() && !getTipoInformeActivo()) return;
+    // En el menú principal de INFORMES no se muestra selector operativo todavía,
+    // pero el círculo debe reflejar los EN_CURSO reales.
+    if (estaEnMenuInformes() && !getTipoInformeActivo()) {
+      await refrescarContadorInformesMenuWsp({ origen: "sync_antes_menu_informes" });
+      return;
+    }
 
     // INFORMES usa como fuente los operativos realmente iniciados/en curso.
     // No recargar el selector cada vez que recibe foco: en celulares/Chrome eso
@@ -826,6 +825,66 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
       selHorario.innerHTML = '<option value="">Seleccionar Operativo</option>';
     }
     actualizarContadorOperativosWsp(0);
+  }
+
+
+  let refrescoContadorInformesMenuSeq = 0;
+
+  async function refrescarContadorInformesMenuWsp(opts = {}) {
+    const seq = ++refrescoContadorInformesMenuSeq;
+    const origen = limpiarTextoSimple(opts?.origen || "informes_menu");
+    const debugBase = {
+      version: "paso87g-informes-contador-envio-alcoholemia-robusto-20260607",
+      origen,
+      timestamp: new Date().toISOString(),
+      modo: selTipo?.value || "",
+      tipoInforme: getTipoInformeActivo(),
+    };
+
+    try {
+      const svc = window.WSP?.modules?.informesOperativosActivos || window.WSP?.services?.informesOperativosActivos || null;
+      let inicios = null;
+
+      if (svc && typeof svc.leerIniciados === "function") {
+        inicios = await svc.leerIniciados({
+          leerIniciosGuardiaDesdeSupabase,
+          deps: depsHistorialOperativoRepoWsp(),
+        });
+      } else {
+        inicios = await leerIniciosGuardiaDesdeSupabase();
+      }
+
+      if (seq !== refrescoContadorInformesMenuSeq) return inicios || [];
+
+      const lista = Array.isArray(inicios) ? inicios : [];
+      actualizarContadorOperativosWsp(lista.length);
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.informesMenuOperativosIniciados = {
+        ...debugBase,
+        cantidad: lista.length,
+        items: lista.map((item) => ({
+          operativo_key: limpiarTextoSimple(item?.operativo_key || item?.__operativoKey || ""),
+          horario: limpiarTextoSimple(item?.horario || ""),
+          lugar: limpiarTextoSimple(item?.lugar || ""),
+          tipo: limpiarTextoSimple(item?.tipo_corto || item?.titulo || ""),
+        })),
+      };
+      return lista;
+    } catch (e) {
+      if (seq === refrescoContadorInformesMenuSeq) {
+        actualizarContadorOperativosWsp(0);
+        window.WSP = window.WSP || {};
+        window.WSP.debug = window.WSP.debug || {};
+        window.WSP.debug.informesMenuOperativosIniciados = {
+          ...debugBase,
+          cantidad: 0,
+          error: e?.message || String(e),
+        };
+      }
+      console.warn("[WSP] No se pudo refrescar contador de iniciados en menú INFORMES.", e);
+      return [];
+    }
   }
 
   // ===== Guardia =====
@@ -1509,7 +1568,7 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
     }
 
     const guardiaFecha = getGuardiaFechaISO();
-    const selectCols = "*";
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at";
 
     try {
       const params = new URLSearchParams({
@@ -1528,11 +1587,12 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
         return null;
       }
 
-      const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase();
       const data = await r.json();
+      // Fuente de verdad: estado EN_CURSO. No excluir por FINALIZADO histórico,
+      // porque Estadísticas puede conservar eventos viejos eliminados para auditoría.
       return deduplicarIniciosInformeWsp((Array.isArray(data) ? data : [])
         .map(normalizarEstadoOperativoEnCurso)
-        .filter((item) => item && item.operativo_key && !finalizados.has(limpiarTextoSimple(item.operativo_key))));
+        .filter((item) => item && item.operativo_key));
     } catch (e) {
       console.warn("[WSP] Error leyendo operativos EN CURSO desde operativos_estado.", e);
       return null;
@@ -1972,7 +2032,9 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
     };
 
     if (ui && typeof ui.prepararMenuInformes === "function") {
-      return ui.prepararMenuInformes(config);
+      const res = ui.prepararMenuInformes(config);
+      refrescarContadorInformesMenuWsp({ origen: "preparar_menu_informes_modular" });
+      return res;
     }
 
     aplicarPantallaExclusivaWsp("INFORMES_MENU");
@@ -1986,6 +2048,7 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
     prepararSelectorInformesMenuWsp();
     if (divFinaliza) divFinaliza.classList.add("hidden");
     if (divDetalles) divDetalles.classList.add("hidden");
+    refrescarContadorInformesMenuWsp({ origen: "preparar_menu_informes_legacy" });
     return { ok: true, modo: "INFORMES_MENU" };
   }
 
@@ -3715,7 +3778,7 @@ window.WSP.debug.paso87eAplicado = "paso87e-selector-finaliza-cache-y-legacy-sin
       selHorario.innerHTML = '<option value="">Seleccione un informe para ver operativos iniciados</option>';
       selHorario.value = "";
     }
-    actualizarContadorOperativosWsp(0);
+    refrescarContadorInformesMenuWsp({ origen: "preparar_selector_informes_menu" });
   }
 
 
@@ -7232,8 +7295,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const mod = moduloInformeAlcoholemiaWsp();
     if (mod && typeof mod.grupoVehiculo === "function") return mod.grupoVehiculo(value);
     const v = normalizarBasicoSinAcentos(value || "").replace(/[\-_]+/g, " ").trim();
-    if (/\bmoto\b|motovehiculo|motovehiculo/.test(v)) return "moto";
-    if (/\bcamion\b|transporte de pasajeros|chasis con cabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
+    if (/\bmoto\b|motocicleta|motovehiculo|motovehiculo|ciclomotor/.test(v)) return "moto";
+    if (/\bcamion\b|transporte de pasajeros|omnibus|colectivo|chasis con cabina|chasis con chabina|chasis sin cabina|tractor de carretera|carreton/.test(v)) return "profesional";
     return "general";
   }
 
@@ -7766,7 +7829,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
+    await abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
   }
 
 
@@ -8627,8 +8690,10 @@ ${bold(`Moviles ${organismo}:`)}`)
       return;
     }
 
-    if (!franjaSeleccionada) return;
-
+    // Informes resuelven/preseleccionan su operativo internamente.
+    // No cortar antes por franjaSeleccionada null, porque eso bloqueaba
+    // ALCOHOLEMIA / DECTO 460 / CONTROL SUPERIOR cuando había EN_CURSO pero
+    // aún no se había sincronizado la variable legacy.
     if (esInformeAlcoholemiaActivo()) {
       await enviarInformeAlcoholemia();
       return;
@@ -8670,7 +8735,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       }
 
       resetUI();
-      abrirWhatsappYCerrarWspLuego(resultadoControlSuperior.texto);
+      await abrirWhatsappYCerrarWspLuego(resultadoControlSuperior.texto);
       return;
     }
 

@@ -6,7 +6,7 @@
   window.WSP.modules = window.WSP.modules || {};
   window.WSP.debug = window.WSP.debug || {};
 
-  const VERSION = "paso87e-selector-finaliza-cache-y-legacy-sin-tipo-20260607";
+  const VERSION = "paso87g-informes-contador-envio-alcoholemia-robusto-20260607";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 
@@ -250,7 +250,7 @@
     if (!limpios.length) return new Map();
     try {
       const data = await leerTabla(TABLA_EVENTOS, {
-        select: "*",
+        select: "id,operativo_estado_id,operativo_key,tipo_evento,fecha,horario,hora_desde,hora_hasta,lugar,tipo_operativo,personal,moviles,motos,elementos,payload_completo,metadata,texto_generado,created_at,updated_at,deleted_at",
         id: `in.(${limpios.join(",")})`,
         limit: String(Math.max(50, limpios.length + 5)),
       });
@@ -270,7 +270,7 @@
     const out = new Set();
     try {
       const data = await leerTabla(TABLA_EVENTOS, {
-        select: "*",
+        select: "id,operativo_key,guardia_fecha,tipo_evento,payload_completo,metadata,deleted_at",
         guardia_fecha: `eq.${guardiaFecha}`,
         tipo_evento: "eq.FINALIZADO",
         limit: "1000",
@@ -332,7 +332,7 @@
   }
 
   async function leerEstadosEnCurso(guardiaFecha) {
-    const select = "*";
+    const select = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at";
     let rows = [];
     try {
       rows = await leerTabla(TABLA_ESTADOS, {

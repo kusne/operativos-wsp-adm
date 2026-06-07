@@ -98,7 +98,7 @@
 
   function abrirWhatsappYCerrarWspLuego(texto, files = []) {
     programarCierreVentanaWsp();
-    return compartirWhatsappConFotosSiCorresponde(texto, files);
+    compartirWhatsappConFotosSiCorresponde(texto, files);
   }
 
   window.WSP.services.whatsapp = {
