@@ -4,15 +4,14 @@
   window.WSP = window.WSP || {};
   window.WSP.services = window.WSP.services || {};
   window.WSP.modules = window.WSP.modules || {};
+  window.WSP.debug = window.WSP.debug || {};
 
-  const VERSION = "paso87b-selector-finaliza-en-curso-flexible-20260607";
+  const VERSION = "paso87c-selector-finaliza-en-curso-robusto-20260607";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 
   function limpiarTextoSimple(value) {
-    return String(value || "")
-      .replace(/\s+/g, " ")
-      .trim();
+    return String(value || "").replace(/\s+/g, " ").trim();
   }
 
   function normalizarEstado(value) {
@@ -50,16 +49,19 @@
     return [];
   }
 
-  function tieneMarcaEliminado(value) {
-    const obj = parseJsonObject(value);
+  function marcaEliminadoEnObjeto(obj = {}) {
     return !!(
       obj.eliminado_desde_acumulador ||
       obj.eliminado_acumulador ||
       obj.eliminado_completo_desde_acumulador ||
       obj.borrado_logico_desde_acumulador ||
       obj.eliminado === true ||
-      obj.estado_logico === "BORRADO"
+      normalizarEstado(obj.estado_logico || "") === "BORRADO"
     );
+  }
+
+  function tieneMarcaEliminado(value) {
+    return marcaEliminadoEnObjeto(parseJsonObject(value));
   }
 
   function estadoEliminado(row) {
@@ -88,29 +90,20 @@
 
   function headers(extra = {}) {
     const { anonKey } = getConfig();
-    return {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-      ...extra,
-    };
+    return { apikey: anonKey, Authorization: `Bearer ${anonKey}`, ...extra };
   }
 
   async function leerTabla(table, params = {}) {
     const { supabaseUrl, anonKey } = getConfig();
     if (!supabaseUrl || !anonKey) throw new Error("[WSP Selector Canonico] Falta config Supabase.");
-
     const qs = new URLSearchParams();
     Object.entries(params || {}).forEach(([k, v]) => {
       if (v === undefined || v === null) return;
       qs.set(k, String(v));
     });
-
     const url = `${supabaseUrl}/rest/v1/${table}${qs.toString() ? "?" + qs.toString() : ""}`;
     const r = await fetch(url, { headers: headers({ Accept: "application/json" }) });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`${table} ${r.status}: ${txt}`);
-    }
+    if (!r.ok) throw new Error(`${table} ${r.status}: ${await r.text().catch(() => "")}`);
     return r.json();
   }
 
@@ -123,13 +116,8 @@
     return `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, "0")}-${String(inicio.getDate()).padStart(2, "0")}`;
   }
 
-  function pareceHora(value) {
-    return /^\d{1,2}\s*[:.]\s*\d{2}$/.test(limpiarTextoSimple(value));
-  }
-
-  function pareceHorarioRango(value) {
-    const t = limpiarTextoSimple(value);
-    return /^\d{1,2}\s*[:.]\s*\d{2}\s*(?:a|A|-|–|—)\s*\d{1,2}\s*[:.]\s*\d{2}$/.test(t);
+  function fechaISOValida(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(limpiarTextoSimple(value));
   }
 
   function normalizarHora(value) {
@@ -156,21 +144,23 @@
     const lineas = raw.split(/\r?\n/).map((linea) => limpiarTextoSimple(linea.replace(/[\*_`~]+/g, ""))).filter(Boolean);
     for (const linea of lineas) {
       if (/^horario\s*:/i.test(linea)) {
-        const valor = limpiarTextoSimple(linea.replace(/^horario\s*:\s*/i, ""));
-        const rango = normalizarHorarioRango(valor);
+        const rango = normalizarHorarioRango(linea.replace(/^horario\s*:\s*/i, ""));
         if (rango) return rango;
       }
     }
     const m = raw.match(/(\d{1,2})\s*[:.]\s*(\d{2})\s*a\s*(\d{1,2})\s*[:.]\s*(\d{2})/i);
-    if (m) return normalizarHorarioRango(`${m[1]}:${m[2]} A ${m[3]}:${m[4]}`);
-    return "";
+    return m ? normalizarHorarioRango(`${m[1]}:${m[2]} A ${m[3]}:${m[4]}`) : "";
   }
 
-  function resolverHorarioEstado(row, inicioEv) {
+  function resolverMetadataPayload(row, inicioEv) {
     const meta = parseJsonObject(row?.metadata);
     const payloadInicio = parseJsonObject(meta?.payload_inicio || meta?.ultimo_payload_wsp || meta?.inicio_payload || {});
     const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
+    return { meta, payloadInicio, payloadEvento };
+  }
 
+  function resolverHorarioEstado(row, inicioEv) {
+    const { meta, payloadInicio, payloadEvento } = resolverMetadataPayload(row, inicioEv);
     const candidatos = [
       row?.hora_desde && row?.hora_hasta ? `${row.hora_desde} A ${row.hora_hasta}` : "",
       row?.horario,
@@ -185,53 +175,33 @@
       payloadEvento?.franja?.horario,
       horarioDesdeTextoGenerado(inicioEv?.texto_generado || payloadEvento?.texto_generado || meta?.inicio_texto_generado || meta?.ultimo_texto_generado || ""),
     ];
-
     for (const candidato of candidatos) {
       const rango = normalizarHorarioRango(candidato);
       if (rango) return rango;
     }
-
+    // Blindaje: no devolver números de orden como 0028. Si no hay rango real, mostrar vacío.
     return "";
   }
 
   function resolverLugarEstado(row, inicioEv) {
-    const meta = parseJsonObject(row?.metadata);
-    const payloadInicio = parseJsonObject(meta?.payload_inicio || meta?.ultimo_payload_wsp || {});
-    const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
+    const { meta, payloadInicio, payloadEvento } = resolverMetadataPayload(row, inicioEv);
     return limpiarTextoSimple(
-      inicioEv?.lugar ||
-      payloadEvento?.lugar ||
-      payloadEvento?.franja?.lugar ||
-      meta?.lugar_inicio ||
-      payloadInicio?.lugar ||
-      payloadInicio?.franja?.lugar ||
-      row?.lugar ||
-      ""
+      inicioEv?.lugar || payloadEvento?.lugar || payloadEvento?.franja?.lugar ||
+      meta?.lugar_inicio || payloadInicio?.lugar || payloadInicio?.franja?.lugar || row?.lugar || ""
     );
   }
 
   function resolverTipoEstado(row, inicioEv) {
-    const meta = parseJsonObject(row?.metadata);
-    const payloadInicio = parseJsonObject(meta?.payload_inicio || meta?.ultimo_payload_wsp || {});
-    const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
+    const { meta, payloadInicio, payloadEvento } = resolverMetadataPayload(row, inicioEv);
     return limpiarTextoSimple(
-      inicioEv?.tipo_operativo ||
-      payloadEvento?.tipo_corto ||
-      payloadEvento?.tipo_operativo ||
-      payloadEvento?.franja?.__tipoPublicado ||
-      meta?.tipo_operativo_inicio ||
-      meta?.tipo_operativo ||
-      payloadInicio?.tipo_corto ||
-      payloadInicio?.tipo_operativo ||
-      row?.tipo_operativo ||
-      row?.tipo ||
-      "Operativo iniciado"
+      inicioEv?.tipo_operativo || payloadEvento?.tipo_corto || payloadEvento?.tipo_operativo || payloadEvento?.franja?.__tipoPublicado ||
+      meta?.tipo_operativo_inicio || meta?.tipo_operativo || payloadInicio?.tipo_corto || payloadInicio?.tipo_operativo ||
+      row?.tipo_operativo || row?.tipo || "Operativo iniciado"
     );
   }
 
   function resolverOrdenes(row, inicioEv) {
-    const meta = parseJsonObject(row?.metadata);
-    const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
+    const { meta, payloadEvento } = resolverMetadataPayload(row, inicioEv);
     const arr = normalizarArray(row?.ordenes_origen);
     if (arr.length) return arr.join(" / ");
     const payloadOrdenes = normalizarArray(payloadEvento?.ordenes_origen || payloadEvento?.ordenesOrigen);
@@ -240,14 +210,9 @@
   }
 
   function resolverArrayCampo(row, inicioEv, key, metaKeys = []) {
-    const meta = parseJsonObject(row?.metadata);
-    const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
-    const directos = [
-      row?.[key],
-      inicioEv?.[key],
-      payloadEvento?.[key],
-    ];
-    for (const k of metaKeys) directos.push(meta?.[k]);
+    const { meta, payloadEvento } = resolverMetadataPayload(row, inicioEv);
+    const directos = [row?.[key], inicioEv?.[key], payloadEvento?.[key]];
+    metaKeys.forEach((k) => directos.push(meta?.[k]));
     for (const val of directos) {
       const arr = normalizarArray(val);
       if (arr.length) return arr;
@@ -256,16 +221,8 @@
   }
 
   function resolverElementos(row, inicioEv) {
-    const meta = parseJsonObject(row?.metadata);
-    const payloadEvento = parseJsonObject(inicioEv?.payload_completo || {});
-    const candidatos = [
-      row?.elementos,
-      inicioEv?.elementos,
-      payloadEvento?.elementos,
-      meta?.elementos_inicio,
-      meta?.ultimo_elementos,
-      meta?.elementos,
-    ];
+    const { meta, payloadEvento } = resolverMetadataPayload(row, inicioEv);
+    const candidatos = [row?.elementos, inicioEv?.elementos, payloadEvento?.elementos, meta?.elementos_inicio, meta?.ultimo_elementos, meta?.elementos];
     for (const c of candidatos) {
       const obj = parseJsonObject(c);
       if (obj && Object.keys(obj).length) return obj;
@@ -273,49 +230,24 @@
     return {};
   }
 
-  function tieneSnapshotInicioEstado(row) {
-    const meta = parseJsonObject(row?.metadata);
-    return !!(
-      row?.inicio_evento_id ||
-      meta?.inicio_texto_generado ||
-      meta?.ultimo_texto_generado ||
-      meta?.payload_inicio ||
-      meta?.inicio_payload ||
-      meta?.horario_inicio ||
-      meta?.inicio_horario ||
-      meta?.lugar_inicio ||
-      meta?.tipo_operativo_inicio ||
-      (Array.isArray(meta?.personal_inicio) && meta.personal_inicio.length) ||
-      (Array.isArray(meta?.moviles_inicio) && meta.moviles_inicio.length) ||
-      (Array.isArray(meta?.motos_inicio) && meta.motos_inicio.length) ||
-      (row?.hora_desde && row?.hora_hasta && row?.lugar)
-    );
-  }
-
   function estadoEsEnCursoCanonico(row) {
-    const estadoTxt = normalizarEstado(row?.estado || "");
     if (!row || estadoEliminado(row)) return false;
+    const estadoTxt = normalizarEstado(row?.estado || row?.estado_real || "");
     if (row?.finalizado_evento_id) return false;
     if (["FINALIZADO", "CERRADO", "BORRADO"].includes(estadoTxt)) return false;
-
-    // Paso 87B: no exigir inicio_evento_id físico. Algunas restauraciones desde
-    // Estadísticas dejan el estado EN_CURSO con snapshot de INICIO en metadata o
-    // con hora/lugar, pero sin evento INICIO legible. Si exigimos inicio_evento_id,
-    // FINALIZA queda en cero aunque el operativo esté iniciado.
-    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return tieneSnapshotInicioEstado(row);
-    if (!estadoTxt && row?.inicio_evento_id) return true;
-    return false;
+    // Paso 87C: EN_CURSO manda. No exigir inicio_evento_id ni snapshot.
+    if (["EN_CURSO", "INICIADO", "ACTIVO"].includes(estadoTxt)) return true;
+    // Respaldo: si no hay estado textual pero hay inicio_evento_id y no hay finalizado, también cuenta.
+    return !estadoTxt && !!row?.inicio_evento_id;
   }
 
   function eventoFinalizadoActivo(row) {
-    const tipo = normalizarEstado(row?.tipo_evento || "");
-    return tipo === "FINALIZADO" && !eventoEliminado(row);
+    return normalizarEstado(row?.tipo_evento || "") === "FINALIZADO" && !eventoEliminado(row);
   }
 
   async function leerEventosPorIds(ids = []) {
     const limpios = Array.from(new Set((Array.isArray(ids) ? ids : []).map((id) => limpiarTextoSimple(id)).filter(Boolean)));
     if (!limpios.length) return new Map();
-
     try {
       const data = await leerTabla(TABLA_EVENTOS, {
         select: "id,operativo_estado_id,operativo_key,tipo_evento,fecha,horario,hora_desde,hora_hasta,lugar,tipo_operativo,personal,moviles,motos,elementos,payload_completo,metadata,texto_generado,created_at,updated_at,deleted_at",
@@ -336,7 +268,6 @@
   async function leerOperativoKeysFinalizadosGuardiaSupabase(deps = {}) {
     const guardiaFecha = getGuardiaFechaISO(deps);
     const out = new Set();
-
     try {
       const data = await leerTabla(TABLA_EVENTOS, {
         select: "id,operativo_key,guardia_fecha,tipo_evento,payload_completo,metadata,deleted_at",
@@ -344,60 +275,45 @@
         tipo_evento: "eq.FINALIZADO",
         limit: "1000",
       });
-
-      (Array.isArray(data) ? data : [])
-        .filter(eventoFinalizadoActivo)
-        .forEach((row) => {
-          [
-            row?.operativo_key,
-            row?.payload_completo?.operativo_key,
-            row?.payload_completo?.franja?.__operativoKey,
-          ].forEach((key) => {
-            const clean = limpiarTextoSimple(key || "");
-            if (clean) out.add(clean);
-          });
+      (Array.isArray(data) ? data : []).filter(eventoFinalizadoActivo).forEach((row) => {
+        [row?.operativo_key, row?.payload_completo?.operativo_key, row?.payload_completo?.franja?.__operativoKey].forEach((key) => {
+          const clean = limpiarTextoSimple(key || "");
+          if (clean) out.add(clean);
         });
+      });
     } catch (e) {
       console.warn("[WSP Selector Canonico] Error leyendo FINALIZADOS activos.", e);
     }
-
     return out;
   }
 
   function deduplicarCanonico(items = []) {
     const porKey = new Map();
-
     (Array.isArray(items) ? items : []).forEach((item) => {
-      const key = limpiarTextoSimple(item?.operativo_key || "");
+      const key = limpiarTextoSimple(item?.operativo_key || item?.operativo_estado_id || "");
       if (!key) return;
       const anterior = porKey.get(key);
       const tsItem = Number(item?.ts || 0);
       const tsAnterior = Number(anterior?.ts || 0);
       if (!anterior || tsItem >= tsAnterior) porKey.set(key, item);
     });
-
-    return Array.from(porKey.values()).sort((a, b) => {
-      const ah = limpiarTextoSimple(a?.horario || "");
-      const bh = limpiarTextoSimple(b?.horario || "");
-      return ah.localeCompare(bh) || limpiarTextoSimple(a?.lugar || "").localeCompare(limpiarTextoSimple(b?.lugar || ""));
-    });
+    return Array.from(porKey.values()).sort((a, b) => limpiarTextoSimple(a?.horario || "").localeCompare(limpiarTextoSimple(b?.horario || "")) || limpiarTextoSimple(a?.lugar || "").localeCompare(limpiarTextoSimple(b?.lugar || "")));
   }
 
   function normalizarItemCanonico(row, inicioEv, deps = {}) {
+    const key = limpiarTextoSimple(row?.operativo_key || inicioEv?.operativo_key || row?.id || "");
+    if (!key) return null;
+
     const horario = resolverHorarioEstado(row, inicioEv);
-    const lugar = resolverLugarEstado(row, inicioEv);
-    const tipo = resolverTipoEstado(row, inicioEv);
-    const key = limpiarTextoSimple(row?.operativo_key || inicioEv?.operativo_key || "");
-
-    if (!key || !horario || !lugar || !tipo) return null;
-
+    const lugar = resolverLugarEstado(row, inicioEv) || limpiarTextoSimple(row?.lugar || "Sin lugar");
+    const tipo = resolverTipoEstado(row, inicioEv) || "Operativo iniciado";
     const base = {
       guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(deps),
       operativo_estado_id: row?.id || row?.operativo_estado_id || "",
       operativo_key: key,
       orden_num: resolverOrdenes(row, inicioEv),
       texto_ref: "Operativo en curso",
-      horario,
+      horario: horario || "Sin horario",
       lugar,
       tipo_corto: tipo,
       personal: resolverArrayCampo(row, inicioEv, "personal", ["personal_inicio", "ultimo_personal", "personal"]),
@@ -406,43 +322,79 @@
       elementos: resolverElementos(row, inicioEv),
       ts: Date.parse(row?.updated_at || row?.created_at || "") || Date.now(),
     };
-
-    if (typeof deps.normalizarInicioGuardado === "function") return deps.normalizarInicioGuardado(base);
-    return base;
+    return typeof deps.normalizarInicioGuardado === "function" ? deps.normalizarInicioGuardado(base) : base;
   }
 
-  async function leerOperativosEnCursoDesdeEstadoSupabase(deps = {}) {
-    const guardiaFecha = getGuardiaFechaISO(deps);
+  function filaPerteneceAGuardia(row, guardiaFecha) {
+    const meta = parseJsonObject(row?.metadata);
+    const posibles = [row?.guardia_fecha, row?.fecha_operativo, meta?.guardia_fecha, meta?.fecha_operativo].map(limpiarTextoSimple).filter(Boolean);
+    return posibles.some((v) => v === guardiaFecha) || !posibles.length;
+  }
 
+  async function leerEstadosEnCurso(guardiaFecha) {
+    const select = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at";
+    let rows = [];
     try {
-      const rows = await leerTabla(TABLA_ESTADOS, {
-        select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,tipo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at",
+      rows = await leerTabla(TABLA_ESTADOS, {
+        select,
         guardia_fecha: `eq.${guardiaFecha}`,
         order: "hora_desde.asc,updated_at.desc",
         limit: "300",
       });
+    } catch (e) {
+      console.warn("[WSP Selector Canonico] Error leyendo estados por guardia.", e);
+    }
 
-      const estados = (Array.isArray(rows) ? rows : []).filter(estadoEsEnCursoCanonico);
+    // Respaldo: si por diferencias de guardia_fecha no aparece nada, buscar EN_CURSO recientes.
+    if (!Array.isArray(rows) || !rows.length) {
+      try {
+        const recientes = await leerTabla(TABLA_ESTADOS, {
+          select,
+          estado: "eq.EN_CURSO",
+          order: "updated_at.desc",
+          limit: "80",
+        });
+        rows = (Array.isArray(recientes) ? recientes : []).filter((row) => filaPerteneceAGuardia(row, guardiaFecha));
+      } catch (e) {
+        console.warn("[WSP Selector Canonico] Error leyendo respaldo de estados EN_CURSO recientes.", e);
+      }
+    }
+
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function leerOperativosEnCursoDesdeEstadoSupabase(deps = {}) {
+    const guardiaFecha = getGuardiaFechaISO(deps);
+    const debug = { version: VERSION, guardiaFecha, timestamp: new Date().toISOString() };
+
+    try {
+      const rows = await leerEstadosEnCurso(guardiaFecha);
+      const estados = rows.filter(estadoEsEnCursoCanonico);
+      const rechazados = rows.filter((row) => !estadoEsEnCursoCanonico(row)).map((row) => ({
+        id: row?.id || "",
+        operativo_key: row?.operativo_key || "",
+        estado: row?.estado || "",
+        deleted_at: row?.deleted_at || "",
+        finalizado_evento_id: row?.finalizado_evento_id || "",
+        metadata_eliminado: tieneMarcaEliminado(row?.metadata),
+      }));
+
       const eventosInicio = await leerEventosPorIds(estados.map((row) => row.inicio_evento_id));
       const finalizados = await leerOperativoKeysFinalizadosGuardiaSupabase(deps);
 
-      // Paso 87B: el estado EN_CURSO es la fuente de verdad para el selector.
-      // No excluir por eventos FINALIZADO sueltos: después de eliminar un
-      // FINALIZADO desde Estadísticas puede quedar un evento finalizado histórico
-      // o mal marcado, pero el estado vigente ya volvió a EN_CURSO.
+      // EN_CURSO es la fuente de verdad. No excluir por FINALIZADO histórico suelto.
       const items = estados
         .map((row) => normalizarItemCanonico(row, eventosInicio.get(String(row.inicio_evento_id)) || null, deps))
         .filter(Boolean);
-
       const unicos = deduplicarCanonico(items);
-      window.WSP.debug = window.WSP.debug || {};
+
       window.WSP.debug.selectorIniciadosCanonico = {
-        version: VERSION,
-        guardiaFecha,
-        estadosLeidos: Array.isArray(rows) ? rows.length : 0,
+        ...debug,
+        estadosLeidos: rows.length,
         estadosEnCursoCanonicos: estados.length,
+        estadosRechazados: rechazados,
         finalizadosActivosIgnoradosParaSelector: finalizados.size,
-        regla: "estado_en_curso_manda_no_excluir_por_finalizados_sueltos",
+        regla: "estado_EN_CURSO_manda_sin_exigir_inicio_evento_id_ni_operativo_key",
         items: unicos.map((item) => ({
           operativo_key: item.operativo_key,
           horario: item.horario,
@@ -450,26 +402,20 @@
           tipo_corto: item.tipo_corto,
           operativo_estado_id: item.operativo_estado_id,
         })),
-        timestamp: new Date().toISOString(),
       };
-
       return unicos;
     } catch (e) {
+      window.WSP.debug.selectorIniciadosCanonico = { ...debug, error: e?.message || String(e) };
       console.warn("[WSP Selector Canonico] Error leyendo operativos EN CURSO canonicos.", e);
       return [];
     }
   }
 
   async function leerIniciosGuardiaDesdeSupabase(deps = {}) {
-    // Fuente canónica para FINALIZA/Informes: sólo operativos_estado EN_CURSO
-    // con inicio_evento_id real. No usa operativos_publicados, no usa wsp_inicios,
-    // y no usa OperativosRepo si puede mezclar vistas o estados viejos.
     return leerOperativosEnCursoDesdeEstadoSupabase(deps);
   }
 
   async function leerIniciosGuardiaDesdeWspIniciosFallback() {
-    // Fallback desactivado para el selector FINALIZA/Informes: era la fuente
-    // que podía dejar operativos viejos o no iniciados en el selector.
     return [];
   }
 
@@ -481,13 +427,8 @@
     leerIniciosGuardiaDesdeWspIniciosFallback,
   };
 
-  // Conservar el repo existente y reemplazar únicamente la lectura del selector.
   const repoAnterior = window.WSP.services.historialOperativoRepo || window.WSP.modules.historialOperativo || {};
-  const repoCanonico = {
-    ...repoAnterior,
-    ...api,
-  };
-
+  const repoCanonico = { ...repoAnterior, ...api };
   window.WSP.services.historialOperativoRepo = repoCanonico;
   window.WSP.modules.historialOperativo = repoCanonico;
   window.WSP.modules.selectorIniciadosCanonico = api;
