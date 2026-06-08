@@ -269,7 +269,14 @@ window.WSP.config = {
   function actualizarContadorOperativosWsp(cantidad = operativosCache.length) {
     if (!contadorOperativosWsp) return;
     const n = Math.max(0, parseInt(cantidad, 10) || 0);
+    contadorOperativosWsp.classList.remove("contador-operativos-cargando");
     contadorOperativosWsp.textContent = String(n);
+  }
+
+  function marcarContadorOperativosCargandoWsp() {
+    if (!contadorOperativosWsp) return;
+    contadorOperativosWsp.classList.add("contador-operativos-cargando");
+    contadorOperativosWsp.textContent = "…";
   }
 
   const OBS_PRESENCIA_ACTIVA_INICIA = "Se inicia con Presencia Activa por inclemencias del tiempo ( lluvias).Se adjunta vistas Fotograficas.";
@@ -839,6 +846,56 @@ window.WSP.config = {
     }
   }
 
+  async function contarOperativosPublicadosGuardiaSupabaseWsp() {
+    const guardiaFecha = getGuardiaFechaISO();
+    const params = new URLSearchParams({
+      select: "id",
+      guardia_fecha: `eq.${guardiaFecha}`,
+      activo: "eq.true",
+      sin_efecto: "eq.false",
+      limit: "1",
+    });
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Accept: "application/json",
+        Prefer: "count=exact",
+      },
+    });
+
+    if (!r.ok) throw new Error(`No se pudo contar operativos publicados: ${r.status}`);
+    const contentRange = String(r.headers.get("content-range") || "");
+    const m = contentRange.match(/\/(\d+)$/);
+    if (m) return parseInt(m[1], 10) || 0;
+
+    const data = await r.json().catch(() => []);
+    return Array.isArray(data) ? data.length : 0;
+  }
+
+  let refrescoContadorPublicadosSeq = 0;
+
+  async function refrescarContadorPublicadosRapidoWsp(opts = {}) {
+    if (!contadorOperativosWsp || selTipo?.value !== "INICIA") return null;
+    const seq = ++refrescoContadorPublicadosSeq;
+    marcarContadorOperativosCargandoWsp();
+
+    try {
+      const cantidad = await contarOperativosPublicadosGuardiaSupabaseWsp();
+      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA") {
+        actualizarContadorOperativosWsp(cantidad);
+      }
+      return cantidad;
+    } catch (e) {
+      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA") {
+        actualizarContadorOperativosWsp(operativosCache.length);
+      }
+      console.warn("[WSP] No se pudo refrescar rápido el contador de publicados.", opts?.origen || "", e);
+      return null;
+    }
+  }
+
   async function syncAntesDeSeleccion() {
     if (syncingOrdenes) return;
 
@@ -852,7 +909,21 @@ window.WSP.config = {
     // INFORMES usa como fuente los operativos realmente iniciados/en curso.
     // No recargar el selector cada vez que recibe foco: en celulares/Chrome eso
     // desarma el desplegable justo cuando el usuario intenta elegir otro operativo.
-    if (selTipo?.value === "FINALIZA" || esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
+    if (selTipo?.value === "FINALIZA") {
+      const tieneOpciones = Array.from(selHorario?.options || []).some((opt) => limpiarTextoSimple(opt?.value || ""));
+      if (tieneOpciones && operativosCache.length) return;
+
+      syncingOrdenes = true;
+      try {
+        await cargarOperativosFinalizablesConEstadoWsp(selHorario?.value || "");
+        actualizarDatosFranja();
+      } finally {
+        syncingOrdenes = false;
+      }
+      return;
+    }
+
+    if (esInformeAlcoholemiaActivo() || esInformeDecto460Activo() || esControlSuperiorActivo()) {
       const tieneOpciones = Array.from(selHorario?.options || []).some((opt) => limpiarTextoSimple(opt?.value || ""));
       if (tieneOpciones && operativosCache.length) return;
 
@@ -2170,7 +2241,7 @@ window.WSP.config = {
       desactivarControlesMismos,
       sincronizarUIAlcoholimetro,
       sincronizarUIQrzDominio,
-      cargarOperativosIniciados: cargarOperativosIniciadosParaInformes,
+      cargarOperativosIniciados: cargarOperativosFinalizablesConEstadoWsp,
       actualizarDatosFranja,
       sincronizarInicioGuardadoSegunContexto,
     };
@@ -2190,7 +2261,7 @@ window.WSP.config = {
     desactivarControlesMismos({ limpiar: true });
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
-    return cargarOperativosIniciadosParaInformes(selHorario?.value || "").then(() => {
+    return cargarOperativosFinalizablesConEstadoWsp(selHorario?.value || "").then(() => {
       actualizarDatosFranja();
       sincronizarInicioGuardadoSegunContexto();
     });
@@ -2641,17 +2712,41 @@ window.WSP.config = {
     };
   }
 
+  function aplicarEstadoOpcionFinalizaWsp(opt, operativo = {}) {
+    if (!opt) return opt;
+
+    opt.classList.remove("opcion-finaliza-seleccionable", "opcion-finaliza-no-seleccionable");
+    opt.disabled = false;
+
+    if (operativo.__finalizaNoSeleccionable) {
+      opt.disabled = true;
+      opt.classList.add("opcion-finaliza-no-seleccionable");
+      opt.title = `${opt.title || opt.text || "Operativo"} | No seleccionable: falta INICIO en curso`;
+      return opt;
+    }
+
+    if (operativo.__finalizaSeleccionable) {
+      opt.classList.add("opcion-finaliza-seleccionable");
+      opt.style.color = "#ffd400";
+      opt.style.fontWeight = "700";
+      opt.title = `${opt.title || opt.text || "Operativo"} | Seleccionable: INICIO en curso`;
+    }
+
+    return opt;
+  }
+
   function crearOpcionHorarioWsp(operativo) {
     const ui = selectorOperativoUiWsp();
     if (ui && typeof ui.crearOpcionHorario === "function") {
-      return ui.crearOpcionHorario(operativo);
+      const optModular = ui.crearOpcionHorario(operativo);
+      return aplicarEstadoOpcionFinalizaWsp(optModular, operativo);
     }
 
     const opt = document.createElement("option");
     opt.value = operativo.__key;
     opt.text = construirTextoOpcionHorario(operativo);
     opt.title = construirTextoOpcionHorario(operativo);
-    return opt;
+    return aplicarEstadoOpcionFinalizaWsp(opt, operativo);
   }
 
   function renderizarSelectorOperativosWsp(operativos = [], opts = {}) {
@@ -2890,6 +2985,227 @@ window.WSP.config = {
     if (!estadoVisibilidad.visible) limpiarSelectorOperativosOcultoWsp(estadoVisibilidad);
     setSelectorOperativosVisibleWsp(estadoVisibilidad.visible, estadoVisibilidad);
     return estadoVisibilidad.visible;
+  }
+
+  function obtenerOperativosPublicadosParaFinalizaWsp() {
+    const ordenes = cargarOrdenesSeguro();
+    const salida = [];
+
+    ordenes.forEach((orden, idxOrden) => {
+      const franjasOrdenadas = (orden.franjas || [])
+        .map((franja, idxFranja) => ({ franja, idxFranja, inicio: construirFechaHoraInicioFranja(franja, orden) }))
+        .sort((a, b) => {
+          const at = a.inicio instanceof Date && !isNaN(a.inicio.getTime()) ? a.inicio.getTime() : Number.MAX_SAFE_INTEGER;
+          const bt = b.inicio instanceof Date && !isNaN(b.inicio.getTime()) ? b.inicio.getTime() : Number.MAX_SAFE_INTEGER;
+          return at - bt;
+        });
+
+      const operativosOrden = [];
+      franjasOrdenadas.forEach(({ franja, idxFranja }) => {
+        if (!franjaIniciaEnGuardiaActual(franja, orden)) return;
+        operativosOrden.push(construirOperativoPlano(franja, orden, idxOrden, idxFranja));
+      });
+
+      prepararFranjasParaModoWsp(operativosOrden).forEach((operativo) => salida.push(operativo));
+    });
+
+    return salida;
+  }
+
+  function crearIndiceIniciosEnCursoFinalizaWsp(inicios = []) {
+    const lista = (Array.isArray(inicios) ? inicios : [])
+      .map(normalizarInicioGuardado)
+      .filter((item) => item && item.operativo_key);
+
+    const porKey = new Map();
+    lista.forEach((inicio) => {
+      const key = limpiarTextoSimple(inicio.operativo_key || "");
+      if (key && !porKey.has(key)) porKey.set(key, inicio);
+    });
+
+    return { lista, porKey };
+  }
+
+  function buscarInicioEnCursoParaFinalizableWsp(franja, indice) {
+    if (!franja || !indice) return null;
+
+    const claves = construirOperativoKeysPosibles(franja)
+      .concat([franja?.__operativoKey, construirOperativoKeyEstable(franja)])
+      .map((v) => limpiarTextoSimple(v || ""))
+      .filter(Boolean);
+
+    for (const key of claves) {
+      if (indice.porKey.has(key)) return indice.porKey.get(key);
+    }
+
+    let mejor = null;
+    let mejorPuntaje = -1;
+    indice.lista.forEach((inicio) => {
+      const puntaje = puntuarCoincidenciaInicio(inicio, franja);
+      if (puntaje > mejorPuntaje) {
+        mejor = inicio;
+        mejorPuntaje = puntaje;
+      }
+    });
+
+    return mejorPuntaje >= 90 ? mejor : null;
+  }
+
+  function escapeRegexWsp(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function normalizarTipoOrdenFinalizaWsp(value = "") {
+    return normalizarBasicoSinAcentos(value).replace(/[^a-z0-9]+/g, "");
+  }
+
+  function extraerNumeroOrdenServicioWsp(value = "") {
+    const texto = limpiarTextoSimple(value || "");
+    const match = texto.match(/\b(\d{1,6}\s*\/\s*\d{2,4})\b/);
+    return match ? match[1].replace(/\s+/g, "") : "";
+  }
+
+  function limpiarOrdenDentroDeTipoFinalizaWsp(tipoRaw = "", ordenRaw = "") {
+    let tipo = limpiarTextoSimple(tipoRaw || "");
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    if (!tipo) return "";
+
+    if (orden) {
+      const exacta = new RegExp(escapeRegexWsp(orden), "ig");
+      tipo = tipo.replace(exacta, " ");
+    }
+
+    const numeroOrden = extraerNumeroOrdenServicioWsp(orden || tipo);
+    if (numeroOrden) {
+      const numeroFlexible = numeroOrden.replace(/\//g, "\\s*\/\\s*");
+      tipo = tipo
+        .replace(new RegExp(`\\b(?:O\\.?\\s*S\\.?\\s*G\\.?\\s*P\\.?|OSGP|O\\.?\\s*S\\.?|ORDEN(?:\\s+DE\\s+SERVICIO)?|ORD\\.?)\\s*(?:N[°º]?\\s*)?${numeroFlexible}\\b`, "ig"), " ")
+        .replace(new RegExp(`\\b(?:N[°º]?\\s*)?${numeroFlexible}\\b`, "ig"), " ");
+    }
+
+    tipo = tipo
+      .replace(/\b(?:O\.?\s*S\.?\s*G\.?\s*P\.?|OSGP|O\.?\s*S\.?|ORDEN(?:\s+DE\s+SERVICIO)?|ORD\.?)\s*(?:N[°º]?\s*)?$/ig, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+[-–—]\s*$/g, "")
+      .trim();
+
+    if (!tipo || normalizarTipoOrdenFinalizaWsp(tipo) === normalizarTipoOrdenFinalizaWsp(orden)) return "";
+    return tipo;
+  }
+
+  function construirTituloFinalizaDesdeInicioWsp(tipoRaw = "", ordenRaw = "", fallback = "") {
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    const tipoLimpio = limpiarOrdenDentroDeTipoFinalizaWsp(tipoRaw, orden) || limpiarOrdenDentroDeTipoFinalizaWsp(fallback, orden);
+    const partes = [];
+    if (tipoLimpio) partes.push(tipoLimpio);
+    if (orden && !normalizarTipoOrdenFinalizaWsp(tipoLimpio).includes(normalizarTipoOrdenFinalizaWsp(orden))) partes.push(orden);
+    const titulo = limpiarTextoSimple(partes.join(" "));
+    return titulo || limpiarTextoSimple(fallback || tipoRaw || orden || "Operativo");
+  }
+
+  function construirFranjaDesdeInicioCanonicoWsp(franja = {}, inicio = {}) {
+    const data = normalizarInicioGuardado(inicio);
+    if (!data) return franja;
+
+    const orden = limpiarTextoSimple(data.orden_num || franja?.__ordenNum || "");
+    const tipoBase = limpiarTextoSimple(data.tipo_corto || franja?.__tipoPublicado || franja?.tipo_operativo || franja?.tipo || franja?.titulo || "Operativo");
+    const tipo = limpiarOrdenDentroDeTipoFinalizaWsp(tipoBase, orden) || obtenerTipoCortoFranja(franja) || "Operativo";
+    const titulo = construirTituloFinalizaDesdeInicioWsp(tipo, orden, franja?.titulo || tipoBase);
+
+    return {
+      ...(franja || {}),
+      titulo,
+      horario: limpiarTextoSimple(data.horario || franja?.horario || ""),
+      lugar: limpiarTextoSimple(data.lugar || franja?.lugar || ""),
+      fecha: limpiarTextoSimple(data.guardia_fecha || franja?.fecha || getGuardiaFechaISO()),
+      __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || franja?.__fechaOperativo || getGuardiaFechaISO()),
+      __operativoKey: limpiarTextoSimple(data.operativo_key || franja?.__operativoKey || ""),
+      __ordenNum: orden || limpiarTextoSimple(franja?.__ordenNum || ""),
+      __ordenTextoRef: limpiarTextoSimple(data.texto_ref || franja?.__ordenTextoRef || ""),
+      __tipoPublicado: tipo,
+      __inicioGuardadoPayload: data,
+      __franjaFinalizaOriginal: franja,
+    };
+  }
+
+  function marcarFinalizableConEstadoWsp(franja, indice) {
+    const inicio = buscarInicioEnCursoParaFinalizableWsp(franja, indice);
+    if (!inicio) {
+      return {
+        ...franja,
+        __finalizaNoSeleccionable: true,
+        __finalizaSeleccionable: false,
+      };
+    }
+
+    return {
+      ...construirFranjaDesdeInicioCanonicoWsp(franja, inicio),
+      __finalizaNoSeleccionable: false,
+      __finalizaSeleccionable: true,
+    };
+  }
+
+  async function cargarOperativosFinalizablesConEstadoWsp(valorSeleccionado = "") {
+    setSelectorOperativosVisibleWsp(true, {
+      motivo: "cargar_operativos_finaliza_con_estado",
+      tipoSelector: "publicados",
+    });
+
+    if (!selHorario) return [];
+
+    setTituloOperativosIniciados(false);
+    selHorario.disabled = true;
+    selHorario.innerHTML = '<option value="">Buscando operativos para finalizar...</option>';
+    marcarContadorOperativosCargandoWsp();
+
+    operativosCache = [];
+    franjaSeleccionada = null;
+    ordenSeleccionada = null;
+
+    await syncOrdenesDesdeServidor();
+
+    const publicadosFinaliza = obtenerOperativosPublicadosParaFinalizaWsp();
+    const inicios = await leerIniciosGuardiaDesdeSupabase();
+    const indice = crearIndiceIniciosEnCursoFinalizaWsp(inicios);
+
+    operativosCache = publicadosFinaliza.map((franja) => marcarFinalizableConEstadoWsp(franja, indice));
+    const valorSeleccionadoSeguro = operativosCache.some((item) => item.__key === valorSeleccionado && item.__finalizaSeleccionable)
+      ? valorSeleccionado
+      : "";
+
+    renderizarSelectorOperativosWsp(operativosCache, {
+      placeholderConItems: "Seleccionar operativo iniciado/en curso",
+      placeholderVacio: "No hay operativos para finalizar",
+      valorSeleccionado: valorSeleccionadoSeguro,
+      selectorDefault: () => "",
+    });
+
+    franjaSeleccionada = operativosCache.find((item) => item.__key === selHorario.value) || null;
+    ordenSeleccionada = null;
+    selHorario.disabled = false;
+
+    const cantidadSeleccionables = operativosCache.filter((item) => item.__finalizaSeleccionable).length;
+    actualizarContadorOperativosWsp(cantidadSeleccionables);
+
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.finalizaSelectorEstado = {
+      version: "paso88-finaliza-selector-referencias-20260608",
+      publicados: publicadosFinaliza.length,
+      enCurso: indice.lista.length,
+      seleccionables: cantidadSeleccionables,
+      timestamp: new Date().toISOString(),
+      items: operativosCache.map((item) => ({
+        key: item.__key,
+        operativo_key: item.__operativoKey || "",
+        horario: item.horario || "",
+        lugar: item.lugar || "",
+        titulo: item.titulo || "",
+        seleccionable: !!item.__finalizaSeleccionable,
+      })),
+    };
+
+    return operativosCache;
   }
 
   async function cargarOperativosIniciadosParaInformes(valorSeleccionado = "") {
@@ -8940,6 +9256,10 @@ ${bold(`Moviles ${organismo}:`)}`)
         return;
       }
       inicioGuardadoActual = inicioCompartido;
+
+      if (esFinaliza) {
+        franjaSeleccionada = construirFranjaDesdeInicioCanonicoWsp(franjaSeleccionada, inicioCompartido);
+      }
     }
 
     const elementosInicio = (esFinaliza || usarMismosElementos) ? normalizarPayloadElementos(inicioCompartido) : null;
@@ -9348,6 +9668,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     actualizarTipo();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
+    refrescarContadorPublicadosRapidoWsp({ origen: "init_pantalla_principal" });
     await syncOrdenesDesdeServidor();
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria de pantalla:", Array.isArray(_tmp) ? _tmp.length : _tmp);

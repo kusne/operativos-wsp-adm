@@ -3372,3 +3372,17 @@ body.modo-control-moviles #controlMovilesAyudaWrap.control-moviles-ayuda-wrap{
   font-weight:900;
   white-space:nowrap;
 }
+
+/* Paso 88 funcional: FINALIZA muestra todos, seleccionables en amarillo */
+#horario option.opcion-finaliza-seleccionable{
+  color: #ffd400 !important;
+  font-weight: 700 !important;
+}
+
+#horario option.opcion-finaliza-no-seleccionable{
+  color: #8b8b8b !important;
+}
+
+#contadorOperativosWsp.contador-operativos-cargando{
+  opacity: 0.85 !important;
+}

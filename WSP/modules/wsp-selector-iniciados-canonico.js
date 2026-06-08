@@ -6,7 +6,7 @@
   window.WSP.modules = window.WSP.modules || {};
   window.WSP.debug = window.WSP.debug || {};
 
-  const VERSION = "paso87g-informes-contador-envio-alcoholemia-robusto-20260607";
+  const VERSION = "paso88-finaliza-selector-referencias-20260608";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 
@@ -200,6 +200,32 @@
     );
   }
 
+  function resolverTextoRefEstado(row, inicioEv) {
+    const { meta, payloadInicio, payloadEvento } = resolverMetadataPayload(row, inicioEv);
+    const candidatos = [
+      inicioEv?.texto_ref,
+      inicioEv?.archivo,
+      payloadEvento?.texto_ref,
+      payloadEvento?.archivo,
+      payloadEvento?.franja?.__ordenTextoRef,
+      payloadEvento?.franja?.texto_ref,
+      meta?.texto_ref,
+      meta?.archivo,
+      meta?.titulo,
+      payloadInicio?.texto_ref,
+      payloadInicio?.archivo,
+      payloadInicio?.franja?.__ordenTextoRef,
+      payloadInicio?.franja?.texto_ref,
+    ];
+
+    for (const candidato of candidatos) {
+      const clean = limpiarTextoSimple(candidato || "");
+      if (clean && clean !== "Operativo en curso") return clean;
+    }
+
+    return "Operativo en curso";
+  }
+
   function resolverOrdenes(row, inicioEv) {
     const { meta, payloadEvento } = resolverMetadataPayload(row, inicioEv);
     const arr = normalizarArray(row?.ordenes_origen);
@@ -312,7 +338,7 @@
       operativo_estado_id: row?.id || row?.operativo_estado_id || "",
       operativo_key: key,
       orden_num: resolverOrdenes(row, inicioEv),
-      texto_ref: "Operativo en curso",
+      texto_ref: resolverTextoRefEstado(row, inicioEv),
       horario: horario || "Sin horario",
       lugar,
       tipo_corto: tipo,
