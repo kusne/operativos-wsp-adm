@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso88a-finaliza-sin-orden-duplicada-20260608";
+  const WSP_BOOTSTRAP_VERSION = "paso88g-cache-blindado-automatico-20260608";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -64,10 +64,82 @@
     "./wsp.js"
   ];
 
+
+  const WSP_CACHE_TOKEN = String(window.__WSP_CACHE_TOKEN__ || (WSP_BOOTSTRAP_VERSION + "-" + Date.now()));
+
+  window.WSP_CACHE_INFO = Object.freeze({
+    version: WSP_BOOTSTRAP_VERSION,
+    token: WSP_CACHE_TOKEN,
+    loadedAt: new Date().toISOString()
+  });
+
+  function agregarNoCache(src) {
+    const separador = src.includes("?") ? "&" : "?";
+    return src + separador + "v=" + encodeURIComponent(WSP_CACHE_TOKEN);
+  }
+
+  async function limpiarCacheWebAppWsp() {
+    try {
+      if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
+        const registros = await navigator.serviceWorker.getRegistrations();
+        const appPath = new URL("./", location.href).pathname;
+        await Promise.all(registros.map((registro) => {
+          const scopePath = new URL(registro.scope).pathname;
+          if (scopePath.includes("/operativos-wsp-adm/") || scopePath.startsWith(appPath)) {
+            console.warn("[WSP cache] service worker desregistrado:", registro.scope);
+            return registro.unregister();
+          }
+          return Promise.resolve(false);
+        }));
+      }
+    } catch (error) {
+      console.warn("[WSP cache] no se pudo revisar service workers:", error);
+    }
+
+    try {
+      if ("caches" in window && window.caches && window.caches.keys) {
+        const claves = await window.caches.keys();
+        await Promise.all(claves.map((clave) => {
+          if (/wsp|operativos|bmzcn/i.test(clave)) {
+            console.warn("[WSP cache] cache eliminado:", clave);
+            return window.caches.delete(clave);
+          }
+          return Promise.resolve(false);
+        }));
+      }
+    } catch (error) {
+      console.warn("[WSP cache] no se pudo revisar Cache Storage:", error);
+    }
+  }
+
+  async function verificarVersionPublicadaWsp() {
+    try {
+      const respuesta = await fetch(agregarNoCache("./version.json"), {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (!respuesta.ok) return;
+      const data = await respuesta.json();
+      const versionPublicada = data && data.version ? String(data.version) : "";
+      if (versionPublicada && versionPublicada !== WSP_BOOTSTRAP_VERSION) {
+        console.warn("[WSP cache] versión distinta detectada. Recargando app.", {
+          actual: WSP_BOOTSTRAP_VERSION,
+          publicada: versionPublicada
+        });
+        const url = new URL(window.location.href);
+        url.searchParams.set("wspv", versionPublicada);
+        url.searchParams.set("_", String(Date.now()));
+        window.location.replace(url.toString());
+      }
+    } catch (error) {
+      console.warn("[WSP cache] no se pudo verificar version.json:", error);
+    }
+  }
+
   function cargarScript(src) {
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = src + "?v=" + encodeURIComponent(WSP_BOOTSTRAP_VERSION);
+      script.src = agregarNoCache(src);
       script.defer = false;
 
       script.onload = () => {
@@ -86,7 +158,10 @@
 
   async function iniciarBootstrapWsp() {
     try {
-      console.log("[WSP bootstrap] iniciando carga modular...");
+      console.log("[WSP bootstrap] iniciando carga modular sin cache...", window.WSP_CACHE_INFO);
+
+      await limpiarCacheWebAppWsp();
+      verificarVersionPublicadaWsp();
 
       for (const src of SCRIPTS_WSP) {
         await cargarScript(src);

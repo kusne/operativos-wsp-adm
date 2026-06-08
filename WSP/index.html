@@ -6,9 +6,24 @@
   <title>Informes WhatsApp</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
 
-  <link rel="stylesheet" href="../SHARED/STYLES/base.css" />
-  <link rel="stylesheet" href="./wsp.css?v=control-moviles-ayuda-posicion-v3" />
+  <script>
+    (function () {
+      "use strict";
+      var version = "paso88g-cache-blindado-automatico-20260608";
+      var token = version + "-" + Date.now();
+      window.__WSP_APP_VERSION__ = version;
+      window.__WSP_CACHE_TOKEN__ = token;
+      function escribirCss(href) {
+        document.write('<link rel="stylesheet" href="' + href + '?v=' + encodeURIComponent(token) + '">');
+      }
+      escribirCss('../SHARED/STYLES/base.css');
+      escribirCss('./wsp.css');
+    })();
+  </script>
 </head>
 
 <body>
@@ -620,7 +635,20 @@ o se realizó (01) Procedimiento Policial"></textarea>
     <button type="button" id="btnEnviar">Enviar por WhatsApp</button>
   </div>
 
-  <!-- CARGA ROBUSTA WSP - bootstrap modular -->
-  <script src="./wsp-bootstrap.js?v=paso88a-finaliza-sin-orden-duplicada-20260608"></script>
+  <!-- CARGA ROBUSTA WSP - bootstrap modular SIN CACHE -->
+  <script>
+    (function () {
+      "use strict";
+      var version = window.__WSP_APP_VERSION__ || "paso88g-cache-blindado-automatico-20260608";
+      var token = window.__WSP_CACHE_TOKEN__ || (version + "-" + Date.now());
+      var script = document.createElement("script");
+      script.src = "./wsp-bootstrap.js?v=" + encodeURIComponent(token);
+      script.defer = false;
+      script.onerror = function () {
+        alert("Error cargando WSP bootstrap. Revisá conexión y consola.");
+      };
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>
