@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609";
+  const WSP_BOOTSTRAP_VERSION = "paso92-wsp-reparacion-estable-inicio-finaliza-20260609";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

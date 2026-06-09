@@ -113,54 +113,6 @@
     return "";
   }
 
-  function valorInicioArray(row = {}, metadata = {}, clavesInicio = [], clavesGenericas = []) {
-    for (const k of clavesInicio) {
-      const arr = normalizarArrayJson(row?.[k]);
-      if (arr.length) return arr;
-    }
-    for (const k of clavesInicio) {
-      const arr = normalizarArrayJson(metadata?.[k]);
-      if (arr.length) return arr;
-    }
-    const estado = normalizarEstado(row?.estado_real || row?.estado || metadata?.estado || "");
-    const esFinalizado = estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-    if (!esFinalizado) {
-      for (const k of clavesGenericas) {
-        const arr = normalizarArrayJson(row?.[k]);
-        if (arr.length) return arr;
-      }
-      for (const k of clavesGenericas) {
-        const arr = normalizarArrayJson(metadata?.[k]);
-        if (arr.length) return arr;
-      }
-    }
-    return [];
-  }
-
-  function valorInicioObjeto(row = {}, metadata = {}, clavesInicio = [], clavesGenericas = []) {
-    for (const k of clavesInicio) {
-      const obj = parseJsonObject(row?.[k]);
-      if (obj && Object.keys(obj).length) return obj;
-    }
-    for (const k of clavesInicio) {
-      const obj = parseJsonObject(metadata?.[k]);
-      if (obj && Object.keys(obj).length) return obj;
-    }
-    const estado = normalizarEstado(row?.estado_real || row?.estado || metadata?.estado || "");
-    const esFinalizado = estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-    if (!esFinalizado) {
-      for (const k of clavesGenericas) {
-        const obj = parseJsonObject(row?.[k]);
-        if (obj && Object.keys(obj).length) return obj;
-      }
-      for (const k of clavesGenericas) {
-        const obj = parseJsonObject(metadata?.[k]);
-        if (obj && Object.keys(obj).length) return obj;
-      }
-    }
-    return {};
-  }
-
   function timestampMs(value) {
     if (!value) return NaN;
     const d = new Date(String(value).trim());
@@ -233,6 +185,9 @@
     const d = getDeps(deps);
     const metadataEstado = d.parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
     const horario = resolverHorarioRow(row, metadataEstado);
+    const estadoTxt = normalizarEstado(row?.estado_real || row?.estado || "");
+    const puedeUsarUltimoComoInicio = !["FINALIZADO", "CERRADO"].includes(estadoTxt);
+
     return d.normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || d.getGuardiaFechaISO(),
       operativo_estado_id: row?.operativo_estado_id || row?.id || "",
@@ -240,12 +195,12 @@
       orden_num: d.normalizarArrayJsonWsp(row?.ordenes_origen).join(" / ") || limpiarTextoSimple(metadataEstado?.orden_num || metadataEstado?.orden || ""),
       texto_ref: limpiarTextoSimple(metadataEstado?.texto_ref || metadataEstado?.titulo || metadataEstado?.archivo || "Operativo en curso"),
       horario,
-      lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: valorInicioArray(row, metadataEstado, ["inicio_personal", "personal_inicio"], ["personal", "ultimo_personal"]),
-      moviles: valorInicioArray(row, metadataEstado, ["inicio_moviles", "moviles_inicio"], ["moviles", "ultimo_moviles"]),
-      motos: valorInicioArray(row, metadataEstado, ["inicio_motos", "motos_inicio"], ["motos", "ultimo_motos"]),
-      elementos: valorInicioObjeto(row, metadataEstado, ["inicio_elementos", "elementos_inicio"], ["elementos", "ultimo_elementos"]),
+      lugar: row?.lugar_inicio || row?.lugar || "",
+      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo_inicio_texto || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_personal : []) || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_moviles : []) || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_motos : []) || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_elementos : {}) || metadataEstado?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -254,33 +209,74 @@
     if (!franja) return null;
     const d = getDeps(deps);
     const keysPosibles = new Set(d.construirOperativoKeysPosibles(franja).map((v) => limpiarTextoSimple(v)).filter(Boolean));
-    const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
+    const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.operativo_key || franja?.__inicioGuardadoPayload?.operativo_key || "");
     if (keyDirecta) keysPosibles.add(keyDirecta);
+
+    const normalizarFilas = (rows) => (Array.isArray(rows) ? rows : []).filter(Boolean);
 
     try {
       if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
-        const rows = await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: d.getGuardiaFechaISO(), limit: 500 });
+        const rows = normalizarFilas(await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: d.getGuardiaFechaISO(), limit: 500 }));
+
+        const exactos = rows
+          .filter((row) => keysPosibles.has(limpiarTextoSimple(row?.operativo_key || "")))
+          .map((row) => normalizarInicioDesdeVistaGuardiaWsp(row, d))
+          .filter((payload) => payload && payload.operativo_key);
+
+        if (exactos.length) {
+          exactos.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+          const elegido = exactos[0];
+          window.WSP = window.WSP || {};
+          window.WSP.debug = window.WSP.debug || {};
+          window.WSP.debug.ultimoInicioFinalizaExacto = {
+            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+            fuente: "OperativosRepo.leerOperativosGuardia_key_exacta",
+            keyDirecta,
+            operativo_key: elegido.operativo_key,
+            inicio_evento_id: elegido.inicio_evento_id || elegido.operativo_estado_id || "",
+            payload: elegido,
+          };
+          return elegido;
+        }
+
+        // Si el selector trae operativo_key, NO se permite caer por puntaje a otro operativo.
+        // Esto evita cruzar datos entre operativos parecidos o entre formularios anteriores.
+        if (keyDirecta) {
+          const embebido = d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload);
+          if (embebido && limpiarTextoSimple(embebido.operativo_key || "") === keyDirecta) return embebido;
+          window.WSP = window.WSP || {};
+          window.WSP.debug = window.WSP.debug || {};
+          window.WSP.debug.ultimoInicioFinalizaExacto = {
+            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+            fuente: "sin_inicio_exact_key",
+            keyDirecta,
+            filasLeidas: rows.length,
+          };
+          return null;
+        }
+
         let mejor = null;
         let mejorPuntaje = -1;
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
+        rows.forEach((row) => {
           const estadoReal = normalizarEstado(row?.estado_real || row?.estado || "");
           if (!["EN_CURSO", "FINALIZADO"].includes(estadoReal)) return;
-          const rowKey = limpiarTextoSimple(row?.operativo_key || "");
           const payload = normalizarInicioDesdeVistaGuardiaWsp(row, d);
           if (!payload) return;
-          const puntaje = keysPosibles.has(rowKey) ? 100 : d.puntuarCoincidenciaInicio(payload, franja);
+          const puntaje = d.puntuarCoincidenciaInicio(payload, franja);
           if (puntaje > mejorPuntaje) {
             mejor = payload;
             mejorPuntaje = puntaje;
           }
         });
-        if (mejor && mejorPuntaje >= 90) return mejor;
+        if (mejor && mejorPuntaje >= 95) return mejor;
       }
     } catch (e) {
       console.warn("[WSP historial operativo] No se pudo leer INICIO desde OperativosRepo.", e);
     }
 
-    return d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload) || null;
+    const fallback = d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload);
+    if (keyDirecta && fallback && limpiarTextoSimple(fallback.operativo_key || "") !== keyDirecta) return null;
+    return fallback || null;
   }
 
   function estadoOperativoEsEnCursoWsp(row) {
@@ -309,10 +305,10 @@
       horario,
       lugar: row?.lugar || "",
       tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
-      personal: valorInicioArray(row, meta, ["inicio_personal", "personal_inicio"], ["personal", "ultimo_personal"]),
-      moviles: valorInicioArray(row, meta, ["inicio_moviles", "moviles_inicio"], ["moviles", "ultimo_moviles"]),
-      motos: valorInicioArray(row, meta, ["inicio_motos", "motos_inicio"], ["motos", "ultimo_motos"]),
-      elementos: valorInicioObjeto(row, meta, ["inicio_elementos", "elementos_inicio"], ["elementos", "ultimo_elementos"]),
+      personal: row?.inicio_personal || row?.personal_inicio || row?.personal || meta?.personal_inicio || meta?.ultimo_personal || meta?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || row?.moviles || meta?.moviles_inicio || meta?.ultimo_moviles || meta?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || row?.motos || meta?.motos_inicio || meta?.ultimo_motos || meta?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || row?.elementos || meta?.elementos_inicio || meta?.ultimo_elementos || meta?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -409,7 +405,7 @@
   async function leerIniciosGuardiaDesdeSupabase(deps = {}) {
     const d = getDeps(deps);
     const debug = {
-      version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       guardiaFecha: d.getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),

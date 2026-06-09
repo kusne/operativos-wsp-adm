@@ -8,7 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
-  const REPO_VERSION = "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609";
+  const REPO_VERSION = "paso92-wsp-reparacion-estable-inicio-finaliza-20260609";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -630,13 +630,9 @@
     return Array.isArray(data) ? data[0] : data;
   }
 
-  function esErrorConflictoUnico(error) {
-    const msg = String(error?.message || error || "").toLowerCase();
-    return msg.includes("409") || msg.includes("duplicate key") || msg.includes("23505") || msg.includes("ux_operativos_eventos_evento_key");
-  }
 
-  async function buscarEventoPorEventoKey(eventoKey, { incluirBorrados = true } = {}) {
-    const key = limpiarTexto(eventoKey || "");
+  async function buscarEventoPorEventoKey(eventoKeyValue) {
+    const key = limpiarTexto(eventoKeyValue || "");
     if (!key) return null;
     const params = new URLSearchParams({
       select: "*",
@@ -644,39 +640,35 @@
       order: "updated_at.desc,created_at.desc",
       limit: "1",
     });
-    if (!incluirBorrados) params.set("deleted_at", "is.null");
     const rows = await selectRows(EVENTOS_TABLE, params);
     return rows[0] || null;
   }
 
-  async function guardarEventoUnicoPorEventoKey(eventoBody = {}, opciones = {}) {
-    const body = { ...(eventoBody || {}), updated_at: isoAhora() };
-    const preferId = limpiarTexto(opciones.preferId || "");
-    const key = limpiarTexto(body.evento_key || "");
+  async function upsertEventoPorEventoKey(eventoBody = {}) {
+    const key = limpiarTexto(eventoBody.evento_key || "");
+    if (!key) return await insertRow(EVENTOS_TABLE, eventoBody);
 
-    if (preferId) {
-      try {
-        const actualizadoPorId = await patchRows(EVENTOS_TABLE, { id: `eq.${preferId}` }, { ...body, deleted_at: null });
-        if (actualizadoPorId?.id) return actualizadoPorId;
-      } catch (error) {
-        console.warn("[WSP OperativosRepo] No se pudo actualizar evento por id; se intenta por evento_key.", error);
-      }
-    }
-
-    if (!key) return await insertRow(EVENTOS_TABLE, body);
-
-    const existente = await buscarEventoPorEventoKey(key, { incluirBorrados: true });
+    const existente = await buscarEventoPorEventoKey(key);
     if (existente?.id) {
-      return await patchRows(EVENTOS_TABLE, { id: `eq.${existente.id}` }, { ...body, deleted_at: null });
+      return await patchRows(EVENTOS_TABLE, { id: `eq.${existente.id}` }, {
+        ...eventoBody,
+        deleted_at: null,
+        updated_at: isoAhora(),
+      });
     }
 
     try {
-      return await insertRow(EVENTOS_TABLE, body);
+      return await insertRow(EVENTOS_TABLE, eventoBody);
     } catch (error) {
-      if (!esErrorConflictoUnico(error)) throw error;
-      const existentePostConflicto = await buscarEventoPorEventoKey(key, { incluirBorrados: true });
-      if (!existentePostConflicto?.id) throw error;
-      return await patchRows(EVENTOS_TABLE, { id: `eq.${existentePostConflicto.id}` }, { ...body, deleted_at: null });
+      const msg = String(error?.message || error || "");
+      if (!/409|duplicate key|ux_operativos_eventos_evento_key/i.test(msg)) throw error;
+      const repetido = await buscarEventoPorEventoKey(key);
+      if (!repetido?.id) throw error;
+      return await patchRows(EVENTOS_TABLE, { id: `eq.${repetido.id}` }, {
+        ...eventoBody,
+        deleted_at: null,
+        updated_at: isoAhora(),
+      });
     }
   }
 
@@ -764,14 +756,16 @@
   async function guardarInicio(payload = {}) {
     const estado = await crearOActualizarEstadoInicio(payload);
     const eventoBody = eventoBaseDesdePayload("INICIO", payload, estado.id);
-
-    // Paso 93: el INICIO es único por evento_key. Si se reenvía mientras está EN_CURSO,
-    // debe actualizar el evento vigente y el estado; nunca debe chocar con 409 ni duplicar.
-    const evento = await guardarEventoUnicoPorEventoKey(eventoBody, { preferId: estado.inicio_evento_id });
-
+    const evento = await upsertEventoPorEventoKey(eventoBody);
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
-    window.WSP.debug.operativosRepoUltimoInicioBody = { version: REPO_VERSION, eventoBody, evento, payload, modo: "upsert_por_evento_key" };
+    window.WSP.debug.operativosRepoUltimoInicioBody = {
+      version: REPO_VERSION,
+      modo: "upsert_evento_key",
+      eventoBody,
+      evento,
+      payload,
+    };
 
     const estadoActualizado = await patchRows(ESTADO_TABLE, { id: `eq.${estado.id}` }, {
       estado: "EN_CURSO",
@@ -782,16 +776,14 @@
       moviles_inicio: eventoBody.moviles,
       motos_inicio: eventoBody.motos,
       elementos_inicio: eventoBody.elementos,
-      texto_inicio: eventoBody.texto_generado || "",
-      lugar_inicio: eventoBody.lugar || estado.lugar_inicio || estado.lugar || "",
-      horario_inicio: eventoBody.horario || eventoBody.franja_horaria || estado.horario_inicio || "",
+      texto_inicio: eventoBody.texto_generado,
+      horario_inicio: eventoBody.franja_horaria || eventoBody.horario,
+      lugar_inicio: eventoBody.lugar,
       hora_desde: eventoBody.hora_desde || estado.hora_desde || null,
       hora_hasta: eventoBody.hora_hasta || estado.hora_hasta || null,
       franja_horaria: eventoBody.franja_horaria || estado.franja_horaria || null,
       hora_inicio: eventoBody.hora_inicio || estado.hora_inicio || null,
       hora_finalizacion: eventoBody.hora_finalizacion || estado.hora_finalizacion || null,
-      fecha_inicio: eventoBody.fecha_inicio || estado.fecha_inicio || null,
-      fecha_finalizacion: eventoBody.fecha_finalizacion || estado.fecha_finalizacion || null,
       updated_at: isoAhora(),
       metadata: {
         ...(asObject(estado.metadata)),
@@ -802,7 +794,8 @@
         moviles_inicio: eventoBody.moviles,
         motos_inicio: eventoBody.motos,
         elementos_inicio: eventoBody.elementos,
-        texto_generado_inicio: eventoBody.texto_generado || "",
+        texto_inicio: eventoBody.texto_generado,
+        horario_inicio: eventoBody.franja_horaria || eventoBody.horario,
         repo_version: REPO_VERSION,
       },
     });
@@ -853,7 +846,13 @@
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.operativosRepoUltimoFinalizadoBody = { version: REPO_VERSION, eventoBody, payload };
     validarFinalizadoBodyObligatorio(eventoBody, payload);
-    const evento = await guardarEventoUnicoPorEventoKey(eventoBody, { preferId: estado.finalizado_evento_id });
+    const evento = estado.finalizado_evento_id
+      ? await patchRows(EVENTOS_TABLE, { id: `eq.${estado.finalizado_evento_id}` }, {
+          ...eventoBody,
+          deleted_at: null,
+          updated_at: isoAhora(),
+        })
+      : await upsertEventoPorEventoKey(eventoBody);
 
     const snap = datosSnapshotPayload(payload);
     const tiempo = camposTiempoDesdePayload({ ...payload, horario: eventoBody.franja_horaria || eventoBody.horario });

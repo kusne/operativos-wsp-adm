@@ -1534,54 +1534,6 @@ window.WSP.config = {
     return candidatos.find((v) => !esTipoOperativoGenericoWsp(v)) || candidatos[0] || "Operativo iniciado";
   }
 
-  function valorInicioArrayDesdeEstadoWsp(row = {}, metadata = {}, clavesInicio = [], clavesGenericas = []) {
-    for (const k of clavesInicio) {
-      const arr = normalizarArrayJsonWsp(row?.[k]);
-      if (arr.length) return arr;
-    }
-    for (const k of clavesInicio) {
-      const arr = normalizarArrayJsonWsp(metadata?.[k]);
-      if (arr.length) return arr;
-    }
-    const estado = limpiarTextoSimple(row?.estado_real || row?.estado || metadata?.estado || "").toUpperCase();
-    const esFinalizado = estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-    if (!esFinalizado) {
-      for (const k of clavesGenericas) {
-        const arr = normalizarArrayJsonWsp(row?.[k]);
-        if (arr.length) return arr;
-      }
-      for (const k of clavesGenericas) {
-        const arr = normalizarArrayJsonWsp(metadata?.[k]);
-        if (arr.length) return arr;
-      }
-    }
-    return [];
-  }
-
-  function valorInicioObjetoDesdeEstadoWsp(row = {}, metadata = {}, clavesInicio = [], clavesGenericas = []) {
-    for (const k of clavesInicio) {
-      const obj = parseJsonObjectWsp(row?.[k]);
-      if (obj && Object.keys(obj).length) return obj;
-    }
-    for (const k of clavesInicio) {
-      const obj = parseJsonObjectWsp(metadata?.[k]);
-      if (obj && Object.keys(obj).length) return obj;
-    }
-    const estado = limpiarTextoSimple(row?.estado_real || row?.estado || metadata?.estado || "").toUpperCase();
-    const esFinalizado = estado === "FINALIZADO" || !!row?.finalizado_evento_id;
-    if (!esFinalizado) {
-      for (const k of clavesGenericas) {
-        const obj = parseJsonObjectWsp(row?.[k]);
-        if (obj && Object.keys(obj).length) return obj;
-      }
-      for (const k of clavesGenericas) {
-        const obj = parseJsonObjectWsp(metadata?.[k]);
-        if (obj && Object.keys(obj).length) return obj;
-      }
-    }
-    return {};
-  }
-
   function normalizarInicioDesdeVistaGuardiaWsp(row) {
     if (!row) return null;
     const metadataEstado = parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
@@ -1603,10 +1555,10 @@ window.WSP.config = {
       horario,
       lugar: row?.lugar || "",
       tipo_corto: tipoInicio || row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: valorInicioArrayDesdeEstadoWsp(row, metadataEstado, ["inicio_personal", "personal_inicio"], ["personal", "ultimo_personal"]),
-      moviles: valorInicioArrayDesdeEstadoWsp(row, metadataEstado, ["inicio_moviles", "moviles_inicio"], ["moviles", "ultimo_moviles"]),
-      motos: valorInicioArrayDesdeEstadoWsp(row, metadataEstado, ["inicio_motos", "motos_inicio"], ["motos", "ultimo_motos"]),
-      elementos: valorInicioObjetoDesdeEstadoWsp(row, metadataEstado, ["inicio_elementos", "elementos_inicio"], ["elementos", "ultimo_elementos"]),
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -1846,7 +1798,7 @@ window.WSP.config = {
 
   async function leerIniciosGuardiaDesdeSupabase() {
     const debug = {
-      version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       guardiaFecha: getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
@@ -3399,7 +3351,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       etapa: "inicio_carga_finaliza",
       valorSeleccionado: valorSeleccionado || "",
       timestamp: new Date().toISOString(),
@@ -3453,7 +3405,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -7142,7 +7094,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function obtenerEstadoDecisionFinalizaWsp() {
     asegurarEstadoMismosDatosFinalizaWsp();
     return {
-      version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       checks: {
         personal: !!chkMismoPersonal?.checked,
         movilidad: !!chkMismoMovil?.checked,
@@ -10127,7 +10079,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
       };
       window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
-        version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         personal: payloadHistorial.personal,
         moviles: payloadHistorial.moviles,
         motos: payloadHistorial.motos,
@@ -10147,7 +10099,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       payloadHistorial.metadata = {
         ...(payloadHistorial.metadata || {}),
         finaliza_fuentes_datos: fuentesFinaliza,
-        finaliza_version_envio: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+        finaliza_version_envio: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       };
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.textoFinal = textoFinal;
@@ -10166,8 +10118,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (esFinaliza) {
       const repoVersion = versionRepoOperativosWsp();
-      if (!repoVersion.includes("paso88r-finaliza-lee-en-curso")) {
-        alert(`WSP no cargó el repositorio nuevo de Supabase. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
+      if (!repoVersion.includes("paso92-wsp-reparacion-estable-inicio-finaliza")) {
+        alert(`WSP no cargó el repositorio nuevo de Supabase Paso 92. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
         return;
       }
     }
@@ -10186,7 +10138,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaErrorEstructuraSupabase = {
-        version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         resultadoHistorial,
         payloadHistorial,
         repoVersion: versionRepoOperativosWsp(),
@@ -10200,7 +10152,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaSupabaseGuardado = {
-        version: "paso93-wsp-inicio-upsert-real-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         evento_id: resultadoHistorial?.evento?.id || null,
         estado_id: resultadoHistorial?.estado?.id || null,
         evento: {

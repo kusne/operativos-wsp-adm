@@ -1,0 +1,19 @@
+PASO 87H WSP - ALCOHOLEMIA ENVIO ROBUSTO
+
+COPIAR/REEMPLAZAR:
+- WSP/wsp.js
+- WSP/wsp-bootstrap.js
+
+QUE CORRIGE:
+1) Alcoholemia resuelve primero el operativo/INICIO y despues valida.
+2) Si Supabase/fotos falla, el informe igual abre WhatsApp.
+3) Si el modulo WhatsApp no responde, usa fallback directo a wa.me o compartir del celular.
+4) Oculta y limpia Observacion Extra en Alcoholemia.
+5) Fuerza regla de codigo por vehiculo/graduacion:
+   - Moto/motocicleta > 0.20 => codigo 2020 sancionable.
+   - Camion/transporte/chasis/tractor/carreton > 0 => codigo 2033 sancionable.
+   - Resto > 0.50 => codigo 2016 sancionable.
+
+PRUEBA:
+WSP > INFORMES > ALCOHOLEMIA > completar > Enviar por WhatsApp.
+Debe abrir WhatsApp o compartir texto/fotos.
