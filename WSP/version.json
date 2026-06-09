@@ -1,5 +1,5 @@
 {
-  "version": "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
-  "updated_at": "2026-06-08T21:55:00-03:00",
-  "notes": "FINALIZA agrega operativos EN_CURSO directos desde Supabase aunque no coincidan con publicados; mantiene persistencia estructurada"
+  "version": "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+  "updated_at": "2026-06-09T00:00:00-03:00",
+  "notes": "Carga reparada: root redirige a WSP con mayúsculas y version.json queda sincronizado con wsp-bootstrap para evitar recarga infinita. Mantiene reparación paso92 de INICIO/FINALIZA."
 }
