@@ -74,16 +74,19 @@
   }
 
   function resolverPersonalOperativo({ esFinaliza = false, usarMismoPersonal = false, inicioCompartido = null } = {}) {
-    const personalTexto = (esFinaliza || usarMismoPersonal)
+    // En FINALIZA el INICIO canónico solo fija referencia/orden/horario.
+    // Personal sale del INICIO únicamente si está tildado “Mismo personal”.
+    const tomarDesdeInicio = !!usarMismoPersonal;
+    const personalTexto = tomarDesdeInicio
       ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
       : seleccion("personal");
 
     if (!personalTexto) {
       return {
         ok: false,
-        mensaje: esFinaliza
-          ? "El INICIO guardado no tiene personal policial. Actualice primero el INICIO del operativo en curso."
-          : "Debe seleccionar personal policial.",
+        mensaje: tomarDesdeInicio
+          ? "El INICIO guardado no tiene personal policial. Destilde “Mismo personal” y seleccione el personal del FINALIZADO."
+          : (esFinaliza ? "Debe seleccionar el personal policial del FINALIZADO o tildar “Mismo personal”." : "Debe seleccionar personal policial."),
         personalTexto: "",
       };
     }
@@ -92,20 +95,23 @@
   }
 
   function resolverMovilidadOperativo({ esFinaliza = false, usarMismoMovil = false, inicioCompartido = null } = {}) {
-    const mov = (esFinaliza || usarMismoMovil)
+    // En FINALIZA la movilidad sale del INICIO únicamente si está tildado
+    // “Mismo móvil/es”. Si se destilda, se imprime lo seleccionado ahora.
+    const tomarDesdeInicio = !!usarMismoMovil;
+    const mov = tomarDesdeInicio
       ? lineaDesdeArray(inicioCompartido?.moviles, "/")
       : seleccionLinea("movil", "/");
 
-    const mot = (esFinaliza || usarMismoMovil)
+    const mot = tomarDesdeInicio
       ? lineaDesdeArray(inicioCompartido?.motos, "/")
       : seleccionLinea("moto", "/");
 
     if (mov === "/" && mot === "/") {
       return {
         ok: false,
-        mensaje: esFinaliza
-          ? "El INICIO guardado no tiene móvil ni moto. Actualice primero el INICIO del operativo en curso."
-          : "Debe seleccionar al menos un móvil o moto.",
+        mensaje: tomarDesdeInicio
+          ? "El INICIO guardado no tiene móvil ni moto. Destilde “Mismo móvil/es” y seleccione la movilidad del FINALIZADO."
+          : (esFinaliza ? "Debe seleccionar móvil o moto del FINALIZADO o tildar “Mismo móvil/es”." : "Debe seleccionar al menos un móvil o moto."),
         mov,
         mot,
       };
@@ -115,14 +121,14 @@
   }
 
   function resolverElementosOperativo({ esFinaliza = false, usarMismosElementos = false, elementosInicio = null } = {}) {
-    const usarElementosDesdeInicio = !!(esFinaliza || usarMismosElementos);
+    // En FINALIZA los elementos salen del INICIO únicamente si está tildado
+    // “Mismo Elementos”. Si se destilda, se imprime lo seleccionado ahora.
+    const usarElementosDesdeInicio = !!usarMismosElementos;
 
     if (usarElementosDesdeInicio && !elementosInicio) {
       return {
         ok: false,
-        mensaje: esFinaliza
-          ? "El INICIO guardado no tiene elementos. Actualice primero el INICIO del operativo en curso."
-          : "No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA.",
+        mensaje: "No hay elementos guardados del INICIA. Destilde “Mismo Elementos” y seleccione los elementos del FINALIZADO.",
       };
     }
 
