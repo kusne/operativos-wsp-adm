@@ -1,6 +1,5 @@
 {
-  "app": "WSP",
-  "version": "paso88g-cache-blindado-automatico-20260608",
-  "build": "2026-06-08",
-  "cachePolicy": "no-store-js-css-versioned"
+  "version": "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+  "updated_at": "2026-06-08T22:45:00-03:00",
+  "notes": "Corrige guard de version repo, ignora deleted_at y persiste FINALIZADO con eventoBody estructurado"
 }

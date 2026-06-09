@@ -125,6 +125,9 @@ window.WSP.config = {
   let operativosCache = [];
   let inicioGuardadoActual = null;
   let inicioGuardadoLookupId = 0;
+  let finalizaMismosDatosKey = "";
+  let finalizaMismosDatosTocados = { personal: false, movilidad: false, elementos: false };
+  let finalizaMismosDatosManual = { personal: false, movilidad: false, elementos: false };
   let firmaInformesIntermediosAplicadosFinalizado = "";
 
 
@@ -1310,7 +1313,9 @@ window.WSP.config = {
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
-      horario: limpiarTextoSimple(payload.horario || derivado.horario || ""),
+      horario: resolverHorarioCanonicoFinalizaWsp({ ...payload, horario: payload.horario || derivado.horario || "" }, {}),
+      hora_desde: normalizarHoraCampoFinalizaWsp(payload.hora_desde || payload.hora_inicio || ""),
+      hora_hasta: normalizarHoraCampoFinalizaWsp(payload.hora_hasta || payload.hora_finalizacion || ""),
       lugar: limpiarTextoSimple(payload.lugar || derivado.lugar || ""),
       tipo_corto: limpiarTextoSimple(payload.tipo_corto || derivado.tipo_corto || ""),
       personal: normalizarArrayTexto(payload.personal),
@@ -1532,7 +1537,14 @@ window.WSP.config = {
   function normalizarInicioDesdeVistaGuardiaWsp(row) {
     if (!row) return null;
     const metadataEstado = parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
-    const horario = limpiarTextoSimple(row?.hora_desde && row?.hora_hasta ? `${row.hora_desde} A ${row.hora_hasta}` : row?.horario || metadataEstado?.horario || "");
+    const horario = resolverHorarioCanonicoFinalizaWsp({
+      franja_horaria: row?.franja_horaria || row?.inicio_franja_horaria || row?.horario_inicio || row?.horario || metadataEstado?.franja_horaria || metadataEstado?.horario_inicio || metadataEstado?.horario || "",
+      hora_inicio: row?.hora_inicio || row?.inicio_hora_inicio || metadataEstado?.hora_inicio || "",
+      hora_finalizacion: row?.hora_finalizacion || row?.inicio_hora_finalizacion || metadataEstado?.hora_finalizacion || "",
+      hora_desde: row?.hora_desde || metadataEstado?.hora_desde || "",
+      hora_hasta: row?.hora_hasta || metadataEstado?.hora_hasta || "",
+      metadata: metadataEstado,
+    }, row);
     const tipoInicio = resolverTipoInicioDesdeEstadoWsp(row, metadataEstado);
     return normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || getGuardiaFechaISO(),
@@ -1543,10 +1555,10 @@ window.WSP.config = {
       horario,
       lugar: row?.lugar || "",
       tipo_corto: tipoInicio || row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: row?.inicio_personal || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
-      moviles: row?.inicio_moviles || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
-      motos: row?.inicio_motos || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
-      elementos: row?.inicio_elementos || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -1717,6 +1729,7 @@ window.WSP.config = {
       const params = new URLSearchParams({
         select: selectCols,
         guardia_fecha: `eq.${guardiaFecha}`,
+        deleted_at: "is.null",
         order: "hora_desde.asc,updated_at.desc",
         limit: "300",
       });
@@ -3093,6 +3106,108 @@ window.WSP.config = {
     return tipo;
   }
 
+
+  function normalizarHoraRangoFinalizaWsp(value = "") {
+    const raw = limpiarTextoSimple(value || "").replace(/[–—]/g, "-");
+    if (!raw) return "";
+    const m = raw.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b\s*(?:A|a|-|\/|HASTA|hasta)\s*(FINALIZAR|\d{1,2}\s*:\s*\d{2}(?::\d{2})?)\b/);
+    if (!m) return "";
+    const desdeH = Number(m[1]);
+    const desdeM = Number(m[2]);
+    if (desdeH < 0 || desdeH > 23 || desdeM < 0 || desdeM > 59) return "";
+    let hasta = limpiarTextoSimple(m[3]).toUpperCase();
+    const desde = `${String(desdeH).padStart(2, "0")}:${String(desdeM).padStart(2, "0")}`;
+    if (hasta !== "FINALIZAR") {
+      const mh = hasta.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?$/);
+      if (!mh) return "";
+      const hastaH = Number(mh[1]);
+      const hastaM = Number(mh[2]);
+      if (hastaH < 0 || hastaH > 23 || hastaM < 0 || hastaM > 59) return "";
+      hasta = `${String(hastaH).padStart(2, "0")}:${String(hastaM).padStart(2, "0")}`;
+    }
+    return `${desde} A ${hasta}`;
+  }
+
+  function normalizarHoraCampoFinalizaWsp(value = "") {
+    const raw = limpiarTextoSimple(value || "");
+    if (!raw || /^FINALIZAR$/i.test(raw)) return /^FINALIZAR$/i.test(raw) ? "FINALIZAR" : "";
+    // Acepta formatos de Supabase TIME: HH:MM o HH:MM:SS.
+    // No acepta cadenas compactas tipo "0009" porque producen impresiones corruptas.
+    const m = raw.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (!m) return "";
+    const h = Number(m[1]);
+    const mm = Number(m[2]);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return "";
+    return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function construirHorarioDesdePartesFinalizaWsp(desde = "", hasta = "") {
+    const d = normalizarHoraCampoFinalizaWsp(desde);
+    const h = normalizarHoraCampoFinalizaWsp(hasta);
+    if (!d || !h) return "";
+    return normalizarHoraRangoFinalizaWsp(`${d} A ${h}`) || "";
+  }
+
+  function resolverHorarioCanonicoFinalizaWsp(data = {}, franja = {}) {
+    const metadata = data?.metadata && typeof data.metadata === "object" ? data.metadata : {};
+    const payload = data?.payload_completo && typeof data.payload_completo === "object" ? data.payload_completo : {};
+    const derivadoKey = extraerPartesDeOperativoKey(
+      data?.operativo_key
+      || franja?.operativo_key
+      || franja?.__operativoKey
+      || franja?.__inicioGuardadoPayload?.operativo_key
+      || payload?.operativo_key
+      || payload?.franja?.operativo_key
+      || payload?.franja?.__operativoKey
+      || ""
+    );
+    const candidatosRango = [
+      data.franja_horaria,
+      data.horario_inicio,
+      data.horario,
+      franja?.franja_horaria,
+      franja?.horario_inicio,
+      franja?.horario,
+      franja?.__franjaFinalizaOriginal?.franja_horaria,
+      franja?.__franjaFinalizaOriginal?.horario,
+      franja?.__inicioGuardadoPayload?.franja_horaria,
+      franja?.__inicioGuardadoPayload?.horario_inicio,
+      franja?.__inicioGuardadoPayload?.horario,
+      payload?.franja_horaria,
+      payload?.horario,
+      payload?.franja?.franja_horaria,
+      payload?.franja?.horario,
+      metadata?.franja_horaria,
+      metadata?.horario_inicio,
+      metadata?.ultimo_horario,
+      derivadoKey?.horario,
+    ];
+    for (const item of candidatosRango) {
+      const normalizado = normalizarHoraRangoFinalizaWsp(item || "");
+      if (normalizado) return normalizado;
+    }
+
+    const candidatosPartes = [
+      [data.hora_inicio, data.hora_finalizacion],
+      [data.hora_desde, data.hora_hasta],
+      [franja?.hora_inicio, franja?.hora_finalizacion],
+      [franja?.hora_desde, franja?.hora_hasta],
+      [franja?.__inicioGuardadoPayload?.hora_inicio, franja?.__inicioGuardadoPayload?.hora_finalizacion],
+      [franja?.__inicioGuardadoPayload?.hora_desde, franja?.__inicioGuardadoPayload?.hora_hasta],
+      [payload?.hora_inicio, payload?.hora_finalizacion],
+      [payload?.hora_desde, payload?.hora_hasta],
+      [payload?.franja?.hora_inicio, payload?.franja?.hora_finalizacion],
+      [payload?.franja?.hora_desde, payload?.franja?.hora_hasta],
+      [metadata?.hora_inicio, metadata?.hora_finalizacion],
+      [metadata?.hora_desde, metadata?.hora_hasta],
+    ];
+    for (const [desde, hasta] of candidatosPartes) {
+      const normalizado = construirHorarioDesdePartesFinalizaWsp(desde, hasta);
+      if (normalizado) return normalizado;
+    }
+    return "";
+  }
+
   function construirTituloFinalizaDesdeInicioWsp(tipoRaw = "", ordenRaw = "", fallback = "") {
     const orden = limpiarTextoSimple(ordenRaw || "");
     const tipoLimpio = limpiarOrdenDentroDeTipoFinalizaWsp(tipoRaw, orden) || limpiarOrdenDentroDeTipoFinalizaWsp(fallback, orden);
@@ -3115,7 +3230,7 @@ window.WSP.config = {
     return {
       ...(franja || {}),
       titulo,
-      horario: limpiarTextoSimple(data.horario || franja?.horario || ""),
+      horario: resolverHorarioCanonicoFinalizaWsp(data, franja),
       lugar: limpiarTextoSimple(data.lugar || franja?.lugar || ""),
       fecha: limpiarTextoSimple(data.guardia_fecha || franja?.fecha || getGuardiaFechaISO()),
       __fechaOperativo: limpiarTextoSimple(data.guardia_fecha || franja?.__fechaOperativo || getGuardiaFechaISO()),
@@ -3190,7 +3305,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso88-finaliza-selector-referencias-20260608",
+      version: "paso88D-finaliza-mismos-datos-manual-20260608",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -6804,7 +6919,156 @@ ${bold(`Moviles ${organismo}:`)}`)
     aplicarSeleccionDesdeArray(".moto", payload?.motos);
   }
 
-  function desactivarControlesMismos({ limpiar = false } = {}) {
+  function claveMismosDatosFinalizaWsp() {
+    // La clave debe ser estable durante la selección del FINALIZA.
+    // Antes se priorizaba __operativoKey y podía cambiar cuando Supabase
+    // devolvía el INICIO canónico; eso reseteaba el estado manual y volvía
+    // a pisar personal/móvil/elementos editados por el usuario.
+    return limpiarTextoSimple(
+      selHorario?.value ||
+      franjaSeleccionada?.__key ||
+      franjaSeleccionada?.__operativoKey ||
+      ""
+    );
+  }
+
+  function asegurarEstadoMismosDatosFinalizaWsp() {
+    const key = claveMismosDatosFinalizaWsp();
+    if (key !== finalizaMismosDatosKey) {
+      finalizaMismosDatosKey = key;
+      finalizaMismosDatosTocados = { personal: false, movilidad: false, elementos: false };
+      finalizaMismosDatosManual = { personal: false, movilidad: false, elementos: false };
+    }
+    return finalizaMismosDatosTocados;
+  }
+
+  function resetearEstadoMismosDatosFinalizaWsp() {
+    finalizaMismosDatosKey = claveMismosDatosFinalizaWsp();
+    finalizaMismosDatosTocados = { personal: false, movilidad: false, elementos: false };
+    finalizaMismosDatosManual = { personal: false, movilidad: false, elementos: false };
+  }
+
+  function marcarMismoDatoFinalizaTocadoWsp(campo) {
+    asegurarEstadoMismosDatosFinalizaWsp();
+    if (campo && Object.prototype.hasOwnProperty.call(finalizaMismosDatosTocados, campo)) {
+      finalizaMismosDatosTocados[campo] = true;
+    }
+  }
+
+  function marcarMismoDatoFinalizaManualWsp(campo) {
+    asegurarEstadoMismosDatosFinalizaWsp();
+    if (campo && Object.prototype.hasOwnProperty.call(finalizaMismosDatosManual, campo)) {
+      finalizaMismosDatosManual[campo] = true;
+      finalizaMismosDatosTocados[campo] = true;
+    }
+  }
+
+  function marcarMismoDatoFinalizaDesdeInicioWsp(campo) {
+    asegurarEstadoMismosDatosFinalizaWsp();
+    if (campo && Object.prototype.hasOwnProperty.call(finalizaMismosDatosManual, campo)) {
+      finalizaMismosDatosManual[campo] = false;
+      finalizaMismosDatosTocados[campo] = true;
+    }
+  }
+
+  function bloqueFinalizaVisibleWsp(id) {
+    const el = id ? document.getElementById(id) : null;
+    return !!(el && !el.classList.contains("hidden"));
+  }
+
+  function debeUsarInicioEnEnvioFinalizaWsp(campo, checkbox, bloqueId = "") {
+    asegurarEstadoMismosDatosFinalizaWsp();
+    if (selTipo?.value !== "FINALIZA") return false;
+    if (!checkbox?.checked) return false;
+    if (finalizaMismosDatosManual[campo]) return false;
+
+    // Blindaje Paso 88F:
+    // si el bloque está visible al enviar, el usuario está trabajando en modo manual.
+    // No alcanza con mirar el checkbox porque una sincronización tardía/caché podía
+    // dejarlo tildado aunque el usuario hubiera abierto el bloque y cambiado datos.
+    if (bloqueFinalizaVisibleWsp(bloqueId)) return false;
+
+    return true;
+  }
+
+  function obtenerEstadoDecisionFinalizaWsp() {
+    asegurarEstadoMismosDatosFinalizaWsp();
+    return {
+      version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+      checks: {
+        personal: !!chkMismoPersonal?.checked,
+        movilidad: !!chkMismoMovil?.checked,
+        elementos: !!chkMismosElementos?.checked,
+      },
+      visibles: {
+        personal: bloqueFinalizaVisibleWsp("bloquePersonal"),
+        movilidad: bloqueFinalizaVisibleWsp("bloqueMovil"),
+        elementos: [
+          "bloqueEscopeta",
+          "bloqueHT",
+          "bloquePDA",
+          "bloqueImpresora",
+          "bloqueAlometro",
+          "bloqueAlcoholimetro",
+        ].some((id) => bloqueFinalizaVisibleWsp(id)),
+      },
+      manual: { ...finalizaMismosDatosManual },
+      tocados: { ...finalizaMismosDatosTocados },
+    };
+  }
+
+  function leerDatosManualFinalizaDesdeDomWsp() {
+    // Paso 88I: lectura final y directa del DOM en el momento del ENVÍO.
+    // Esto evita que cualquier snapshot de INICIO, sincronización tardía o estado
+    // interno viejo vuelva a pisar lo que el usuario seleccionó manualmente.
+    return {
+      personalTexto: seleccion("personal"),
+      mov: seleccionLinea("movil", "/"),
+      mot: seleccionLinea("moto", "/"),
+      elementos: {
+        escopetasTXT: seleccionLinea("ESCOPETA", "/"),
+        htTXT: seleccionLinea("HT", "/"),
+        pdaTXT: seleccionLinea("PDA", "/"),
+        impTXT: seleccionLinea("IMPRESORA", "/"),
+        alomTXT: seleccionLinea("Alometro", "/"),
+        alcoTXT: seleccionLinea("Alcoholimetro", "/"),
+      },
+    };
+  }
+
+  function bloqueElementosFinalizaVisibleWsp() {
+    return [
+      "bloqueEscopeta",
+      "bloqueHT",
+      "bloquePDA",
+      "bloqueImpresora",
+      "bloqueAlometro",
+      "bloqueAlcoholimetro",
+    ].some((id) => bloqueFinalizaVisibleWsp(id));
+  }
+
+  function debeForzarManualFinalizaWsp(campo, checkbox, bloqueId = "") {
+    if (selTipo?.value !== "FINALIZA") return false;
+    asegurarEstadoMismosDatosFinalizaWsp();
+    if (!checkbox?.checked) return true;
+    if (finalizaMismosDatosManual[campo]) return true;
+    if (campo === "elementos" && bloqueElementosFinalizaVisibleWsp()) return true;
+    if (bloqueId && bloqueFinalizaVisibleWsp(bloqueId)) return true;
+    return false;
+  }
+
+  function debeAutoAplicarMismoDatoFinalizaWsp(campo, checkbox) {
+    const estado = asegurarEstadoMismosDatosFinalizaWsp();
+    // Si el usuario editó manualmente, una lectura tardía de Supabase
+    // no debe volver a tildar ni pisar la selección manual del FINALIZADO.
+    if (finalizaMismosDatosManual[campo]) return false;
+    if (estado[campo]) return !!checkbox?.checked;
+    return true;
+  }
+
+  function desactivarControlesMismos({ limpiar = false, resetTocados = true } = {}) {
+    if (resetTocados) resetearEstadoMismosDatosFinalizaWsp();
+
     if (chkMismoPersonal) chkMismoPersonal.checked = false;
     if (chkMismoMovil) chkMismoMovil.checked = false;
     if (chkMismosElementos) chkMismosElementos.checked = false;
@@ -6829,17 +7093,31 @@ ${bold(`Moviles ${organismo}:`)}`)
       return;
     }
 
-    if (chkMismoPersonal) chkMismoPersonal.checked = true;
-    if (chkMismoMovil) chkMismoMovil.checked = true;
-    if (chkMismosElementos) chkMismosElementos.checked = true;
+    asegurarEstadoMismosDatosFinalizaWsp();
 
-    aplicarPersonal(data);
-    aplicarMovilidad(data);
-    aplicarElementos(data.elementos);
+    if (debeAutoAplicarMismoDatoFinalizaWsp("personal", chkMismoPersonal)) {
+      if (chkMismoPersonal) chkMismoPersonal.checked = true;
+      aplicarPersonal(data);
+      setPersonalVisible(false);
+    } else {
+      setPersonalVisible(true);
+    }
 
-    setPersonalVisible(false);
-    setMovilidadVisible(false);
-    setElementosVisibles(false);
+    if (debeAutoAplicarMismoDatoFinalizaWsp("movilidad", chkMismoMovil)) {
+      if (chkMismoMovil) chkMismoMovil.checked = true;
+      aplicarMovilidad(data);
+      setMovilidadVisible(false);
+    } else {
+      setMovilidadVisible(true);
+    }
+
+    if (debeAutoAplicarMismoDatoFinalizaWsp("elementos", chkMismosElementos)) {
+      if (chkMismosElementos) chkMismosElementos.checked = true;
+      aplicarElementos(data.elementos);
+      setElementosVisibles(false);
+    } else {
+      setElementosVisibles(true);
+    }
   }
 
   async function sincronizarInicioGuardadoSegunContexto() {
@@ -6935,11 +7213,14 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   if (chkMismoPersonal) {
     chkMismoPersonal.addEventListener("change", () => {
+      marcarMismoDatoFinalizaTocadoWsp("personal");
       if (!chkMismoPersonal.checked) {
+        marcarMismoDatoFinalizaManualWsp("personal");
         limpiarSeleccionPersonal();
         setPersonalVisible(true);
         return;
       }
+      marcarMismoDatoFinalizaDesdeInicioWsp("personal");
 
       const payload = cargarInicioGuardadoCoincidente();
       if (!payload || !payload.personal.length) {
@@ -6957,11 +7238,14 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   if (chkMismoMovil) {
     chkMismoMovil.addEventListener("change", () => {
+      marcarMismoDatoFinalizaTocadoWsp("movilidad");
       if (!chkMismoMovil.checked) {
+        marcarMismoDatoFinalizaManualWsp("movilidad");
         limpiarSeleccionMovilidad();
         setMovilidadVisible(true);
         return;
       }
+      marcarMismoDatoFinalizaDesdeInicioWsp("movilidad");
 
       const payload = cargarInicioGuardadoCoincidente();
       if (!payload || (!payload.moviles.length && !payload.motos.length)) {
@@ -6979,11 +7263,14 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   if (chkMismosElementos) {
     chkMismosElementos.addEventListener("change", () => {
+      marcarMismoDatoFinalizaTocadoWsp("elementos");
       if (!chkMismosElementos.checked) {
+        marcarMismoDatoFinalizaManualWsp("elementos");
         limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
+      marcarMismoDatoFinalizaDesdeInicioWsp("elementos");
 
       const payload = cargarElementosGuardados();
       if (!payload) {
@@ -6998,6 +7285,33 @@ ${bold(`Moviles ${organismo}:`)}`)
       setElementosVisibles(false);
     });
   }
+
+
+  document.addEventListener("change", (evt) => {
+    if (selTipo?.value !== "FINALIZA") return;
+    const target = evt?.target;
+    if (!target || typeof target.matches !== "function") return;
+
+    if (target.matches(".personal")) {
+      marcarMismoDatoFinalizaManualWsp("personal");
+      if (chkMismoPersonal) chkMismoPersonal.checked = false;
+      setPersonalVisible(true);
+      return;
+    }
+
+    if (target.matches(".movil, .moto")) {
+      marcarMismoDatoFinalizaManualWsp("movilidad");
+      if (chkMismoMovil) chkMismoMovil.checked = false;
+      setMovilidadVisible(true);
+      return;
+    }
+
+    if (target.matches(".ESCOPETA, .HT, .PDA, .IMPRESORA, .Alometro, .Alcoholimetro")) {
+      marcarMismoDatoFinalizaManualWsp("elementos");
+      if (chkMismosElementos) chkMismosElementos.checked = false;
+      setElementosVisibles(true);
+    }
+  });
 
 
   // ===== HISTORIAL OPERATIVOS SUPABASE =====
@@ -7156,6 +7470,46 @@ ${bold(`Moviles ${organismo}:`)}`)
       resultado.estado.id &&
       resultado.evento.id
     );
+  }
+
+  function arrayNoVacioFinalizadoWsp(value) {
+    return Array.isArray(value) && value.some((v) => String(v || "").trim());
+  }
+
+  function objetoNoVacioFinalizadoWsp(value) {
+    return !!(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
+  }
+
+  function resultadoFinalizadoEstructuradoValidoWsp(resultado) {
+    const ev = resultado?.evento || {};
+    const est = resultado?.estado || {};
+    const horarioEvento = normalizarHoraRangoFinalizaWsp(ev.franja_horaria || ev.horario || "");
+    const horarioEstado = normalizarHoraRangoFinalizaWsp(est.franja_horaria || est.horario || "");
+    return !!(
+      resultadoGuardadoValidoWsp(resultado) &&
+      (horarioEvento || horarioEstado) &&
+      (ev.hora_inicio || est.hora_inicio) &&
+      (ev.hora_finalizacion || est.hora_finalizacion) &&
+      arrayNoVacioFinalizadoWsp(ev.personal || est.personal_finalizado) &&
+      (arrayNoVacioFinalizadoWsp(ev.moviles || est.moviles_finalizado) || arrayNoVacioFinalizadoWsp(ev.motos || est.motos_finalizado)) &&
+      objetoNoVacioFinalizadoWsp(ev.elementos || est.elementos_finalizado) &&
+      String(ev.texto_generado || est.texto_finalizado || "").trim()
+    );
+  }
+
+  function reemplazarHorarioTextoFinalizaWsp(texto, horarioCanonico) {
+    const horario = normalizarHoraRangoFinalizaWsp(horarioCanonico || "");
+    if (!horario) return texto;
+    const raw = String(texto || "");
+    const patronMd = new RegExp("(\\*Horario:\\*\\s*)[^\\r\\n]*", "i");
+    if (patronMd.test(raw)) return raw.replace(patronMd, `$1${horario}`);
+    const patronSimple = new RegExp("(Horario:\\s*)[^\\r\\n]*", "i");
+    if (patronSimple.test(raw)) return raw.replace(patronSimple, `$1${horario}`);
+    return raw;
+  }
+
+  function versionRepoOperativosWsp() {
+    return String(window.BMZCN?.OperativosRepo?.version || window.WSP?.services?.operativosRepo?.version || "");
   }
 
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
@@ -9236,33 +9590,43 @@ ${bold(`Moviles ${organismo}:`)}`)
     const incluirResultadosFinaliza = esFinaliza && (debeIncluirResultadosFinaliza() || hayAgregadoInformesFinalizado);
     const incluirDetallesFinaliza = esFinaliza && (debeIncluirDetallesFinaliza() || hayAgregadoInformesFinalizado);
     const usarPresenciaActiva = !!chkPresenciaActiva?.checked;
-    const usarMismoPersonal = esFinaliza && !!chkMismoPersonal?.checked;
-    const usarMismoMovil = esFinaliza && !!chkMismoMovil?.checked;
-    const usarMismosElementos = esFinaliza && !!chkMismosElementos?.checked;
+    let usarMismoPersonal = false;
+    let usarMismoMovil = false;
+    let usarMismosElementos = false;
 
     let inicioCompartido = null;
 
     // Regla robusta BMZCN:
-    // FINALIZA siempre debe salir con el snapshot vigente del INICIO guardado en Supabase.
-    // No se debe obligar al usuario a volver a seleccionar personal, móvil ni elementos.
-    // Si no existe INICIO previo, se corta el envío.
-    if (esFinaliza || usarMismoPersonal || usarMismoMovil || usarMismosElementos) {
+    // FINALIZA siempre debe tomar referencia/orden/horario del INICIO guardado en Supabase.
+    // Personal, móvil y elementos solo salen del INICIO si al momento exacto del ENVÍO
+    // el usuario dejó activo "Mismo..." y el bloque está oculto. Si el bloque está visible,
+    // gana lo manual y se guarda/imprime eso mismo.
+    if (esFinaliza) {
       inicioCompartido = await leerInicioDesdeSupabase(franjaSeleccionada) || cargarInicioGuardadoCoincidente() || cargarInicioLocal();
       if (!inicioCompartido) {
-        alert(esFinaliza
-          ? "Debe iniciar el operativo antes de finalizarlo."
-          : "No hay datos guardados del INICIA para este operativo. Destilde las opciones o envíe primero un INICIA."
-        );
+        alert("Debe iniciar el operativo antes de finalizarlo.");
         return;
       }
       inicioGuardadoActual = inicioCompartido;
-
-      if (esFinaliza) {
-        franjaSeleccionada = construirFranjaDesdeInicioCanonicoWsp(franjaSeleccionada, inicioCompartido);
+      franjaSeleccionada = construirFranjaDesdeInicioCanonicoWsp(franjaSeleccionada, inicioCompartido);
+      const horarioFinalizaCanonico = normalizarHoraRangoFinalizaWsp(franjaSeleccionada?.horario || "");
+      if (!horarioFinalizaCanonico) {
+        alert("No se pudo determinar correctamente la franja horaria del INICIO. No se enviará el FINALIZADO hasta corregir esa referencia.");
+        return;
       }
+      franjaSeleccionada.horario = horarioFinalizaCanonico;
+
+      usarMismoPersonal = debeUsarInicioEnEnvioFinalizaWsp("personal", chkMismoPersonal, "bloquePersonal");
+      usarMismoMovil = debeUsarInicioEnEnvioFinalizaWsp("movilidad", chkMismoMovil, "bloqueMovil");
+      usarMismosElementos = debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloqueEscopeta")
+        && debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloqueHT")
+        && debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloquePDA")
+        && debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloqueImpresora")
+        && debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloqueAlometro")
+        && debeUsarInicioEnEnvioFinalizaWsp("elementos", chkMismosElementos, "bloqueAlcoholimetro");
     }
 
-    const elementosInicio = (esFinaliza || usarMismosElementos) ? normalizarPayloadElementos(inicioCompartido) : null;
+    const elementosInicio = usarMismosElementos ? normalizarPayloadElementos(inicioCompartido) : null;
     const lecturaFormulario = resolverLecturaFormularioOperativo({
       esFinaliza,
       usarMismoPersonal,
@@ -9301,37 +9665,34 @@ ${bold(`Moviles ${organismo}:`)}`)
         alcoTXT,
       } = lecturaFormulario);
     } else {
-      personalTexto = (esFinaliza || usarMismoPersonal)
+      personalTexto = usarMismoPersonal
         ? normalizarArrayTexto(inicioCompartido?.personal).join("\n")
         : seleccion("personal");
 
       if (!personalTexto) {
-        alert(esFinaliza
-          ? "El INICIO guardado no tiene personal policial. Actualice primero el INICIO del operativo en curso."
-          : "Debe seleccionar personal policial."
+        alert(usarMismoPersonal
+          ? "El INICIO guardado no tiene personal policial. Destilde “Mismo personal” y seleccione el personal del FINALIZADO."
+          : (esFinaliza ? "Debe seleccionar el personal policial del FINALIZADO o tildar “Mismo personal”." : "Debe seleccionar personal policial.")
         );
         return;
       }
 
-      mov = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
-      mot = (esFinaliza || usarMismoMovil) ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
+      mov = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.moviles, "/") : seleccionLinea("movil", "/");
+      mot = usarMismoMovil ? lineaDesdeArray(inicioCompartido?.motos, "/") : seleccionLinea("moto", "/");
       if (mov === "/" && mot === "/") {
-        alert(esFinaliza
-          ? "El INICIO guardado no tiene móvil ni moto. Actualice primero el INICIO del operativo en curso."
-          : "Debe seleccionar al menos un móvil o moto."
+        alert(usarMismoMovil
+          ? "El INICIO guardado no tiene móvil ni moto. Destilde “Mismo móvil/es” y seleccione la movilidad del FINALIZADO."
+          : (esFinaliza ? "Debe seleccionar móvil o moto del FINALIZADO o tildar “Mismo móvil/es”." : "Debe seleccionar al menos un móvil o moto.")
         );
         return;
       }
 
-      if ((esFinaliza || usarMismosElementos) && !elementosInicio) {
-        alert(esFinaliza
-          ? "El INICIO guardado no tiene elementos. Actualice primero el INICIO del operativo en curso."
-          : "No hay elementos guardados del INICIA. Destilde “mismos elementos” o envíe primero un INICIA."
-        );
+      if (usarMismosElementos && !elementosInicio) {
+        alert("No hay elementos guardados del INICIA. Destilde “Mismo Elementos” y seleccione los elementos del FINALIZADO.");
         return;
       }
 
-      usarElementosDesdeInicio = esFinaliza || usarMismosElementos;
+      usarElementosDesdeInicio = usarMismosElementos;
       escopetasTXT = usarElementosDesdeInicio
         ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
         : seleccionLinea("ESCOPETA", "/");
@@ -9350,6 +9711,68 @@ ${bold(`Moviles ${organismo}:`)}`)
       alcoTXT = usarElementosDesdeInicio
         ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
         : seleccionLinea("Alcoholimetro", "/");
+    }
+
+    if (esFinaliza) {
+      const manualFinalizaDom = leerDatosManualFinalizaDesdeDomWsp();
+
+      if (debeForzarManualFinalizaWsp("personal", chkMismoPersonal, "bloquePersonal")) {
+        usarMismoPersonal = false;
+        personalTexto = manualFinalizaDom.personalTexto;
+        if (!personalTexto) {
+          alert("Debe seleccionar el personal policial del FINALIZADO o tildar “Mismo personal”.");
+          return;
+        }
+      }
+
+      if (debeForzarManualFinalizaWsp("movilidad", chkMismoMovil, "bloqueMovil")) {
+        usarMismoMovil = false;
+        mov = manualFinalizaDom.mov;
+        mot = manualFinalizaDom.mot;
+        if (mov === "/" && mot === "/") {
+          alert("Debe seleccionar móvil o moto del FINALIZADO o tildar “Mismo móvil/es”.");
+          return;
+        }
+      }
+
+      if (debeForzarManualFinalizaWsp("elementos", chkMismosElementos, "bloqueEscopeta")) {
+        usarMismosElementos = false;
+        usarElementosDesdeInicio = false;
+        escopetasTXT = manualFinalizaDom.elementos.escopetasTXT;
+        htTXT = manualFinalizaDom.elementos.htTXT;
+        pdaTXT = manualFinalizaDom.elementos.pdaTXT;
+        impTXT = manualFinalizaDom.elementos.impTXT;
+        alomTXT = manualFinalizaDom.elementos.alomTXT;
+        alcoTXT = manualFinalizaDom.elementos.alcoTXT;
+      }
+    }
+
+    const fuentesFinaliza = esFinaliza ? {
+      personal: usarMismoPersonal ? "INICIO" : "FINALIZADO_MANUAL",
+      movilidad: usarMismoMovil ? "INICIO" : "FINALIZADO_MANUAL",
+      elementos: usarMismosElementos ? "INICIO" : "FINALIZADO_MANUAL",
+    } : null;
+
+    if (esFinaliza) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.finalizaDatosEnvio = {
+        ...obtenerEstadoDecisionFinalizaWsp(),
+        fuentes: fuentesFinaliza,
+        salida: {
+          personalTexto,
+          mov,
+          mot,
+          elementos: { escopetasTXT, htTXT, pdaTXT, impTXT, alomTXT, alcoTXT },
+        },
+        inicio: {
+          personal: inicioCompartido?.personal || [],
+          moviles: inicioCompartido?.moviles || [],
+          motos: inicioCompartido?.motos || [],
+          elementos: inicioCompartido?.elementos || {},
+        },
+      };
+      console.log("[WSP FINALIZA datos envío]", window.WSP.debug.finalizaDatosEnvio);
     }
 
     const fecha = new Date().toLocaleDateString("es-AR");
@@ -9400,7 +9823,14 @@ ${bold(`Moviles ${organismo}:`)}`)
       partes.push("");
 
       partes.push(`${bold("Fecha:")} ${fecha}`);
-      partes.push(`${bold("Horario:")} ${normalizarHorario(franjaSeleccionada.horario)}`);
+      const horarioImpresion = esFinaliza
+        ? normalizarHoraRangoFinalizaWsp(franjaSeleccionada?.horario || "")
+        : normalizarHorario(franjaSeleccionada.horario);
+      if (esFinaliza && !horarioImpresion) {
+        alert("No se imprimirá el FINALIZADO porque la franja horaria está vacía o corrupta. Vuelva a seleccionar el operativo iniciado.");
+        return;
+      }
+      partes.push(`${bold("Horario:")} ${horarioImpresion}`);
       partes.push(`${bold("Lugar:")} ${normalizarLugar(franjaSeleccionada.lugar)}`);
       partes.push("");
 
@@ -9495,9 +9925,17 @@ ${bold(`Moviles ${organismo}:`)}`)
       partes.push(observacionesFinalesTexto);
     }
 
-    const textoFinal = modMensajesOperativo && typeof modMensajesOperativo.construirTextoDesdePartes === "function"
+    let textoFinal = modMensajesOperativo && typeof modMensajesOperativo.construirTextoDesdePartes === "function"
       ? modMensajesOperativo.construirTextoDesdePartes(partes)
       : compactarSaltos(partes.join("\n"));
+    if (esFinaliza) {
+      const horarioCanonicoTexto = normalizarHoraRangoFinalizaWsp(franjaSeleccionada?.horario || "");
+      if (!horarioCanonicoTexto) {
+        alert("No se imprimirá el FINALIZADO porque la franja horaria está vacía o corrupta. Vuelva a seleccionar el operativo iniciado.");
+        return;
+      }
+      textoFinal = reemplazarHorarioTextoFinalizaWsp(textoFinal, horarioCanonicoTexto);
+    }
     const tipoEventoHistorial = esFinaliza ? "FINALIZADO" : "INICIO";
     const payloadHistorial = construirPayloadHistorialOperativoWsp({
       tipoEvento: tipoEventoHistorial,
@@ -9516,8 +9954,74 @@ ${bold(`Moviles ${organismo}:`)}`)
       observacionesFinales: observacionesFinalesTexto,
     });
 
+    if (esFinaliza && payloadHistorial) {
+      if (window.WSP?.debug?.finalizaDatosEnvio) {
+        window.WSP.debug.finalizaDatosEnvio.texto_generado = textoFinal;
+        window.WSP.debug.finalizaDatosEnvio.textoFinal = textoFinal;
+      }
+      const horarioCanonicoPayload = resolverHorarioCanonicoFinalizaWsp(payloadHistorial, franjaSeleccionada);
+      if (!horarioCanonicoPayload) {
+        alert("No se guardará ni enviará el FINALIZADO porque la franja horaria llegó corrupta al payload.");
+        return;
+      }
+      payloadHistorial.horario = horarioCanonicoPayload;
+      payloadHistorial.franja_horaria = horarioCanonicoPayload;
+      payloadHistorial.texto_generado = textoFinal;
+      payloadHistorial.personal = String(personalTexto || "").split(/\r?\n/).map((v) => limpiarTextoSimple(v)).filter(Boolean);
+      payloadHistorial.moviles = String(mov || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
+      payloadHistorial.motos = String(mot || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
+      payloadHistorial.elementos = {
+        ESCOPETA: String(escopetasTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+        HT: String(htTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+        PDA: String(pdaTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+        IMPRESORA: String(impTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+        Alometro: String(alomTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+        Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
+      };
+      window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
+        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        personal: payloadHistorial.personal,
+        moviles: payloadHistorial.moviles,
+        motos: payloadHistorial.motos,
+        elementos: payloadHistorial.elementos,
+        horario: payloadHistorial.horario,
+        texto_generado: payloadHistorial.texto_generado,
+      };
+      // Paso 88K: las fuentes quedan también como columnas top-level para que
+      // operativos_eventos y operativos_estado las persistan, no solo metadata.
+      payloadHistorial.personal_fuente = fuentesFinaliza.personal;
+      payloadHistorial.movilidad_fuente = fuentesFinaliza.movilidad;
+      payloadHistorial.elementos_fuente = fuentesFinaliza.elementos;
+      payloadHistorial.personal_finalizado_fuente = fuentesFinaliza.personal;
+      payloadHistorial.movilidad_finalizado_fuente = fuentesFinaliza.movilidad;
+      payloadHistorial.elementos_finalizado_fuente = fuentesFinaliza.elementos;
+      payloadHistorial.finaliza_fuentes_datos = fuentesFinaliza;
+      payloadHistorial.metadata = {
+        ...(payloadHistorial.metadata || {}),
+        finaliza_fuentes_datos: fuentesFinaliza,
+        finaliza_version_envio: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+      };
+      payloadHistorial.texto_generado = textoFinal;
+      payloadHistorial.textoFinal = textoFinal;
+      payloadHistorial.payload_completo = {
+        ...(payloadHistorial.payload_completo || {}),
+        texto_generado: textoFinal,
+        textoFinal,
+        finaliza_fuentes_datos: fuentesFinaliza,
+        finaliza_debug_envio: window.WSP?.debug?.finalizaDatosEnvio || null,
+      };
+    }
+
     if (selTipo.value === "INICIA") {
       await guardarElementosDeInicio();
+    }
+
+    if (esFinaliza) {
+      const repoVersion = versionRepoOperativosWsp();
+      if (!repoVersion.includes("paso88p-version-repo")) {
+        alert(`WSP no cargó el repositorio nuevo de Supabase. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
+        return;
+      }
     }
 
     const resultadoHistorial = await guardarHistorialOperativoWsp(tipoEventoHistorial, payloadHistorial);
@@ -9528,6 +10032,61 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!resultadoGuardadoValidoWsp(resultadoHistorial)) {
       alert("No se confirmó el guardado en Supabase. No se enviará por WhatsApp porque Estadísticas no podría actualizarse.");
       return;
+    }
+
+    if (esFinaliza && !resultadoFinalizadoEstructuradoValidoWsp(resultadoHistorial)) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.finalizaErrorEstructuraSupabase = {
+        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        resultadoHistorial,
+        payloadHistorial,
+        repoVersion: versionRepoOperativosWsp(),
+      };
+      console.error("[WSP FINALIZA] Supabase devolvió guardado incompleto", window.WSP.debug.finalizaErrorEstructuraSupabase);
+      alert("Supabase devolvió el FINALIZADO sin campos estructurados. No se abrirá WhatsApp. Revise window.WSP.debug.finalizaErrorEstructuraSupabase.");
+      return;
+    }
+
+    if (esFinaliza) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.finalizaSupabaseGuardado = {
+        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        evento_id: resultadoHistorial?.evento?.id || null,
+        estado_id: resultadoHistorial?.estado?.id || null,
+        evento: {
+          horario: resultadoHistorial?.evento?.horario || null,
+          franja_horaria: resultadoHistorial?.evento?.franja_horaria || null,
+          hora_desde: resultadoHistorial?.evento?.hora_desde || null,
+          hora_hasta: resultadoHistorial?.evento?.hora_hasta || null,
+          hora_inicio: resultadoHistorial?.evento?.hora_inicio || null,
+          hora_finalizacion: resultadoHistorial?.evento?.hora_finalizacion || null,
+          personal: resultadoHistorial?.evento?.personal || null,
+          personal_fuente: resultadoHistorial?.evento?.personal_fuente || null,
+          moviles: resultadoHistorial?.evento?.moviles || null,
+          motos: resultadoHistorial?.evento?.motos || null,
+          movilidad_fuente: resultadoHistorial?.evento?.movilidad_fuente || null,
+          elementos: resultadoHistorial?.evento?.elementos || null,
+          elementos_fuente: resultadoHistorial?.evento?.elementos_fuente || null,
+          texto_generado: resultadoHistorial?.evento?.texto_generado || null,
+        },
+        estado: {
+          franja_horaria: resultadoHistorial?.estado?.franja_horaria || null,
+          hora_inicio: resultadoHistorial?.estado?.hora_inicio || null,
+          hora_finalizacion: resultadoHistorial?.estado?.hora_finalizacion || null,
+          personal_finalizado: resultadoHistorial?.estado?.personal_finalizado || null,
+          personal_finalizado_fuente: resultadoHistorial?.estado?.personal_finalizado_fuente || null,
+          moviles_finalizado: resultadoHistorial?.estado?.moviles_finalizado || null,
+          motos_finalizado: resultadoHistorial?.estado?.motos_finalizado || null,
+          movilidad_finalizado_fuente: resultadoHistorial?.estado?.movilidad_finalizado_fuente || null,
+          elementos_finalizado: resultadoHistorial?.estado?.elementos_finalizado || null,
+          elementos_finalizado_fuente: resultadoHistorial?.estado?.elementos_finalizado_fuente || null,
+          texto_finalizado: resultadoHistorial?.estado?.texto_finalizado || null,
+        },
+        estado_metadata: resultadoHistorial?.estado?.metadata || null,
+      };
+      console.log("[WSP FINALIZA Supabase guardado]", window.WSP.debug.finalizaSupabaseGuardado);
     }
 
     resetUI();

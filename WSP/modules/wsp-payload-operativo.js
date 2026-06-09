@@ -109,6 +109,93 @@
     return /(\d{1,2})[ :](\d{2})\s*a\s*(\d{1,2})[ :](\d{2})/i.test(String(txt || ""));
   }
 
+
+  function normalizarHoraRangoFinalizaWsp(value = "") {
+    const raw = limpiarTextoSimple(value || "").replace(/[–—]/g, "-");
+    if (!raw) return "";
+    const m = raw.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b\s*(?:A|a|-|\/|HASTA|hasta)\s*(FINALIZAR|\d{1,2}\s*:\s*\d{2}(?::\d{2})?)\b/);
+    if (!m) return "";
+    const desdeH = Number(m[1]);
+    const desdeM = Number(m[2]);
+    if (desdeH < 0 || desdeH > 23 || desdeM < 0 || desdeM > 59) return "";
+    let hasta = limpiarTextoSimple(m[3]).toUpperCase();
+    const desde = `${String(desdeH).padStart(2, "0")}:${String(desdeM).padStart(2, "0")}`;
+    if (hasta !== "FINALIZAR") {
+      const mh = hasta.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?$/);
+      if (!mh) return "";
+      const hastaH = Number(mh[1]);
+      const hastaM = Number(mh[2]);
+      if (hastaH < 0 || hastaH > 23 || hastaM < 0 || hastaM > 59) return "";
+      hasta = `${String(hastaH).padStart(2, "0")}:${String(hastaM).padStart(2, "0")}`;
+    }
+    return `${desde} A ${hasta}`;
+  }
+
+  function normalizarHoraCampoFinalizaWsp(value = "") {
+    const raw = limpiarTextoSimple(value || "");
+    if (!raw || /^FINALIZAR$/i.test(raw)) return /^FINALIZAR$/i.test(raw) ? "FINALIZAR" : "";
+    const m = raw.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (!m) return "";
+    const h = Number(m[1]);
+    const mm = Number(m[2]);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return "";
+    return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function construirHorarioDesdePartesFinalizaWsp(desde = "", hasta = "") {
+    const d = normalizarHoraCampoFinalizaWsp(desde);
+    const h = normalizarHoraCampoFinalizaWsp(hasta);
+    if (!d || !h) return "";
+    return normalizarHoraRangoFinalizaWsp(`${d} A ${h}`) || "";
+  }
+
+  function resolverHorarioPayloadWsp(franja = {}) {
+    const payload = franja?.payload_completo && typeof franja.payload_completo === "object" ? franja.payload_completo : {};
+    const derivadoKey = extraerPartesDeOperativoKey(
+      franja?.operativo_key
+      || franja?.__operativoKey
+      || franja?.__inicioGuardadoPayload?.operativo_key
+      || payload?.operativo_key
+      || payload?.franja?.operativo_key
+      || payload?.franja?.__operativoKey
+      || ""
+    );
+    const candidatos = [
+      franja?.franja_horaria,
+      franja?.horario_inicio,
+      franja?.horario,
+      franja?.__inicioGuardadoPayload?.franja_horaria,
+      franja?.__inicioGuardadoPayload?.horario_inicio,
+      franja?.__inicioGuardadoPayload?.horario,
+      franja?.__franjaFinalizaOriginal?.franja_horaria,
+      franja?.__franjaFinalizaOriginal?.horario,
+      payload?.franja_horaria,
+      payload?.horario,
+      payload?.franja?.franja_horaria,
+      payload?.franja?.horario,
+      derivadoKey?.horario,
+    ];
+    for (const item of candidatos) {
+      const normalizado = normalizarHoraRangoFinalizaWsp(item || "");
+      if (normalizado) return normalizado;
+    }
+    const pares = [
+      [franja?.hora_inicio, franja?.hora_finalizacion],
+      [franja?.hora_desde, franja?.hora_hasta],
+      [franja?.__inicioGuardadoPayload?.hora_inicio, franja?.__inicioGuardadoPayload?.hora_finalizacion],
+      [franja?.__inicioGuardadoPayload?.hora_desde, franja?.__inicioGuardadoPayload?.hora_hasta],
+      [payload?.hora_inicio, payload?.hora_finalizacion],
+      [payload?.hora_desde, payload?.hora_hasta],
+      [payload?.franja?.hora_inicio, payload?.franja?.hora_finalizacion],
+      [payload?.franja?.hora_desde, payload?.franja?.hora_hasta],
+    ];
+    for (const [desde, hasta] of pares) {
+      const normalizado = construirHorarioDesdePartesFinalizaWsp(desde, hasta);
+      if (normalizado) return normalizado;
+    }
+    return "";
+  }
+
   function pareceDiaSemana(txt) {
     return /^(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)$/i.test(limpiarTextoSimple(txt));
   }
@@ -206,7 +293,9 @@
       operativo_key: String(payload.operativo_key || ""),
       orden_num: limpiarTextoSimple(payload.orden_num || derivado.orden_num || ""),
       texto_ref: limpiarTextoSimple(payload.texto_ref || derivado.texto_ref || ""),
-      horario: limpiarTextoSimple(payload.horario || derivado.horario || ""),
+      horario: resolverHorarioPayloadWsp({ ...payload, horario: payload.horario || derivado.horario || "" }),
+      hora_desde: normalizarHoraCampoFinalizaWsp(payload.hora_desde || payload.hora_inicio || ""),
+      hora_hasta: normalizarHoraCampoFinalizaWsp(payload.hora_hasta || payload.hora_finalizacion || ""),
       lugar: limpiarTextoSimple(payload.lugar || derivado.lugar || ""),
       tipo_corto: limpiarTextoSimple(payload.tipo_corto || derivado.tipo_corto || ""),
       personal: normalizarArrayTexto(payload.personal),
@@ -285,7 +374,8 @@
     const getGuardiaFechaISO = typeof deps.getGuardiaFechaISO === "function" ? deps.getGuardiaFechaISO : () => "";
     const obtenerTipoCortoFranja = typeof deps.obtenerTipoCortoFranja === "function" ? deps.obtenerTipoCortoFranja : () => "";
 
-    const partesHorario = extraerHorarioPartesWsp(franja?.horario || "");
+    const horarioPayload = resolverHorarioPayloadWsp(franja) || normalizarHorario(franja?.horario || "");
+    const partesHorario = extraerHorarioPartesWsp(horarioPayload || "");
     const mapas = extraerMapasResultadosHistorialWsp(ctx.lineasResultados || []);
     const ordenes = normalizarArrayJsonWsp(franja?.__ordenesOrigen || franja?.__ordenNum || "");
 
@@ -296,7 +386,7 @@
       guardia_fecha: getGuardiaFechaISO(),
       fecha_operativo: fechaFranjaHistorialWsp(franja),
       fecha: ctx.fecha || new Date().toLocaleDateString("es-AR"),
-      horario: normalizarHorario(franja?.horario || ""),
+      horario: horarioPayload,
       hora_desde: partesHorario.desde || "",
       hora_hasta: partesHorario.hasta || "",
       lugar: normalizarLugar(franja?.lugar || ""),
@@ -320,9 +410,12 @@
       detalles: Array.isArray(ctx.detallesProcesados?.detalleItems) ? ctx.detallesProcesados.detalleItems : [],
       observaciones: ctx.observacionesFinales,
       texto_generado: ctx.textoFinal,
+      textoFinal: ctx.textoFinal,
       payload_completo: {
         tipo_evento: ctx.tipoEvento,
         franja,
+        texto_generado: ctx.textoFinal,
+        textoFinal: ctx.textoFinal,
         registro_original: franja?.__registroOriginalPublicado || null,
       },
       metadata: {
@@ -338,6 +431,8 @@
     normalizarParteClave,
     normalizarArrayTexto,
     normalizarPayloadElementos,
+    normalizarHoraRangoFinalizaWsp,
+    resolverHorarioPayloadWsp,
     construirOperativoKeyEstable,
     construirOperativoKeysPosibles,
     pareceHorario,

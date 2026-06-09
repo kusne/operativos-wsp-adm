@@ -45,6 +45,74 @@
     return [];
   }
 
+  function normalizarHoraRango(value = "") {
+    const raw = limpiarTextoSimple(value || "").replace(/[–—]/g, "-");
+    if (!raw) return "";
+    const m = raw.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b\s*(?:A|a|-|\/|HASTA|hasta)\s*(FINALIZAR|\d{1,2}\s*:\s*\d{2}(?::\d{2})?)\b/);
+    if (!m) return "";
+    const hi = Number(m[1]);
+    const mi = Number(m[2]);
+    if (hi < 0 || hi > 23 || mi < 0 || mi > 59) return "";
+    let hasta = limpiarTextoSimple(m[3]).toUpperCase();
+    const desde = `${String(hi).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+    if (hasta !== "FINALIZAR") {
+      const mh = hasta.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?$/);
+      if (!mh) return "";
+      const hf = Number(mh[1]);
+      const mf = Number(mh[2]);
+      if (hf < 0 || hf > 23 || mf < 0 || mf > 59) return "";
+      hasta = `${String(hf).padStart(2, "0")}:${String(mf).padStart(2, "0")}`;
+    }
+    return `${desde} A ${hasta}`;
+  }
+
+  function normalizarHoraCampo(value = "") {
+    const raw = limpiarTextoSimple(value || "");
+    if (!raw || /^FINALIZAR$/i.test(raw)) return /^FINALIZAR$/i.test(raw) ? "FINALIZAR" : "";
+    const m = raw.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (!m) return "";
+    const h = Number(m[1]);
+    const mm = Number(m[2]);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return "";
+    return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function horarioDesdePartes(desde = "", hasta = "") {
+    const d = normalizarHoraCampo(desde);
+    const h = normalizarHoraCampo(hasta);
+    if (!d || !h) return "";
+    return normalizarHoraRango(`${d} A ${h}`);
+  }
+
+  function resolverHorarioRow(row = {}, metadata = {}) {
+    const candidatos = [
+      row?.franja_horaria,
+      row?.inicio_franja_horaria,
+      row?.horario_inicio,
+      row?.horario,
+      metadata?.franja_horaria,
+      metadata?.horario_inicio,
+      metadata?.horario,
+      metadata?.ultimo_horario,
+    ];
+    for (const item of candidatos) {
+      const normalizado = normalizarHoraRango(item || "");
+      if (normalizado) return normalizado;
+    }
+    const pares = [
+      [row?.hora_inicio, row?.hora_finalizacion],
+      [row?.inicio_hora_inicio, row?.inicio_hora_finalizacion],
+      [row?.hora_desde, row?.hora_hasta],
+      [metadata?.hora_inicio, metadata?.hora_finalizacion],
+      [metadata?.hora_desde, metadata?.hora_hasta],
+    ];
+    for (const [desde, hasta] of pares) {
+      const normalizado = horarioDesdePartes(desde, hasta);
+      if (normalizado) return normalizado;
+    }
+    return "";
+  }
+
   function timestampMs(value) {
     if (!value) return NaN;
     const d = new Date(String(value).trim());
@@ -116,7 +184,7 @@
     if (!row) return null;
     const d = getDeps(deps);
     const metadataEstado = d.parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
-    const horario = limpiarTextoSimple(row?.hora_desde && row?.hora_hasta ? `${row.hora_desde} A ${row.hora_hasta}` : row?.horario || metadataEstado?.horario || "");
+    const horario = resolverHorarioRow(row, metadataEstado);
     return d.normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || d.getGuardiaFechaISO(),
       operativo_estado_id: row?.operativo_estado_id || row?.id || "",
@@ -126,10 +194,10 @@
       horario,
       lugar: row?.lugar || "",
       tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: row?.inicio_personal || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
-      moviles: row?.inicio_moviles || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
-      motos: row?.inicio_motos || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
-      elementos: row?.inicio_elementos || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -180,11 +248,9 @@
   function normalizarEstadoOperativoEnCurso(row, deps = {}) {
     if (!row || !estadoOperativoEsEnCursoWsp(row)) return null;
     const d = getDeps(deps);
-    const horaDesde = limpiarTextoSimple(row?.hora_desde || "");
-    const horaHasta = limpiarTextoSimple(row?.hora_hasta || "");
-    const horario = limpiarTextoSimple(row?.horario || (horaDesde && horaHasta ? `${horaDesde} A ${horaHasta}` : horaDesde || horaHasta));
-    const ordenes = d.normalizarArrayJsonWsp(row?.ordenes_origen);
     const meta = d.parseJsonObjectWsp(row?.metadata) || {};
+    const horario = resolverHorarioRow(row, meta);
+    const ordenes = d.normalizarArrayJsonWsp(row?.ordenes_origen);
 
     return d.normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || d.getGuardiaFechaISO(),
@@ -195,10 +261,10 @@
       horario,
       lugar: row?.lugar || "",
       tipo_corto: row?.tipo_operativo || meta?.tipo_operativo || row?.tipo || "Operativo iniciado",
-      personal: row?.personal || meta?.personal_inicio || meta?.ultimo_personal || meta?.personal || [],
-      moviles: row?.moviles || meta?.moviles_inicio || meta?.ultimo_moviles || meta?.moviles || [],
-      motos: row?.motos || meta?.motos_inicio || meta?.ultimo_motos || meta?.motos || [],
-      elementos: row?.elementos || meta?.elementos_inicio || meta?.ultimo_elementos || meta?.elementos || {},
+      personal: row?.inicio_personal || row?.personal_inicio || row?.personal || meta?.personal_inicio || meta?.ultimo_personal || meta?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || row?.moviles || meta?.moviles_inicio || meta?.ultimo_moviles || meta?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || row?.motos || meta?.motos_inicio || meta?.ultimo_motos || meta?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || row?.elementos || meta?.elementos_inicio || meta?.ultimo_elementos || meta?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -212,6 +278,7 @@
         select: "operativo_key,payload_completo,guardia_fecha,tipo_evento",
         guardia_fecha: `eq.${d.getGuardiaFechaISO()}`,
         tipo_evento: "eq.FINALIZADO",
+        deleted_at: "is.null",
         limit: "1000",
       }, d);
 
@@ -246,12 +313,13 @@
 
   async function leerOperativosEnCursoDesdeEstadoSupabase(deps = {}) {
     const d = getDeps(deps);
-    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at";
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,horario_inicio,lugar_inicio";
 
     try {
       const data = await leerTabla("operativos_estado", {
         select: selectCols,
         guardia_fecha: `eq.${d.getGuardiaFechaISO()}`,
+        deleted_at: "is.null",
         order: "hora_desde.asc,updated_at.desc",
         limit: "300",
       }, d);

@@ -8,6 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
+  const REPO_VERSION = "paso88p-version-repo-y-finalizado-manual-estructurado-20260608";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -117,6 +118,106 @@
     return new Date().toISOString();
   }
 
+  function fechaLocalISO(date = new Date()) {
+    const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function horaLocalHHMM(date = new Date()) {
+    const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function normalizarFechaISO(value) {
+    const raw = limpiarTexto(value || "");
+    if (!raw) return "";
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return raw;
+    const ar = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (ar) return `${ar[3]}-${String(Number(ar[2])).padStart(2, "0")}-${String(Number(ar[1])).padStart(2, "0")}`;
+    return "";
+  }
+
+  function sumarDiasISO(fechaISO, dias = 0) {
+    const base = normalizarFechaISO(fechaISO);
+    if (!base) return "";
+    const d = new Date(`${base}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return base;
+    d.setDate(d.getDate() + Number(dias || 0));
+    return fechaLocalISO(d);
+  }
+
+  function normalizarHoraSQL(value) {
+    const raw = limpiarTexto(value || "").toUpperCase();
+    const m = raw.match(/^(\d{1,2})\s*:\s*(\d{2})$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function minutosHora(value) {
+    const h = normalizarHoraSQL(value);
+    if (!h) return null;
+    const [hh, mm] = h.split(":").map(Number);
+    return hh * 60 + mm;
+  }
+
+  function camposTiempoDesdePayload(payload = {}) {
+    const horario = getHorario(payload);
+    const partes = partesHorario({ ...payload, horario });
+    const horaInicio = normalizarHoraSQL(partes.desde);
+    const horaFinalizacion = normalizarHoraSQL(partes.hasta);
+    const fechaBase = normalizarFechaISO(payload.fecha_operativo)
+      || normalizarFechaISO(payload.fecha_inicio)
+      || normalizarFechaISO(payload.guardia_fecha)
+      || getGuardiaFecha(payload)
+      || fechaLocalISO();
+
+    let fechaFinalizacion = normalizarFechaISO(payload.fecha_finalizacion) || fechaBase;
+    const mi = minutosHora(horaInicio);
+    const mf = minutosHora(horaFinalizacion);
+    if (!payload.fecha_finalizacion && mi !== null && mf !== null && mf < mi) {
+      fechaFinalizacion = sumarDiasISO(fechaBase, 1);
+    }
+
+    const eventoTs = limpiarTexto(payload.evento_ts || "") || isoAhora();
+
+    return {
+      franja_horaria: horario || null,
+      hora_inicio: horaInicio,
+      hora_finalizacion: horaFinalizacion,
+      fecha_inicio: fechaBase || null,
+      fecha_finalizacion: fechaFinalizacion || null,
+      fecha_evento: normalizarFechaISO(payload.fecha_evento) || fechaLocalISO(),
+      hora_evento: normalizarHoraSQL(payload.hora_evento) || horaLocalHHMM(),
+      evento_ts: eventoTs,
+    };
+  }
+
+  function fuentesFinalizaDesdePayload(payload = {}) {
+    const fuentes = asObject(payload.finaliza_fuentes_datos)
+      || asObject(payload.payload_completo?.finaliza_fuentes_datos)
+      || asObject(payload.metadata?.finaliza_fuentes_datos);
+    const fuentesPayloadCompleto = asObject(payload.payload_completo?.finaliza_fuentes_datos);
+    const fuentesMetadata = asObject(payload.metadata?.finaliza_fuentes_datos);
+    const fuente = (campo, legacy) => limpiarTexto(
+      payload[`${campo}_fuente`]
+      || fuentes?.[campo]
+      || fuentesPayloadCompleto?.[campo]
+      || fuentesMetadata?.[campo]
+      || payload[legacy]
+      || ""
+    ) || null;
+
+    return {
+      personal_fuente: fuente("personal", "personal_finalizado_fuente"),
+      movilidad_fuente: fuente("movilidad", "movilidad_finalizado_fuente"),
+      elementos_fuente: fuente("elementos", "elementos_finalizado_fuente"),
+    };
+  }
+
   function errorValidacion(message, code = "VALIDACION_OPERATIVA") {
     const e = new Error(message);
     e.code = code;
@@ -137,8 +238,237 @@
     return new Date().toISOString().slice(0, 10);
   }
 
-  function getHorario(payload) {
-    return limpiarTexto(payload?.horario || (payload?.hora_desde && payload?.hora_hasta ? `${payload.hora_desde} A ${payload.hora_hasta}` : ""));
+  function normalizarHorarioRango(value = "") {
+    const raw = limpiarTexto(value || "").replace(/[–—]/g, "-");
+    if (!raw) return "";
+    const m = raw.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b\s*(?:A|a|-|\/|HASTA|hasta)\s*(FINALIZAR|\d{1,2}\s*:\s*\d{2}(?::\d{2})?)\b/);
+    if (!m) return "";
+    const hi = Number(m[1]);
+    const mi = Number(m[2]);
+    if (hi < 0 || hi > 23 || mi < 0 || mi > 59) return "";
+    const desde = `${String(hi).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+    let hasta = limpiarTexto(m[3]).toUpperCase();
+    if (hasta !== "FINALIZAR") {
+      const mh = hasta.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?$/);
+      if (!mh) return "";
+      const hf = Number(mh[1]);
+      const mf = Number(mh[2]);
+      if (hf < 0 || hf > 23 || mf < 0 || mf > 59) return "";
+      hasta = `${String(hf).padStart(2, "0")}:${String(mf).padStart(2, "0")}`;
+    }
+    return `${desde} A ${hasta}`;
+  }
+
+  function normalizarHoraCampo(value = "") {
+    const raw = limpiarTexto(value || "");
+    if (!raw || /^FINALIZAR$/i.test(raw)) return /^FINALIZAR$/i.test(raw) ? "FINALIZAR" : "";
+    const m = raw.match(/^(\d{1,2})\s*:\s*(\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+    if (!m) return "";
+    const h = Number(m[1]);
+    const mm = Number(m[2]);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return "";
+    return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function horarioDesdePartes(desde = "", hasta = "") {
+    const d = normalizarHoraCampo(desde);
+    const h = normalizarHoraCampo(hasta);
+    if (!d || !h) return "";
+    return normalizarHorarioRango(`${d} A ${h}`);
+  }
+
+  function getHorario(payload = {}) {
+    const pc = asObject(payload?.payload_completo);
+    const franja = asObject(payload?.franja || pc?.franja);
+    const candidatos = [
+      payload?.franja_horaria,
+      payload?.horario,
+      pc?.franja_horaria,
+      pc?.horario,
+      franja?.franja_horaria,
+      franja?.horario,
+      payload?.metadata?.franja_horaria,
+      payload?.metadata?.horario_inicio,
+      payload?.metadata?.ultimo_horario,
+    ];
+    for (const candidato of candidatos) {
+      const normalizado = normalizarHorarioRango(candidato || "");
+      if (normalizado) return normalizado;
+    }
+    const pares = [
+      [payload?.hora_inicio, payload?.hora_finalizacion],
+      [payload?.hora_desde, payload?.hora_hasta],
+      [pc?.hora_inicio, pc?.hora_finalizacion],
+      [pc?.hora_desde, pc?.hora_hasta],
+      [franja?.hora_inicio, franja?.hora_finalizacion],
+      [franja?.hora_desde, franja?.hora_hasta],
+    ];
+    for (const [desde, hasta] of pares) {
+      const normalizado = horarioDesdePartes(desde, hasta);
+      if (normalizado) return normalizado;
+    }
+    return "";
+  }
+
+  function partesHorario(payload = {}) {
+    const horario = getHorario(payload);
+    const m = horario.match(/^(\d{2}:\d{2})\s+A\s+(FINALIZAR|\d{2}:\d{2})$/i);
+    return {
+      desde: m ? m[1] : "",
+      hasta: m ? m[2].toUpperCase() : "",
+    };
+  }
+
+  function eventoKey(tipoEvento, payload = {}) {
+    return [getGuardiaFecha(payload), getOperativoKey(payload), normalizarTipo(tipoEvento)].map(claveTipo).join("|");
+  }
+
+
+  function arrayDesdeLineaValor(linea) {
+    const raw = limpiarTexto(linea || "");
+    if (!raw || raw === "/") return [];
+    return raw.split("/").map((v) => limpiarTexto(v)).filter(Boolean).filter((v) => v !== "/");
+  }
+
+  function arrayDesdeTextoMultilinea(texto) {
+    const raw = String(texto || "").trim();
+    if (!raw) return [];
+    return raw.split(/\r?\n/).map((v) => limpiarTexto(v)).filter(Boolean);
+  }
+
+  function primerArrayNoVacio(...valores) {
+    for (const valor of valores) {
+      const arr = ensureArray(valor);
+      if (arr.length) return arr;
+    }
+    return [];
+  }
+
+  function primerObjetoNoVacio(...valores) {
+    for (const valor of valores) {
+      const obj = asObject(valor);
+      if (Object.keys(obj).length) return obj;
+    }
+    return {};
+  }
+
+  function normalizarElementosSalidaDebug(elementos = {}) {
+    const e = asObject(elementos);
+    return {
+      ESCOPETA: arrayDesdeLineaValor(e.escopetasTXT || e.ESCOPETA),
+      HT: arrayDesdeLineaValor(e.htTXT || e.HT),
+      PDA: arrayDesdeLineaValor(e.pdaTXT || e.PDA),
+      IMPRESORA: arrayDesdeLineaValor(e.impTXT || e.IMPRESORA),
+      Alometro: arrayDesdeLineaValor(e.alomTXT || e.Alometro),
+      Alcoholimetro: arrayDesdeLineaValor(e.alcoTXT || e.Alcoholimetro),
+    };
+  }
+
+  function arrayNoVacio(value) {
+    return Array.isArray(value) && value.some((v) => limpiarTexto(v));
+  }
+
+  function objetoNoVacio(value) {
+    return !!(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
+  }
+
+  function validarFinalizadoBodyObligatorio(body, payload = {}) {
+    const faltantes = [];
+    if (!limpiarTexto(body.texto_generado || "")) faltantes.push("texto_generado");
+    if (!limpiarTexto(body.franja_horaria || body.horario || "")) faltantes.push("franja_horaria");
+    if (!body.hora_inicio) faltantes.push("hora_inicio");
+    if (!body.hora_finalizacion) faltantes.push("hora_finalizacion");
+    if (!arrayNoVacio(body.personal)) faltantes.push("personal");
+    if (!arrayNoVacio(body.moviles) && !arrayNoVacio(body.motos)) faltantes.push("moviles/motos");
+    if (!objetoNoVacio(body.elementos)) faltantes.push("elementos");
+    if (faltantes.length) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.operativosRepoFinalizadoRechazado = {
+        version: REPO_VERSION,
+        motivo: "FINALIZADO_ESTRUCTURA_INCOMPLETA",
+        faltantes,
+        body,
+        payload,
+      };
+      throw errorValidacion(`El FINALIZADO llegó incompleto al guardado (${faltantes.join(", ")}). No se guarda para evitar filas vacías.`, "VALIDACION_FINALIZADO_ESTRUCTURA_INCOMPLETA");
+    }
+  }
+
+  function validarFinalizadoGuardadoObligatorio(evento, estado, payload = {}) {
+    const faltantes = [];
+    if (!limpiarTexto(evento?.texto_generado || estado?.texto_finalizado || "")) faltantes.push("texto_generado/texto_finalizado");
+    if (!limpiarTexto(evento?.franja_horaria || evento?.horario || estado?.franja_horaria || "")) faltantes.push("franja_horaria");
+    if (!(evento?.hora_inicio || estado?.hora_inicio)) faltantes.push("hora_inicio");
+    if (!(evento?.hora_finalizacion || estado?.hora_finalizacion)) faltantes.push("hora_finalizacion");
+    if (!arrayNoVacio(evento?.personal || estado?.personal_finalizado)) faltantes.push("personal");
+    if (!arrayNoVacio(evento?.moviles || estado?.moviles_finalizado) && !arrayNoVacio(evento?.motos || estado?.motos_finalizado)) faltantes.push("moviles/motos");
+    if (!objetoNoVacio(evento?.elementos || estado?.elementos_finalizado)) faltantes.push("elementos");
+    if (faltantes.length) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.operativosRepoFinalizadoGuardadoIncompleto = {
+        version: REPO_VERSION,
+        faltantes,
+        evento,
+        estado,
+        payload,
+      };
+      throw errorValidacion(`Supabase guardó/devolvió el FINALIZADO incompleto (${faltantes.join(", ")}). No se enviará WhatsApp.`, "VALIDACION_FINALIZADO_GUARDADO_INCOMPLETO");
+    }
+  }
+
+  function datosSnapshotPayload(payload = {}) {
+    const debugFinaliza = asObject(window.WSP?.debug?.finalizaDatosEnvio);
+    const salidaDebug = asObject(debugFinaliza.salida);
+    const elementosDebug = normalizarElementosSalidaDebug(salidaDebug.elementos);
+    const payloadCompleto = asObject(payload.payload_completo);
+    const franjaPayload = asObject(payloadCompleto.franja || payload.franja);
+
+    const debugPayloadFinalizado = asObject(window.WSP?.debug?.payloadHistorialFinalizadoAntesGuardar);
+    const debugFinalizaEnvio = asObject(window.WSP?.debug?.finalizaDatosEnvio);
+    const textoGenerado = String(
+      payload.texto_generado
+      || payload.textoFinal
+      || payloadCompleto.texto_generado
+      || payloadCompleto.textoFinal
+      || debugPayloadFinalizado.texto_generado
+      || debugPayloadFinalizado.textoFinal
+      || debugFinalizaEnvio.texto_generado
+      || debugFinalizaEnvio.textoFinal
+      || ""
+    );
+
+    return {
+      personal: primerArrayNoVacio(
+        payload.personal,
+        payloadCompleto.personal,
+        arrayDesdeTextoMultilinea(salidaDebug.personalTexto)
+      ),
+      moviles: primerArrayNoVacio(
+        payload.moviles,
+        payloadCompleto.moviles,
+        arrayDesdeLineaValor(salidaDebug.mov)
+      ),
+      motos: primerArrayNoVacio(
+        payload.motos,
+        payloadCompleto.motos,
+        arrayDesdeLineaValor(salidaDebug.mot)
+      ),
+      elementos: primerObjetoNoVacio(
+        payload.elementos,
+        payloadCompleto.elementos,
+        elementosDebug
+      ),
+      resultados: asObject(payload.resultados || payloadCompleto.resultados),
+      medidas_cautelares: asObject(payload.medidas_cautelares || payloadCompleto.medidas_cautelares),
+      detalles: Array.isArray(payload.detalles) ? payload.detalles : (Array.isArray(payloadCompleto.detalles) ? payloadCompleto.detalles : []),
+      observaciones: payload.observaciones ?? payloadCompleto.observaciones ?? "",
+      texto_generado: textoGenerado,
+      horario: getHorario(payload) || getHorario(payloadCompleto) || getHorario(franjaPayload),
+      lugar: limpiarTexto(payload.lugar || payloadCompleto.lugar || franjaPayload.lugar || ""),
+      tipo_operativo: resolverTipoInicioDesdePayload(payload) || limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || franjaPayload.tipo_operativo || franjaPayload.tipo || ""),
+    };
   }
 
   function estadoBaseDesdePayload(payload = {}) {
@@ -155,18 +485,37 @@
       elementos_inicio: asObject(payload.elementos),
       ultimo_payload_wsp: payload,
       actualizado_desde: "wsp-operativos-repo.js",
+      repo_version: REPO_VERSION,
     };
+
+    const tiempo = camposTiempoDesdePayload(payload);
+    const snap = datosSnapshotPayload(payload);
+    const partesLegacy = partesHorario({ ...payload, horario: snap.horario });
 
     return {
       operativo_key: getOperativoKey(payload),
       guardia_fecha: getGuardiaFecha(payload),
       fecha_operativo: limpiarTexto(payload.fecha_operativo || payload.guardia_fecha || getGuardiaFecha(payload)),
-      hora_desde: limpiarTexto(payload.hora_desde || ""),
-      hora_hasta: limpiarTexto(payload.hora_hasta || ""),
+      hora_desde: limpiarTexto(payload.hora_desde || partesLegacy.desde || ""),
+      hora_hasta: limpiarTexto(payload.hora_hasta || partesLegacy.hasta || ""),
+      franja_horaria: tiempo.franja_horaria,
+      hora_inicio: tiempo.hora_inicio,
+      hora_finalizacion: tiempo.hora_finalizacion,
+      fecha_inicio: tiempo.fecha_inicio,
+      fecha_finalizacion: tiempo.fecha_finalizacion,
+      inicio_ts: limpiarTexto(payload.inicio_ts || "") || tiempo.evento_ts,
       lugar: limpiarTexto(payload.lugar || ""),
       lugar_normalizado: limpiarTexto(payload.lugar_normalizado || payload.lugar || ""),
       tipo_operativo: tipoInicio,
       ordenes_origen: ensureArray(payload.ordenes_origen),
+      personal_inicio: snap.personal,
+      moviles_inicio: snap.moviles,
+      motos_inicio: snap.motos,
+      elementos_inicio: snap.elementos,
+      lugar_inicio: snap.lugar,
+      horario_inicio: snap.horario,
+      observaciones_inicio: snap.observaciones || "",
+      texto_inicio: snap.texto_generado || "",
       metadata,
       updated_at: isoAhora(),
     };
@@ -176,22 +525,57 @@
     const tipo = normalizarTipo(tipoEvento || payload.tipo_evento || "INFORME");
     const alimentaFinalizado = ["ALCOHOLEMIA_POSITIVA", "DECTO_460_22", "DECRETO_460_22"].includes(tipo);
     const tipoInicio = resolverTipoInicioDesdePayload(payload) || limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || "");
+    const horario = getHorario(payload);
+    const partes = partesHorario({ ...payload, horario });
+    const tiempo = camposTiempoDesdePayload({ ...payload, horario });
+    const fuentes = fuentesFinalizaDesdePayload(payload);
+    const snap = datosSnapshotPayload(payload);
 
     return {
       operativo_estado_id: estadoId || payload.operativo_estado_id || null,
       operativo_key: getOperativoKey(payload),
+      evento_key: limpiarTexto(payload.evento_key || eventoKey(tipo, payload)),
+      informe_key: limpiarTexto(payload.informe_key || "") || null,
       guardia_fecha: getGuardiaFecha(payload),
       fuente: limpiarTexto(payload.fuente || payload.origen || "WSP"),
       tipo_evento: tipo,
-      resultados: asObject(payload.resultados),
-      medidas_cautelares: asObject(payload.medidas_cautelares),
-      detalles: Array.isArray(payload.detalles) ? payload.detalles : [],
-      payload_completo: payload,
-      observaciones: payload.observaciones ?? "",
-      horario: getHorario(payload),
-      lugar: limpiarTexto(payload.lugar || ""),
+      fecha: limpiarTexto(payload.fecha_operativo || payload.fecha || "") || null,
+      horario: horario || snap.horario || null,
+      hora_desde: partes.desde || null,
+      hora_hasta: partes.hasta || null,
+      franja_horaria: tiempo.franja_horaria,
+      hora_inicio: tiempo.hora_inicio,
+      hora_finalizacion: tiempo.hora_finalizacion,
+      fecha_inicio: tiempo.fecha_inicio,
+      fecha_finalizacion: tiempo.fecha_finalizacion,
+      fecha_evento: tiempo.fecha_evento,
+      hora_evento: tiempo.hora_evento,
+      evento_ts: tiempo.evento_ts,
+      lugar: snap.lugar,
       tipo_operativo: tipoInicio,
+      ordenes_origen: ensureArray(payload.ordenes_origen),
+      personal: snap.personal,
+      moviles: snap.moviles,
+      motos: snap.motos,
+      elementos: snap.elementos,
+      personal_fuente: fuentes.personal_fuente,
+      movilidad_fuente: fuentes.movilidad_fuente,
+      elementos_fuente: fuentes.elementos_fuente,
+      resultados: snap.resultados,
+      medidas_cautelares: snap.medidas_cautelares,
+      detalles: snap.detalles,
+      observaciones: snap.observaciones ?? "",
+      texto_generado: snap.texto_generado,
+      payload_completo: payload,
+      metadata: {
+        ...(asObject(payload.metadata)),
+        ultimo_payload_wsp: payload,
+        actualizado_desde: "wsp-operativos-repo.js",
+        repo_version: REPO_VERSION,
+      repo_version: REPO_VERSION,
+      },
       alimenta_finalizado: !!payload.alimenta_finalizado || alimentaFinalizado,
+      updated_at: isoAhora(),
     };
   }
 
@@ -247,15 +631,18 @@
     return Array.isArray(data) ? data[0] : data;
   }
 
-  async function buscarEstadoPorKey({ operativoKey, guardiaFecha }) {
+  async function buscarEstadoPorKey({ operativoKey, guardiaFecha, incluirBorrados = false } = {}) {
     if (!operativoKey || !guardiaFecha) return null;
     const params = new URLSearchParams({
-      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
+      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,deleted_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,personal_finalizado,moviles_finalizado,motos_finalizado,elementos_finalizado,texto_finalizado",
       operativo_key: `eq.${operativoKey}`,
       guardia_fecha: `eq.${guardiaFecha}`,
       order: "updated_at.desc",
       limit: "1",
     });
+    if (!incluirBorrados) {
+      params.set("deleted_at", "is.null");
+    }
     const rows = await selectRows(ESTADO_TABLE, params);
     return rows[0] || null;
   }
@@ -264,13 +651,62 @@
     const base = estadoBaseDesdePayload(payload);
     if (!base.operativo_key) throw errorValidacion("No se pudo determinar la clave del operativo para guardar el INICIO.");
 
-    const existente = await buscarEstadoPorKey({ operativoKey: base.operativo_key, guardiaFecha: base.guardia_fecha });
-    if (existente?.finalizado_evento_id || normalizarTipo(existente?.estado) === "FINALIZADO") {
+    // Paso 88O: la fuente activa debe ignorar todo registro eliminado lógicamente.
+    // Si existe una fila deleted_at del mismo operativo_key, se puede reciclar para evitar
+    // choques de claves únicas, pero no debe bloquear como FINALIZADO.
+    const existenteActivo = await buscarEstadoPorKey({ operativoKey: base.operativo_key, guardiaFecha: base.guardia_fecha });
+    if (existenteActivo?.finalizado_evento_id || normalizarTipo(existenteActivo?.estado) === "FINALIZADO") {
       throw errorValidacion("El operativo ya figura FINALIZADO. No se puede actualizar el INICIO.", "VALIDACION_OPERATIVO_FINALIZADO");
     }
 
-    if (existente?.id) {
-      return await patchRows(ESTADO_TABLE, { id: `eq.${existente.id}` }, { ...base, estado: "EN_CURSO" });
+    if (existenteActivo?.id) {
+      return await patchRows(ESTADO_TABLE, { id: `eq.${existenteActivo.id}` }, {
+        ...base,
+        estado: "EN_CURSO",
+        deleted_at: null,
+        finalizado_evento_id: null,
+        personal_finalizado: [],
+        personal_finalizado_fuente: null,
+        moviles_finalizado: [],
+        motos_finalizado: [],
+        movilidad_finalizado_fuente: null,
+        elementos_finalizado: {},
+        elementos_finalizado_fuente: null,
+        resultados_finalizado: {},
+        detalles_finalizado: [],
+        observaciones_finalizado: null,
+        texto_finalizado: null,
+        finalizacion_ts: null,
+      });
+    }
+
+    const existenteBorrado = await buscarEstadoPorKey({ operativoKey: base.operativo_key, guardiaFecha: base.guardia_fecha, incluirBorrados: true });
+    if (existenteBorrado?.id) {
+      return await patchRows(ESTADO_TABLE, { id: `eq.${existenteBorrado.id}` }, {
+        ...base,
+        estado: "EN_CURSO",
+        deleted_at: null,
+        inicio_evento_id: null,
+        finalizado_evento_id: null,
+        personal_finalizado: [],
+        personal_finalizado_fuente: null,
+        moviles_finalizado: [],
+        motos_finalizado: [],
+        movilidad_finalizado_fuente: null,
+        elementos_finalizado: {},
+        elementos_finalizado_fuente: null,
+        resultados_finalizado: {},
+        detalles_finalizado: [],
+        observaciones_finalizado: null,
+        texto_finalizado: null,
+        finalizacion_ts: null,
+        metadata: {
+          ...(asObject(existenteBorrado.metadata)),
+          reactivado_desde_deleted_at: true,
+          reactivado_at: isoAhora(),
+          repo_version: REPO_VERSION,
+        },
+      });
     }
 
     return await insertRow(ESTADO_TABLE, { ...base, estado: "EN_CURSO" });
@@ -278,7 +714,12 @@
 
   async function guardarInicio(payload = {}) {
     const estado = await crearOActualizarEstadoInicio(payload);
-    const evento = await insertRow(EVENTOS_TABLE, eventoBaseDesdePayload("INICIO", payload, estado.id));
+    const eventoBody = eventoBaseDesdePayload("INICIO", payload, estado.id);
+    const evento = await insertRow(EVENTOS_TABLE, eventoBody);
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.operativosRepoUltimoInicioBody = { version: REPO_VERSION, eventoBody, payload };
+
     const estadoActualizado = await patchRows(ESTADO_TABLE, { id: `eq.${estado.id}` }, {
       estado: "EN_CURSO",
       inicio_evento_id: evento.id,
@@ -303,18 +744,111 @@
       throw errorValidacion("Debe iniciar el operativo antes de enviar el FINALIZADO.", "VALIDACION_FINALIZADO_SIN_INICIO");
     }
 
-    const evento = await insertRow(EVENTOS_TABLE, eventoBaseDesdePayload("FINALIZADO", payload, estado.id));
+    const eventoBody = eventoBaseDesdePayload("FINALIZADO", payload, estado.id);
+    // Paso 88N: compatibilidad con INICIOS legacy y payloads viejos.
+    // Antes de llegar al trigger de Supabase, se replica aquí lo que efectivamente
+    // se imprimió/seleccionó en FINALIZA, tomando también el debug del envío.
+    const debugPayloadFinalizado = asObject(window.WSP?.debug?.payloadHistorialFinalizadoAntesGuardar);
+    const debugFinalizaEnvio = asObject(window.WSP?.debug?.finalizaDatosEnvio);
+    const salidaDebug = asObject(debugFinalizaEnvio.salida);
+    if (!limpiarTexto(eventoBody.texto_generado || "")) {
+      eventoBody.texto_generado = limpiarTexto(
+        payload.texto_generado
+        || payload.textoFinal
+        || asObject(payload.payload_completo).texto_generado
+        || asObject(payload.payload_completo).textoFinal
+        || debugPayloadFinalizado.texto_generado
+        || debugPayloadFinalizado.textoFinal
+        || ""
+      );
+    }
+    if (!arrayNoVacio(eventoBody.personal)) {
+      eventoBody.personal = primerArrayNoVacio(payload.personal, debugPayloadFinalizado.personal, arrayDesdeTextoMultilinea(salidaDebug.personalTexto));
+    }
+    if (!arrayNoVacio(eventoBody.moviles)) {
+      eventoBody.moviles = primerArrayNoVacio(payload.moviles, debugPayloadFinalizado.moviles, arrayDesdeLineaValor(salidaDebug.mov));
+    }
+    if (!arrayNoVacio(eventoBody.motos)) {
+      eventoBody.motos = primerArrayNoVacio(payload.motos, debugPayloadFinalizado.motos, arrayDesdeLineaValor(salidaDebug.mot));
+    }
+    if (!objetoNoVacio(eventoBody.elementos)) {
+      eventoBody.elementos = primerObjetoNoVacio(payload.elementos, debugPayloadFinalizado.elementos, normalizarElementosSalidaDebug(salidaDebug.elementos));
+    }
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.operativosRepoUltimoFinalizadoBody = { version: REPO_VERSION, eventoBody, payload };
+    validarFinalizadoBodyObligatorio(eventoBody, payload);
+    const evento = estado.finalizado_evento_id
+      ? await patchRows(EVENTOS_TABLE, { id: `eq.${estado.finalizado_evento_id}` }, eventoBody)
+      : await insertRow(EVENTOS_TABLE, eventoBody);
+
+    const snap = datosSnapshotPayload(payload);
+    const tiempo = camposTiempoDesdePayload({ ...payload, horario: eventoBody.franja_horaria || eventoBody.horario });
+    const partesLegacy = partesHorario({ ...payload, horario: eventoBody.franja_horaria || eventoBody.horario || snap.horario });
+    const fuentes = fuentesFinalizaDesdePayload(payload);
+    const finalizadoPersonal = arrayNoVacio(eventoBody.personal) ? eventoBody.personal : snap.personal;
+    const finalizadoMoviles = arrayNoVacio(eventoBody.moviles) ? eventoBody.moviles : snap.moviles;
+    const finalizadoMotos = arrayNoVacio(eventoBody.motos) ? eventoBody.motos : snap.motos;
+    const finalizadoElementos = objetoNoVacio(eventoBody.elementos) ? eventoBody.elementos : snap.elementos;
+    const finalizadoTexto = limpiarTexto(eventoBody.texto_generado || snap.texto_generado || "");
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.operativosRepoUltimoFinalizadoBody = { version: REPO_VERSION, eventoBody, payload };
+
     const estadoActualizado = await patchRows(ESTADO_TABLE, { id: `eq.${estado.id}` }, {
       estado: "FINALIZADO",
       finalizado_evento_id: evento.id,
+      hora_desde: limpiarTexto(payload.hora_desde || partesLegacy.desde || estado.hora_desde || ""),
+      hora_hasta: limpiarTexto(payload.hora_hasta || partesLegacy.hasta || estado.hora_hasta || ""),
+      franja_horaria: tiempo.franja_horaria,
+      hora_inicio: tiempo.hora_inicio,
+      hora_finalizacion: tiempo.hora_finalizacion,
+      fecha_inicio: tiempo.fecha_inicio,
+      fecha_finalizacion: tiempo.fecha_finalizacion,
+      finalizacion_ts: limpiarTexto(payload.finalizacion_ts || "") || isoAhora(),
+      personal_finalizado: finalizadoPersonal,
+      personal_finalizado_fuente: fuentes.personal_fuente,
+      moviles_finalizado: finalizadoMoviles,
+      motos_finalizado: finalizadoMotos,
+      movilidad_finalizado_fuente: fuentes.movilidad_fuente,
+      elementos_finalizado: finalizadoElementos,
+      elementos_finalizado_fuente: fuentes.elementos_fuente,
+      resultados_finalizado: snap.resultados,
+      detalles_finalizado: snap.detalles,
+      observaciones_finalizado: snap.observaciones || "",
+      texto_finalizado: finalizadoTexto,
       updated_at: isoAhora(),
       metadata: {
         ...(asObject(estado.metadata)),
         finalizado_evento_id: evento.id,
         ultimo_evento: "FINALIZADO",
         ultimo_payload_wsp: payload,
+        ultimo_personal: finalizadoPersonal,
+        ultimo_moviles: finalizadoMoviles,
+        ultimo_motos: finalizadoMotos,
+        ultimo_elementos: finalizadoElementos,
+        ultimo_texto_generado: finalizadoTexto,
+        ultimo_horario: snap.horario,
+        personal_finalizado: finalizadoPersonal,
+        personal_finalizado_fuente: fuentes.personal_fuente,
+        moviles_finalizado: finalizadoMoviles,
+        motos_finalizado: finalizadoMotos,
+        movilidad_finalizado_fuente: fuentes.movilidad_fuente,
+        elementos_finalizado: finalizadoElementos,
+        elementos_finalizado_fuente: fuentes.elementos_fuente,
+        texto_generado_finalizado: finalizadoTexto,
+        horario_finalizado: snap.horario,
+        franja_horaria: tiempo.franja_horaria,
+        hora_inicio: tiempo.hora_inicio,
+        hora_finalizacion: tiempo.hora_finalizacion,
+        lugar_finalizado: snap.lugar,
+        tipo_operativo_finalizado: snap.tipo_operativo,
+        resultados_finalizado: snap.resultados,
+        medidas_finalizado: snap.medidas_cautelares,
+        detalles_finalizado: snap.detalles,
       },
     });
+    validarFinalizadoGuardadoObligatorio(evento, estadoActualizado || estado, payload);
     return { ok: true, estado: estadoActualizado || estado, evento };
   }
 
@@ -331,11 +865,24 @@
 
   async function leerOperativosGuardia({ guardiaFecha, limit = 500 } = {}) {
     const gf = guardiaFecha || getGuardiaFecha({});
-    const params = new URLSearchParams({
-      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at",
+    const paramsVista = new URLSearchParams({
+      select: "*",
       guardia_fecha: `eq.${gf}`,
-      order: "hora_desde.asc,updated_at.desc",
+      order: "hora_inicio.asc,updated_at.desc",
       limit: String(limit || 500),
+    });
+    try {
+      return await selectRows("v_operativos_guardia_estadisticas", paramsVista);
+    } catch (error) {
+      console.warn("[WSP OperativosRepo] No se pudo leer la vista v_operativos_guardia_estadisticas, se usa tabla base.", error);
+    }
+
+    const params = new URLSearchParams({
+      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,personal_finalizado,moviles_finalizado,motos_finalizado,elementos_finalizado,texto_finalizado,personal_finalizado_fuente,movilidad_finalizado_fuente,elementos_finalizado_fuente",
+      guardia_fecha: `eq.${gf}`,
+      order: "hora_inicio.asc,updated_at.desc",
+      limit: String(limit || 500),
+      deleted_at: "is.null",
     });
     return await selectRows(ESTADO_TABLE, params);
   }
@@ -348,7 +895,9 @@
     buscarEstadoPorKey,
   };
 
-  window.BMZCN.OperativosRepo = window.BMZCN.OperativosRepo || api;
-  window.WSP.services.operativosRepo = window.BMZCN.OperativosRepo;
-  window.WSP.modules.operativosRepo = window.BMZCN.OperativosRepo;
+  api.version = REPO_VERSION;
+  window.BMZCN.OperativosRepo = api;
+  window.WSP.services.operativosRepo = api;
+  window.WSP.modules.operativosRepo = api;
+  console.log("[WSP OperativosRepo] cargado", REPO_VERSION);
 })();
