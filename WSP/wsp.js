@@ -1537,9 +1537,6 @@ window.WSP.config = {
   function normalizarInicioDesdeVistaGuardiaWsp(row) {
     if (!row) return null;
     const metadataEstado = parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
-    const ultimoEventoMeta = limpiarTextoSimple(metadataEstado?.ultimo_evento || metadataEstado?.tipo_evento || "").toUpperCase().replace(/\s+/g, "_");
-    const ultimoPayloadInicio = ultimoEventoMeta === "INICIO" ? (parseJsonObjectWsp(metadataEstado?.ultimo_payload_wsp) || {}) : {};
-    const payloadInicioMeta = parseJsonObjectWsp(metadataEstado?.payload_inicio) || {};
     const horario = resolverHorarioCanonicoFinalizaWsp({
       franja_horaria: row?.franja_horaria || row?.inicio_franja_horaria || row?.horario_inicio || row?.horario || metadataEstado?.franja_horaria || metadataEstado?.horario_inicio || metadataEstado?.horario || "",
       hora_inicio: row?.hora_inicio || row?.inicio_hora_inicio || metadataEstado?.hora_inicio || "",
@@ -1558,13 +1555,10 @@ window.WSP.config = {
       horario,
       lugar: row?.lugar || "",
       tipo_corto: tipoInicio || row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      // Paso 91B: para FINALIZA/Mismo..., estos datos deben ser del INICIO vigente.
-      // No usar metadata.ultimo_* cuando el estado ya fue FINALIZADO, porque ahí
-      // suele contener el último FINALIZADO y puede cruzar personal/móvil/elementos.
-      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || payloadInicioMeta?.personal || ultimoPayloadInicio?.personal || [],
-      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || payloadInicioMeta?.moviles || ultimoPayloadInicio?.moviles || [],
-      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || payloadInicioMeta?.motos || ultimoPayloadInicio?.motos || [],
-      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || payloadInicioMeta?.elementos || ultimoPayloadInicio?.elementos || {},
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || metadataEstado?.ultimo_personal || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || metadataEstado?.ultimo_moviles || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || metadataEstado?.ultimo_motos || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || metadataEstado?.ultimo_elementos || metadataEstado?.elementos || {},
       ts: timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -1585,42 +1579,8 @@ window.WSP.config = {
     if (keyDirecta) keysPosibles.add(keyDirecta);
 
     try {
-      const repo = window.BMZCN?.OperativosRepo;
-      const guardiaFecha = getGuardiaFechaISO();
-
-      // Paso 91B: primero buscar por operativo_key exacto. Si no existe, recién
-      // se mantiene el fallback flexible histórico. Esto evita tomar datos de
-      // otro operativo parecido, pero no deja WSP sin cargar si la clave vieja
-      // no coincide por alguna variante.
-      if (repo && typeof repo.buscarEstadoPorKey === "function") {
-        const clavesExactas = Array.from(keysPosibles).filter(Boolean);
-        for (const key of clavesExactas) {
-          try {
-            const rowExacta = await repo.buscarEstadoPorKey({ operativoKey: key, guardiaFecha });
-            if (!rowExacta || rowExacta.deleted_at || !rowExacta.inicio_evento_id) continue;
-            const payloadExacto = normalizarInicioDesdeVistaGuardiaWsp(rowExacta);
-            if (payloadExacto) {
-              window.WSP = window.WSP || {};
-              window.WSP.debug = window.WSP.debug || {};
-              window.WSP.debug.ultimoInicioFinalizaExacto = {
-                version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
-                fuente: "buscarEstadoPorKey_exact_first_legacy",
-                operativo_key: key,
-                guardia_fecha: guardiaFecha,
-                estado_id: rowExacta.id || "",
-                inicio_evento_id: rowExacta.inicio_evento_id || "",
-                finalizado_evento_id: rowExacta.finalizado_evento_id || "",
-              };
-              return payloadExacto;
-            }
-          } catch (eExacta) {
-            console.warn("[WSP] No se pudo leer INICIO por key exacta. Se continúa con fallback.", key, eExacta);
-          }
-        }
-      }
-
-      if (repo?.leerOperativosGuardia) {
-        const rows = await repo.leerOperativosGuardia({ guardiaFecha, limit: 500 });
+      if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
+        const rows = await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: getGuardiaFechaISO(), limit: 500 });
         let mejor = null;
         let mejorPuntaje = -1;
         (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -1838,7 +1798,7 @@ window.WSP.config = {
 
   async function leerIniciosGuardiaDesdeSupabase() {
     const debug = {
-      version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       guardiaFecha: getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
@@ -3391,7 +3351,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       etapa: "inicio_carga_finaliza",
       valorSeleccionado: valorSeleccionado || "",
       timestamp: new Date().toISOString(),
@@ -3445,7 +3405,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -7134,7 +7094,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function obtenerEstadoDecisionFinalizaWsp() {
     asegurarEstadoMismosDatosFinalizaWsp();
     return {
-      version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       checks: {
         personal: !!chkMismoPersonal?.checked,
         movilidad: !!chkMismoMovil?.checked,
@@ -10119,7 +10079,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
       };
       window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
-        version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         personal: payloadHistorial.personal,
         moviles: payloadHistorial.moviles,
         motos: payloadHistorial.motos,
@@ -10139,7 +10099,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       payloadHistorial.metadata = {
         ...(payloadHistorial.metadata || {}),
         finaliza_fuentes_datos: fuentesFinaliza,
-        finaliza_version_envio: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+        finaliza_version_envio: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       };
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.textoFinal = textoFinal;
@@ -10158,8 +10118,8 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (esFinaliza) {
       const repoVersion = versionRepoOperativosWsp();
-      if (!repoVersion.includes("paso88r-finaliza-lee-en-curso")) {
-        alert(`WSP no cargó el repositorio nuevo de Supabase. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
+      if (!repoVersion.includes("paso92-wsp-reparacion-estable-inicio-finaliza")) {
+        alert(`WSP no cargó el repositorio nuevo de Supabase Paso 92. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
         return;
       }
     }
@@ -10178,7 +10138,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaErrorEstructuraSupabase = {
-        version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         resultadoHistorial,
         payloadHistorial,
         repoVersion: versionRepoOperativosWsp(),
@@ -10192,7 +10152,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaSupabaseGuardado = {
-        version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
+        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
         evento_id: resultadoHistorial?.evento?.id || null,
         estado_id: resultadoHistorial?.estado?.id || null,
         evento: {

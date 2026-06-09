@@ -184,10 +184,10 @@
     if (!row) return null;
     const d = getDeps(deps);
     const metadataEstado = d.parseJsonObjectWsp(row?.estado_metadata || row?.metadata) || {};
-    const ultimoEventoMeta = limpiarTextoSimple(metadataEstado?.ultimo_evento || metadataEstado?.tipo_evento || "").toUpperCase().replace(/\s+/g, "_");
-    const ultimoPayloadInicio = ultimoEventoMeta === "INICIO" ? (d.parseJsonObjectWsp(metadataEstado?.ultimo_payload_wsp) || {}) : {};
-    const payloadInicioMeta = d.parseJsonObjectWsp(metadataEstado?.payload_inicio) || {};
     const horario = resolverHorarioRow(row, metadataEstado);
+    const estadoTxt = normalizarEstado(row?.estado_real || row?.estado || "");
+    const puedeUsarUltimoComoInicio = !["FINALIZADO", "CERRADO"].includes(estadoTxt);
+
     return d.normalizarInicioGuardado({
       guardia_fecha: row?.guardia_fecha || d.getGuardiaFechaISO(),
       operativo_estado_id: row?.operativo_estado_id || row?.id || "",
@@ -195,15 +195,12 @@
       orden_num: d.normalizarArrayJsonWsp(row?.ordenes_origen).join(" / ") || limpiarTextoSimple(metadataEstado?.orden_num || metadataEstado?.orden || ""),
       texto_ref: limpiarTextoSimple(metadataEstado?.texto_ref || metadataEstado?.titulo || metadataEstado?.archivo || "Operativo en curso"),
       horario,
-      lugar: row?.lugar || "",
-      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      // Paso 91B: para FINALIZA/Mismo..., estos datos deben ser del INICIO vigente.
-      // No usar metadata.ultimo_* cuando el estado ya fue FINALIZADO, porque ahí
-      // suele contener el último FINALIZADO y puede cruzar personal/móvil/elementos.
-      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || payloadInicioMeta?.personal || ultimoPayloadInicio?.personal || [],
-      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || payloadInicioMeta?.moviles || ultimoPayloadInicio?.moviles || [],
-      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || payloadInicioMeta?.motos || ultimoPayloadInicio?.motos || [],
-      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || payloadInicioMeta?.elementos || ultimoPayloadInicio?.elementos || {},
+      lugar: row?.lugar_inicio || row?.lugar || "",
+      tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo_inicio_texto || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_personal : []) || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_moviles : []) || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_motos : []) || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_elementos : {}) || metadataEstado?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
   }
@@ -212,67 +209,74 @@
     if (!franja) return null;
     const d = getDeps(deps);
     const keysPosibles = new Set(d.construirOperativoKeysPosibles(franja).map((v) => limpiarTextoSimple(v)).filter(Boolean));
-    const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.__inicioGuardadoPayload?.operativo_key || "");
+    const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.operativo_key || franja?.__inicioGuardadoPayload?.operativo_key || "");
     if (keyDirecta) keysPosibles.add(keyDirecta);
 
+    const normalizarFilas = (rows) => (Array.isArray(rows) ? rows : []).filter(Boolean);
+
     try {
-      const repo = window.BMZCN?.OperativosRepo;
-      const guardiaFecha = d.getGuardiaFechaISO();
+      if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
+        const rows = normalizarFilas(await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: d.getGuardiaFechaISO(), limit: 500 }));
 
-      // Paso 91B: primero buscar por operativo_key exacto. Si no existe, recién
-      // se mantiene el fallback flexible histórico. Esto evita tomar datos de
-      // otro operativo parecido, pero no deja WSP sin cargar si la clave vieja
-      // no coincide por alguna variante.
-      if (repo && typeof repo.buscarEstadoPorKey === "function") {
-        const clavesExactas = Array.from(keysPosibles).filter(Boolean);
-        for (const key of clavesExactas) {
-          try {
-            const rowExacta = await repo.buscarEstadoPorKey({ operativoKey: key, guardiaFecha });
-            if (!rowExacta || rowExacta.deleted_at || !rowExacta.inicio_evento_id) continue;
-            const payloadExacto = normalizarInicioDesdeVistaGuardiaWsp(rowExacta, d);
-            if (payloadExacto) {
-              window.WSP = window.WSP || {};
-              window.WSP.debug = window.WSP.debug || {};
-              window.WSP.debug.ultimoInicioFinalizaExacto = {
-                version: "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609",
-                fuente: "buscarEstadoPorKey_exact_first",
-                operativo_key: key,
-                guardia_fecha: guardiaFecha,
-                estado_id: rowExacta.id || "",
-                inicio_evento_id: rowExacta.inicio_evento_id || "",
-                finalizado_evento_id: rowExacta.finalizado_evento_id || "",
-              };
-              return payloadExacto;
-            }
-          } catch (eExacta) {
-            console.warn("[WSP historial operativo] No se pudo leer INICIO por key exacta. Se continúa con fallback.", key, eExacta);
-          }
+        const exactos = rows
+          .filter((row) => keysPosibles.has(limpiarTextoSimple(row?.operativo_key || "")))
+          .map((row) => normalizarInicioDesdeVistaGuardiaWsp(row, d))
+          .filter((payload) => payload && payload.operativo_key);
+
+        if (exactos.length) {
+          exactos.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+          const elegido = exactos[0];
+          window.WSP = window.WSP || {};
+          window.WSP.debug = window.WSP.debug || {};
+          window.WSP.debug.ultimoInicioFinalizaExacto = {
+            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+            fuente: "OperativosRepo.leerOperativosGuardia_key_exacta",
+            keyDirecta,
+            operativo_key: elegido.operativo_key,
+            inicio_evento_id: elegido.inicio_evento_id || elegido.operativo_estado_id || "",
+            payload: elegido,
+          };
+          return elegido;
         }
-      }
 
-      if (repo?.leerOperativosGuardia) {
-        const rows = await repo.leerOperativosGuardia({ guardiaFecha, limit: 500 });
+        // Si el selector trae operativo_key, NO se permite caer por puntaje a otro operativo.
+        // Esto evita cruzar datos entre operativos parecidos o entre formularios anteriores.
+        if (keyDirecta) {
+          const embebido = d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload);
+          if (embebido && limpiarTextoSimple(embebido.operativo_key || "") === keyDirecta) return embebido;
+          window.WSP = window.WSP || {};
+          window.WSP.debug = window.WSP.debug || {};
+          window.WSP.debug.ultimoInicioFinalizaExacto = {
+            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+            fuente: "sin_inicio_exact_key",
+            keyDirecta,
+            filasLeidas: rows.length,
+          };
+          return null;
+        }
+
         let mejor = null;
         let mejorPuntaje = -1;
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
+        rows.forEach((row) => {
           const estadoReal = normalizarEstado(row?.estado_real || row?.estado || "");
           if (!["EN_CURSO", "FINALIZADO"].includes(estadoReal)) return;
-          const rowKey = limpiarTextoSimple(row?.operativo_key || "");
           const payload = normalizarInicioDesdeVistaGuardiaWsp(row, d);
           if (!payload) return;
-          const puntaje = keysPosibles.has(rowKey) ? 100 : d.puntuarCoincidenciaInicio(payload, franja);
+          const puntaje = d.puntuarCoincidenciaInicio(payload, franja);
           if (puntaje > mejorPuntaje) {
             mejor = payload;
             mejorPuntaje = puntaje;
           }
         });
-        if (mejor && mejorPuntaje >= 90) return mejor;
+        if (mejor && mejorPuntaje >= 95) return mejor;
       }
     } catch (e) {
       console.warn("[WSP historial operativo] No se pudo leer INICIO desde OperativosRepo.", e);
     }
 
-    return d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload) || null;
+    const fallback = d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload);
+    if (keyDirecta && fallback && limpiarTextoSimple(fallback.operativo_key || "") !== keyDirecta) return null;
+    return fallback || null;
   }
 
   function estadoOperativoEsEnCursoWsp(row) {
@@ -401,7 +405,7 @@
   async function leerIniciosGuardiaDesdeSupabase(deps = {}) {
     const d = getDeps(deps);
     const debug = {
-      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
       guardiaFecha: d.getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
@@ -510,5 +514,5 @@
   window.WSP.services.historialOperativoRepo = api;
   window.WSP.modules.historialOperativo = api;
 
-  console.log("[WSP historial operativo] cargado paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609");
+  console.log("[WSP historial operativo] cargado");
 })();
