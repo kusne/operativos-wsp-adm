@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso88r-finaliza-lee-en-curso-tabla-base-20260608";
+  const WSP_BOOTSTRAP_VERSION = "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

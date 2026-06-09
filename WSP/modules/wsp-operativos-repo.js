@@ -8,7 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
-  const REPO_VERSION = "paso88r-finaliza-lee-en-curso-tabla-base-20260608";
+  const REPO_VERSION = "paso91b-wsp-repara-inicio-upsert-finaliza-inicio-vigente-20260609";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -572,7 +572,6 @@
         ultimo_payload_wsp: payload,
         actualizado_desde: "wsp-operativos-repo.js",
         repo_version: REPO_VERSION,
-      repo_version: REPO_VERSION,
       },
       alimenta_finalizado: !!payload.alimenta_finalizado || alimentaFinalizado,
       updated_at: isoAhora(),
@@ -617,6 +616,57 @@
     await assertOk(r, `Error insertando ${tabla}`);
     const data = await r.json();
     return Array.isArray(data) ? data[0] : data;
+  }
+
+  async function buscarEventoPorEventoKey(eventoKey, { incluirBorrados = false } = {}) {
+    const key = limpiarTexto(eventoKey || "");
+    if (!key) return null;
+
+    const params = new URLSearchParams({
+      select: "*",
+      evento_key: `eq.${key}`,
+      order: "updated_at.desc,created_at.desc",
+      limit: "1",
+    });
+    if (!incluirBorrados) params.set("deleted_at", "is.null");
+
+    const rows = await selectRows(EVENTOS_TABLE, params);
+    return rows[0] || null;
+  }
+
+  function esErrorDuplicadoEventoKey(error) {
+    const msg = String(error?.message || error || "").toLowerCase();
+    return msg.includes("409")
+      || msg.includes("duplicate key")
+      || msg.includes("ux_operativos_eventos_evento_key")
+      || msg.includes("evento_key");
+  }
+
+  async function insertarOActualizarEventoPorKey(eventoBody = {}, { eventoIdPreferido = "" } = {}) {
+    const body = { ...eventoBody, deleted_at: null, updated_at: isoAhora() };
+    const eventoId = limpiarTexto(eventoIdPreferido || "");
+
+    if (eventoId) {
+      const actualizado = await patchRows(EVENTOS_TABLE, { id: `eq.${eventoId}` }, body);
+      if (actualizado?.id) return actualizado;
+    }
+
+    const eventoKey = limpiarTexto(body.evento_key || "");
+    if (eventoKey) {
+      const existenteActivo = await buscarEventoPorEventoKey(eventoKey, { incluirBorrados: false });
+      if (existenteActivo?.id) {
+        return await patchRows(EVENTOS_TABLE, { id: `eq.${existenteActivo.id}` }, body);
+      }
+    }
+
+    try {
+      return await insertRow(EVENTOS_TABLE, body);
+    } catch (error) {
+      if (!eventoKey || !esErrorDuplicadoEventoKey(error)) throw error;
+      const existente = await buscarEventoPorEventoKey(eventoKey, { incluirBorrados: true });
+      if (!existente?.id) throw error;
+      return await patchRows(EVENTOS_TABLE, { id: `eq.${existente.id}` }, body);
+    }
   }
 
   async function patchRows(tabla, filtros, patch) {
@@ -715,7 +765,14 @@
   async function guardarInicio(payload = {}) {
     const estado = await crearOActualizarEstadoInicio(payload);
     const eventoBody = eventoBaseDesdePayload("INICIO", payload, estado.id);
-    const evento = await insertRow(EVENTOS_TABLE, eventoBody);
+
+    // Paso 91B: reenviar INICIO de un operativo EN_CURSO debe actualizar
+    // el INICIO vigente. No debe intentar INSERT y chocar con
+    // ux_operativos_eventos_evento_key.
+    const evento = await insertarOActualizarEventoPorKey(eventoBody, {
+      eventoIdPreferido: estado?.inicio_evento_id || "",
+    });
+
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.operativosRepoUltimoInicioBody = { version: REPO_VERSION, eventoBody, payload };
@@ -778,9 +835,11 @@
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.operativosRepoUltimoFinalizadoBody = { version: REPO_VERSION, eventoBody, payload };
     validarFinalizadoBodyObligatorio(eventoBody, payload);
-    const evento = estado.finalizado_evento_id
-      ? await patchRows(EVENTOS_TABLE, { id: `eq.${estado.finalizado_evento_id}` }, eventoBody)
-      : await insertRow(EVENTOS_TABLE, eventoBody);
+    // Paso 91B: re-finalizar el mismo operativo actualiza el FINALIZADO
+    // vigente por id; si todavía no hay id, se actualiza por evento_key.
+    const evento = await insertarOActualizarEventoPorKey(eventoBody, {
+      eventoIdPreferido: estado?.finalizado_evento_id || "",
+    });
 
     const snap = datosSnapshotPayload(payload);
     const tiempo = camposTiempoDesdePayload({ ...payload, horario: eventoBody.franja_horaria || eventoBody.horario });
@@ -931,6 +990,7 @@
     guardarInforme,
     leerOperativosGuardia,
     buscarEstadoPorKey,
+    buscarEventoPorEventoKey,
   };
 
   api.version = REPO_VERSION;
