@@ -1,5 +1,5 @@
 {
-  "version": "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
-  "updated_at": "2026-06-08T22:45:00-03:00",
-  "notes": "Corrige guard de version repo, ignora deleted_at y persiste FINALIZADO con eventoBody estructurado"
+  "version": "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+  "updated_at": "2026-06-08T21:55:00-03:00",
+  "notes": "FINALIZA agrega operativos EN_CURSO directos desde Supabase aunque no coincidan con publicados; mantiene persistencia estructurada"
 }

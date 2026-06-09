@@ -8,7 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
-  const REPO_VERSION = "paso88p-version-repo-y-finalizado-manual-estructurado-20260608";
+  const REPO_VERSION = "paso88r-finaliza-lee-en-curso-tabla-base-20260608";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -865,26 +865,64 @@
 
   async function leerOperativosGuardia({ guardiaFecha, limit = 500 } = {}) {
     const gf = guardiaFecha || getGuardiaFecha({});
+    const debug = {
+      version: REPO_VERSION,
+      guardiaFecha: gf,
+      timestamp: isoAhora(),
+      fuente: "sin_lectura",
+      vistaFilas: 0,
+      tablaFilas: 0,
+      errorVista: null,
+      errorTabla: null,
+    };
+
     const paramsVista = new URLSearchParams({
       select: "*",
       guardia_fecha: `eq.${gf}`,
       order: "hora_inicio.asc,updated_at.desc",
       limit: String(limit || 500),
     });
+
     try {
-      return await selectRows("v_operativos_guardia_estadisticas", paramsVista);
+      const vista = await selectRows("v_operativos_guardia_estadisticas", paramsVista);
+      debug.vistaFilas = Array.isArray(vista) ? vista.length : 0;
+      if (debug.vistaFilas > 0) {
+        debug.fuente = "v_operativos_guardia_estadisticas";
+        window.WSP = window.WSP || {};
+        window.WSP.debug = window.WSP.debug || {};
+        window.WSP.debug.operativosRepoLeerGuardia = debug;
+        return vista;
+      }
+      debug.fuente = "vista_vacia_fallback_tabla_base";
     } catch (error) {
+      debug.errorVista = error?.message || String(error);
+      debug.fuente = "vista_error_fallback_tabla_base";
       console.warn("[WSP OperativosRepo] No se pudo leer la vista v_operativos_guardia_estadisticas, se usa tabla base.", error);
     }
 
     const params = new URLSearchParams({
-      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,personal_finalizado,moviles_finalizado,motos_finalizado,elementos_finalizado,texto_finalizado,personal_finalizado_fuente,movilidad_finalizado_fuente,elementos_finalizado_fuente",
+      select: "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,personal_finalizado,moviles_finalizado,motos_finalizado,elementos_finalizado,texto_finalizado,personal_finalizado_fuente,movilidad_finalizado_fuente,elementos_finalizado_fuente,deleted_at",
       guardia_fecha: `eq.${gf}`,
       order: "hora_inicio.asc,updated_at.desc",
       limit: String(limit || 500),
       deleted_at: "is.null",
     });
-    return await selectRows(ESTADO_TABLE, params);
+
+    try {
+      const tabla = await selectRows(ESTADO_TABLE, params);
+      debug.tablaFilas = Array.isArray(tabla) ? tabla.length : 0;
+      debug.fuente = debug.fuente || "tabla_base";
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.operativosRepoLeerGuardia = debug;
+      return Array.isArray(tabla) ? tabla : [];
+    } catch (error) {
+      debug.errorTabla = error?.message || String(error);
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.operativosRepoLeerGuardia = debug;
+      throw error;
+    }
   }
 
   const api = {

@@ -6,7 +6,7 @@
   window.WSP.modules = window.WSP.modules || {};
   window.WSP.debug = window.WSP.debug || {};
 
-  const VERSION = "paso88-finaliza-selector-referencias-20260608";
+  const VERSION = "paso88r-selector-canonico-en-curso-tabla-base-20260608";
   const TABLA_ESTADOS = "operativos_estado";
   const TABLA_EVENTOS = "operativos_eventos";
 

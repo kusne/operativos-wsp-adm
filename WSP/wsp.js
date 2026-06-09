@@ -1797,17 +1797,34 @@ window.WSP.config = {
   }
 
   async function leerIniciosGuardiaDesdeSupabase() {
+    const debug = {
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      guardiaFecha: getGuardiaFechaISO(),
+      fuentes: [],
+      timestamp: new Date().toISOString(),
+    };
+    const devolver = (items, fuente) => {
+      const unicos = deduplicarIniciosInformeWsp(Array.isArray(items) ? items : []);
+      debug.resultado = { fuente, cantidad: unicos.length };
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.leerIniciosGuardiaFinaliza = debug;
+      return unicos;
+    };
+
     const svcRepo = historialOperativoRepoWsp();
     if (svcRepo && typeof svcRepo.leerIniciosGuardiaDesdeSupabase === "function") {
       try {
-        return await svcRepo.leerIniciosGuardiaDesdeSupabase(depsHistorialOperativoRepoWsp());
+        const iniciosSvc = await svcRepo.leerIniciosGuardiaDesdeSupabase(depsHistorialOperativoRepoWsp());
+        const unicosSvc = deduplicarIniciosInformeWsp(Array.isArray(iniciosSvc) ? iniciosSvc : []);
+        debug.fuentes.push({ fuente: "historialOperativoRepo.leerIniciosGuardiaDesdeSupabase", cantidad: unicosSvc.length });
+        if (unicosSvc.length) return devolver(unicosSvc, "historialOperativoRepo");
       } catch (e) {
-        console.warn("[WSP] Historial operativo modular falló al leer inicios de guardia. Se usa fallback legacy.", e);
+        debug.fuentes.push({ fuente: "historialOperativoRepo.leerIniciosGuardiaDesdeSupabase", error: e?.message || String(e) });
+        console.warn("[WSP] Historial operativo modular falló al leer inicios de guardia. Se usan respaldos.", e);
       }
     }
 
-    // Fuente única para INFORMES: Supabase canónico.
-    // No usa localStorage, no usa wsp_inicios y no mezcla caches viejas.
     try {
       if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
         const rows = await window.BMZCN.OperativosRepo.leerOperativosGuardia({ guardiaFecha: getGuardiaFechaISO(), limit: 500 });
@@ -1815,15 +1832,32 @@ window.WSP.config = {
           .filter((row) => limpiarTextoSimple(row?.estado_real || row?.estado || "").toUpperCase() === "EN_CURSO")
           .map(normalizarInicioDesdeVistaGuardiaWsp)
           .filter((item) => item && item.operativo_key);
-        return deduplicarIniciosInformeWsp(inicios);
+        const unicos = deduplicarIniciosInformeWsp(inicios);
+        debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", filas: Array.isArray(rows) ? rows.length : 0, enCurso: unicos.length });
+        if (unicos.length) return devolver(unicos, "OperativosRepo");
       }
     } catch (e) {
+      debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", error: e?.message || String(e) });
       console.warn("[WSP] Error leyendo operativos EN CURSO desde OperativosRepo.", e);
     }
 
-    // Respaldo directo a vista en curso si el repo no está cargado. Sigue siendo Supabase.
+    try {
+      const canonico = window.WSP?.modules?.selectorIniciadosCanonico || window.WSP?.services?.selectorIniciadosCanonico || null;
+      if (canonico && typeof canonico.leerIniciosGuardiaDesdeSupabase === "function") {
+        const iniciosCanonicos = await canonico.leerIniciosGuardiaDesdeSupabase(depsHistorialOperativoRepoWsp());
+        const unicosCanonicos = deduplicarIniciosInformeWsp(Array.isArray(iniciosCanonicos) ? iniciosCanonicos : []);
+        debug.fuentes.push({ fuente: "selectorIniciadosCanonico", enCurso: unicosCanonicos.length });
+        if (unicosCanonicos.length) return devolver(unicosCanonicos, "selectorIniciadosCanonico");
+      }
+    } catch (e) {
+      debug.fuentes.push({ fuente: "selectorIniciadosCanonico", error: e?.message || String(e) });
+      console.warn("[WSP] Error leyendo operativos EN CURSO desde selector canónico.", e);
+    }
+
     const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase();
-    return deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
+    const unicosDirectos = deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
+    debug.fuentes.push({ fuente: "operativos_estado_directo_legacy", enCurso: unicosDirectos.length });
+    return devolver(unicosDirectos, "operativos_estado_directo_legacy");
   }
 
   function construirFranjaInformeDesdeInicio(inicio, idx = 0) {
@@ -3260,13 +3294,78 @@ window.WSP.config = {
     };
   }
 
+  function clavesComparacionFinalizaWsp(item = {}) {
+    const claves = [];
+    try {
+      claves.push(...construirOperativoKeysPosibles(item));
+    } catch (_) {}
+    claves.push(
+      item?.operativo_key,
+      item?.__operativoKey,
+      item?.__inicioGuardadoPayload?.operativo_key,
+      construirOperativoKeyEstable(item)
+    );
+    return Array.from(new Set(claves.map((v) => limpiarTextoSimple(v || "")).filter(Boolean)));
+  }
+
+  function agregarIniciosEnCursoDirectosAFinalizaWsp(itemsFinaliza = [], inicios = []) {
+    const salida = Array.isArray(itemsFinaliza) ? itemsFinaliza.slice() : [];
+    const clavesYaMostradas = new Set();
+    salida.forEach((item) => clavesComparacionFinalizaWsp(item).forEach((key) => clavesYaMostradas.add(key)));
+
+    (Array.isArray(inicios) ? inicios : []).forEach((inicioRaw, idx) => {
+      const inicio = normalizarInicioGuardado(inicioRaw);
+      const key = limpiarTextoSimple(inicio?.operativo_key || "");
+      if (!inicio || !key || clavesYaMostradas.has(key)) return;
+
+      const base = {
+        horario: inicio.horario || construirHorarioDesdePartesFinalizaWsp(inicio.hora_desde, inicio.hora_hasta) || "Sin horario",
+        lugar: inicio.lugar || "Sin lugar",
+        titulo: inicio.tipo_corto || "Operativo iniciado",
+        fecha: inicio.guardia_fecha || getGuardiaFechaISO(),
+        __fechaOperativo: inicio.guardia_fecha || getGuardiaFechaISO(),
+        __operativoKey: key,
+        __ordenNum: inicio.orden_num || "",
+        __ordenTextoRef: inicio.texto_ref || "",
+        __tipoPublicado: inicio.tipo_corto || "Operativo iniciado",
+        __key: `finaliza-directo-${idx}-${key}`,
+      };
+
+      const item = construirFranjaDesdeInicioCanonicoWsp(base, inicio);
+      salida.push({
+        ...item,
+        __key: base.__key,
+        __operativoKey: key,
+        __finalizaSeleccionable: true,
+        __finalizaNoSeleccionable: false,
+        __origenFinalizaSelector: "EN_CURSO_DIRECTO_SUPABASE",
+      });
+      clavesComparacionFinalizaWsp(item).forEach((k) => clavesYaMostradas.add(k));
+      clavesYaMostradas.add(key);
+    });
+
+    return salida;
+  }
+
   async function cargarOperativosFinalizablesConEstadoWsp(valorSeleccionado = "") {
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.finalizaSelectorEstado = {
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      etapa: "inicio_carga_finaliza",
+      valorSeleccionado: valorSeleccionado || "",
+      timestamp: new Date().toISOString(),
+    };
+
     setSelectorOperativosVisibleWsp(true, {
       motivo: "cargar_operativos_finaliza_con_estado",
       tipoSelector: "publicados",
     });
 
-    if (!selHorario) return [];
+    if (!selHorario) {
+      window.WSP.debug.finalizaSelectorEstado.etapa = "sin_selHorario";
+      return [];
+    }
 
     setTituloOperativosIniciados(false);
     selHorario.disabled = true;
@@ -3283,7 +3382,8 @@ window.WSP.config = {
     const inicios = await leerIniciosGuardiaDesdeSupabase();
     const indice = crearIndiceIniciosEnCursoFinalizaWsp(inicios);
 
-    operativosCache = publicadosFinaliza.map((franja) => marcarFinalizableConEstadoWsp(franja, indice));
+    const marcadosPublicados = publicadosFinaliza.map((franja) => marcarFinalizableConEstadoWsp(franja, indice));
+    operativosCache = agregarIniciosEnCursoDirectosAFinalizaWsp(marcadosPublicados, inicios);
     const valorSeleccionadoSeguro = operativosCache.some((item) => item.__key === valorSeleccionado && item.__finalizaSeleccionable)
       ? valorSeleccionado
       : "";
@@ -3305,7 +3405,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso88D-finaliza-mismos-datos-manual-20260608",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -6994,7 +7094,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function obtenerEstadoDecisionFinalizaWsp() {
     asegurarEstadoMismosDatosFinalizaWsp();
     return {
-      version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       checks: {
         personal: !!chkMismoPersonal?.checked,
         movilidad: !!chkMismoMovil?.checked,
@@ -9979,7 +10079,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
       };
       window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
-        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         personal: payloadHistorial.personal,
         moviles: payloadHistorial.moviles,
         motos: payloadHistorial.motos,
@@ -9999,7 +10099,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       payloadHistorial.metadata = {
         ...(payloadHistorial.metadata || {}),
         finaliza_fuentes_datos: fuentesFinaliza,
-        finaliza_version_envio: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        finaliza_version_envio: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       };
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.textoFinal = textoFinal;
@@ -10018,7 +10118,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
     if (esFinaliza) {
       const repoVersion = versionRepoOperativosWsp();
-      if (!repoVersion.includes("paso88p-version-repo")) {
+      if (!repoVersion.includes("paso88r-finaliza-lee-en-curso")) {
         alert(`WSP no cargó el repositorio nuevo de Supabase. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
         return;
       }
@@ -10038,7 +10138,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaErrorEstructuraSupabase = {
-        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         resultadoHistorial,
         payloadHistorial,
         repoVersion: versionRepoOperativosWsp(),
@@ -10052,7 +10152,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaSupabaseGuardado = {
-        version: "paso88p-version-repo-y-finalizado-manual-estructurado-20260608",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         evento_id: resultadoHistorial?.evento?.id || null,
         estado_id: resultadoHistorial?.estado?.id || null,
         evento: {

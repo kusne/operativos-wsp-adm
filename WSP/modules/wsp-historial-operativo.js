@@ -360,6 +360,12 @@
 
   async function leerIniciosGuardiaDesdeSupabase(deps = {}) {
     const d = getDeps(deps);
+    const debug = {
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      guardiaFecha: d.getGuardiaFechaISO(),
+      fuentes: [],
+      timestamp: new Date().toISOString(),
+    };
 
     try {
       if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
@@ -368,14 +374,27 @@
           .filter((row) => normalizarEstado(row?.estado_real || row?.estado || "") === "EN_CURSO")
           .map((row) => normalizarInicioDesdeVistaGuardiaWsp(row, d))
           .filter((item) => item && item.operativo_key);
-        return d.deduplicarIniciosInformeWsp(inicios);
+        const unicos = d.deduplicarIniciosInformeWsp(inicios);
+        debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", filas: Array.isArray(rows) ? rows.length : 0, enCurso: unicos.length });
+        if (unicos.length) {
+          window.WSP = window.WSP || {};
+          window.WSP.debug = window.WSP.debug || {};
+          window.WSP.debug.historialLeerIniciosGuardia = debug;
+          return unicos;
+        }
       }
     } catch (e) {
+      debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", error: e?.message || String(e) });
       console.warn("[WSP historial operativo] Error leyendo operativos EN CURSO desde OperativosRepo.", e);
     }
 
     const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase(d);
-    return d.deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
+    const unicos = d.deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
+    debug.fuentes.push({ fuente: "operativos_estado_directo", enCurso: unicos.length });
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.historialLeerIniciosGuardia = debug;
+    return unicos;
   }
 
   function esEventoOperativoCriticoWsp(tipoEvento) {

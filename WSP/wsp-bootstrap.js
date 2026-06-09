@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso88p-version-repo-y-finalizado-manual-estructurado-20260608";
+  const WSP_BOOTSTRAP_VERSION = "paso88r-finaliza-lee-en-curso-tabla-base-20260608";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
