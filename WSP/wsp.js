@@ -8601,7 +8601,8 @@ ${bold(`Moviles ${organismo}:`)}`)
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const tipoOpRaw = inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO";
+    const tipoOp = normalizarMayusInforme(limpiarOrdenDentroDeTipoFinalizaWsp(tipoOpRaw, orden || tipoOpRaw) || "OPERATIVO");
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);

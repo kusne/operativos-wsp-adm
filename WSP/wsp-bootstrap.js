@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso98-wsp-finalizado-acepta-repo-paso97-20260610";
+  const WSP_BOOTSTRAP_VERSION = "paso99-wsp-informes-observacion-no-duplica-orden-20260610";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

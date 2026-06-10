@@ -1,5 +1,5 @@
 {
-  "version": "paso98-wsp-finalizado-acepta-repo-paso97-20260610",
+  "version": "paso99-wsp-informes-observacion-no-duplica-orden-20260610",
   "updated_at": "2026-06-10",
-  "descripcion": "WSP mantiene informes como eventos independientes y permite FINALIZADO manual con repositorio Paso 97 compatible."
+  "descripcion": "WSP corrige observación de informes para no duplicar el número de orden de servicio."
 }
