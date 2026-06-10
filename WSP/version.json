@@ -1,5 +1,5 @@
 {
-  "version": "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
+  "version": "paso105-wsp-bloquea-envio-hasta-fotos-listas-20260610",
   "updated_at": "2026-06-10",
-  "descripcion": "WSP usa el INICIO actualizado vigente de operativos_estado como fuente canónica para Informes, Control Superior y Finalizado."
+  "descripcion": "WSP bloquea Enviar mientras cualquier foto seleccionada no está lista, evita doble envío y mantiene fotos opcionales para inicio, finalizado e informes."
 }
