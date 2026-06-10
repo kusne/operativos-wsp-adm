@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso92-wsp-reparacion-estable-inicio-finaliza-20260609";
+  const WSP_BOOTSTRAP_VERSION = "paso98-wsp-finalizado-acepta-repo-paso97-20260610";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

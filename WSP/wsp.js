@@ -146,6 +146,7 @@ window.WSP.config = {
   const INFORMES_TIPO = "INFORMES";
   const INFORME_CONTROL_SUPERIOR_TIPO = "CONTROL SUPERIOR";
   const INFORME_ALCOHOLEMIA_TIPO = "INFORME ALCOHOLEMIA";
+  const WSP_INFORMES_NO_FINALIZADO_VERSION = "paso97-wsp-informes-eventos-no-finalizado-manual-20260610";
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
@@ -1798,7 +1799,7 @@ window.WSP.config = {
 
   async function leerIniciosGuardiaDesdeSupabase() {
     const debug = {
-      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       guardiaFecha: getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
@@ -3351,7 +3352,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       etapa: "inicio_carga_finaliza",
       valorSeleccionado: valorSeleccionado || "",
       timestamp: new Date().toISOString(),
@@ -3405,7 +3406,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -7094,7 +7095,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function obtenerEstadoDecisionFinalizaWsp() {
     asegurarEstadoMismosDatosFinalizaWsp();
     return {
-      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       checks: {
         personal: !!chkMismoPersonal?.checked,
         movilidad: !!chkMismoMovil?.checked,
@@ -9319,99 +9320,18 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function cargarAgregadoInformesIntermediosWsp() {
-    if (!franjaSeleccionada) return null;
-    const keys = obtenerKeysInformesIntermediosFranja(franjaSeleccionada);
-
-    // Clave crítica: el informe intermedio suele guardarse con la key real del INICIO.
-    // El FINALIZADO a veces trae una franja reconstruida/publicada con otra key.
-    // Por eso se agregan también las keys del INICIO local/remoto y luego hay fallback por franja.
-    const inicioRemoto = await leerInicioDesdeSupabase(franjaSeleccionada);
-    agregarKeyUnicaInformes(keys, inicioRemoto?.operativo_key);
-
-    try {
-      const rows = [];
-      const seen = new Set();
-      const addRow = (row) => {
-        const id = String(row?.id || "");
-        if (id && seen.has(id)) return;
-        if (id) seen.add(id);
-        rows.push(row);
-      };
-
-      for (const key of keys) {
-        const params = new URLSearchParams({
-          select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo,alimenta_finalizado",
-          operativo_key: `eq.${key}`,
-          tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
-          alimenta_finalizado: "eq.true",
-          order: "created_at.asc",
-        });
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${params.toString()}`, {
-          headers: headersSupabase({ Accept: "application/json" }),
-        });
-        if (!r.ok) throw new Error(`${r.status} ${await r.text().catch(() => "")}`);
-        const data = await r.json();
-        (Array.isArray(data) ? data : []).forEach(addRow);
-      }
-
-      // Respaldo: si no coincidió la key, se buscan los informes de la guardia
-      // y se filtran por lugar/horario/tipo/orden guardados en payload_completo.franja.
-      const paramsFallback = new URLSearchParams({
-        select: "id,operativo_estado_id,operativo_key,tipo_evento,resultados,medidas_cautelares,detalles,payload_completo,observaciones,created_at,horario,lugar,tipo_operativo,alimenta_finalizado",
-        guardia_fecha: `eq.${getGuardiaFechaISO()}`,
-        tipo_evento: "in.(ALCOHOLEMIA_POSITIVA,DECTO_460_22)",
-        alimenta_finalizado: "eq.true",
-        order: "created_at.asc",
-        limit: "200",
-      });
-      const rf = await fetch(`${SUPABASE_URL}/rest/v1/operativos_eventos?${paramsFallback.toString()}`, {
-        headers: headersSupabase({ Accept: "application/json" }),
-      });
-      if (rf.ok) {
-        const dataFallback = await rf.json();
-        (Array.isArray(dataFallback) ? dataFallback : [])
-          .filter((row) => informeIntermedioCoincideConFranja(row, franjaSeleccionada, keys))
-          .forEach(addRow);
-      } else {
-        console.warn("[WSP] No se pudo leer fallback de informes intermedios:", rf.status, await rf.text().catch(() => ""));
-      }
-
-      const agregado = { resultados: {}, medidas: {}, detalles: [], observaciones: [], graduacionesSancionables: [], graduacionesNoSancionables: [], detallesReadonly: [], detallesMap: new Map(), procedimientos460: 0, remisiones460: 0, inventarios460: 0, destinos460: new Set() };
-      filtrarDuplicadosInformesIntermedios(rows).forEach((row) => {
-        const resultados = row?.resultados && typeof row.resultados === "object" ? row.resultados : {};
-        Object.entries(resultados).forEach(([k,v]) => { agregado.resultados[k] = Number(agregado.resultados[k] || 0) + Number(v || 0); });
-        const medidas = row?.medidas_cautelares && typeof row.medidas_cautelares === "object" ? row.medidas_cautelares : {};
-        Object.entries(medidas).forEach(([k,v]) => { agregado.medidas[k] = Number(agregado.medidas[k] || 0) + Number(v || 0); });
-        const pc = row?.payload_completo && typeof row.payload_completo === "object" ? row.payload_completo : {};
-        const origen = pc.detalle_origen_visual || (row.tipo_evento === "DECTO_460_22" ? "460/22" : "alcoholemia");
-
-        if (row.tipo_evento === "DECTO_460_22") {
-          const proc = Number(resultados["Decreto 460/22"] || resultados["Dto. 460/22"] || 1);
-          const rem = Number(medidas["Remisión"] || medidas["Vehículos remitidos"] || 1);
-          const datos = pc.datos_formulario && typeof pc.datos_formulario === "object" ? pc.datos_formulario : {};
-          const inv = Number(pc.inventarios_460 || datos.inventarios_460 || (datos.acta_inventario ? 1 : 0) || 0);
-          agregado.procedimientos460 += Number.isFinite(proc) && proc > 0 ? proc : 1;
-          agregado.remisiones460 += Number.isFinite(rem) && rem > 0 ? rem : 1;
-          agregado.inventarios460 += Number.isFinite(inv) && inv > 0 ? inv : 0;
-          const destino = pc.corralon_460 || pc.corralon_460_texto || datos.corralon || datos.corralon_texto || "";
-          if (destino) agregado.destinos460.add(destino);
-        }
-
-        if (Array.isArray(pc.detalles_readonly) && pc.detalles_readonly.length) {
-          pc.detalles_readonly.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d?.texto || ""), d?.origen || origen));
-        } else if (Array.isArray(row?.detalles)) {
-          row.detalles.forEach((d) => agregarDetalleReadonlyAgrupado(agregado, String(d || ""), origen));
-        }
-        if (Array.isArray(pc.graduaciones_sancionables)) agregado.graduacionesSancionables.push(...pc.graduaciones_sancionables);
-        if (Array.isArray(pc.graduaciones_no_sancionables)) agregado.graduacionesNoSancionables.push(...pc.graduaciones_no_sancionables);
-        if (row?.observaciones) agregado.observaciones.push(String(row.observaciones));
-      });
-      finalizarDetallesReadonlyAgrupados(agregado);
-      return agregadoInformesTieneDatos(agregado) ? agregado : null;
-    } catch (e) {
-      console.warn("[WSP] No se pudieron leer informes intermedios para finalizado.", e);
-      return null;
-    }
+    // Paso 97: los informes intermedios NO deben precargar ni sumar datos
+    // en el FINALIZADO. Se conservan como eventos separados para la futura
+    // pestaña Informes, con sus fotos en Supabase.
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.informesNoAlimentanFinalizado = {
+      version: WSP_INFORMES_NO_FINALIZADO_VERSION,
+      regla: "informes_eventos_separados_finalizado_manual",
+      aplicado: true,
+      timestamp: new Date().toISOString(),
+    };
+    return null;
   }
 
   function firmaAgregadoInformesFinalizado(agregado) {
@@ -9591,20 +9511,15 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   function renderResumenInformesIntermediosFinalizado(agregado) {
-    // La información de informes intermedios NO debe mostrarse como resumen aparte.
-    // Debe impactar directamente en los campos existentes del FINALIZADO.
-    aplicarInformesIntermediosEnCamposFinalizado(agregado);
+    // Paso 97: no aplicar informes al FINALIZADO.
+    // El FINALIZADO queda manual; los informes se registran como eventos separados.
     ocultarResumenInformesIntermediosFinalizado();
   }
 
   async function refrescarResumenInformesIntermediosFinalizado() {
-    if (selTipo?.value !== "FINALIZA" || !franjaSeleccionada) {
-      ocultarResumenInformesIntermediosFinalizado();
-      return null;
-    }
-    const agregado = await cargarAgregadoInformesIntermediosWsp();
-    renderResumenInformesIntermediosFinalizado(agregado);
-    return agregado;
+    // Paso 97: no precargar datos de informes en FINALIZA.
+    ocultarResumenInformesIntermediosFinalizado();
+    return null;
   }
 
   function construirLineasAlcoholimetroConAgregado(alcoholimetro, agregado) {
@@ -10079,7 +9994,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
       };
       window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
-        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         personal: payloadHistorial.personal,
         moviles: payloadHistorial.moviles,
         motos: payloadHistorial.motos,
@@ -10099,7 +10014,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       payloadHistorial.metadata = {
         ...(payloadHistorial.metadata || {}),
         finaliza_fuentes_datos: fuentesFinaliza,
-        finaliza_version_envio: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+        finaliza_version_envio: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
       };
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.textoFinal = textoFinal;
@@ -10117,9 +10032,19 @@ ${bold(`Moviles ${organismo}:`)}`)
     }
 
     if (esFinaliza) {
+      const repo = window.BMZCN?.OperativosRepo || window.WSP?.services?.operativosRepo;
       const repoVersion = versionRepoOperativosWsp();
-      if (!repoVersion.includes("paso92-wsp-reparacion-estable-inicio-finaliza")) {
-        alert(`WSP no cargó el repositorio nuevo de Supabase Paso 92. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
+      const repoCompatible = repo && typeof repo.guardarFinalizado === "function";
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.finalizaRepoCompatiblePaso98 = {
+        version: "paso98-wsp-finalizado-acepta-repo-paso97-20260610",
+        repoVersion,
+        repoCompatible,
+        tieneGuardarFinalizado: typeof repo?.guardarFinalizado === "function",
+      };
+      if (!repoCompatible) {
+        alert(`WSP no cargó el repositorio de Supabase compatible. Versión cargada: ${repoVersion || "SIN_VERSION"}. No se guardará ni enviará FINALIZADO para evitar datos vacíos.`);
         return;
       }
     }
@@ -10138,7 +10063,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaErrorEstructuraSupabase = {
-        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         resultadoHistorial,
         payloadHistorial,
         repoVersion: versionRepoOperativosWsp(),
@@ -10152,7 +10077,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaSupabaseGuardado = {
-        version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
         evento_id: resultadoHistorial?.evento?.id || null,
         estado_id: resultadoHistorial?.estado?.id || null,
         evento: {

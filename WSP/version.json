@@ -1,5 +1,5 @@
 {
-  "version": "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
-  "updated_at": "2026-06-09T00:00:00-03:00",
-  "notes": "Carga reparada: root redirige a WSP con mayúsculas y version.json queda sincronizado con wsp-bootstrap para evitar recarga infinita. Mantiene reparación paso92 de INICIO/FINALIZA."
+  "version": "paso98-wsp-finalizado-acepta-repo-paso97-20260610",
+  "updated_at": "2026-06-10",
+  "descripcion": "WSP mantiene informes como eventos independientes y permite FINALIZADO manual con repositorio Paso 97 compatible."
 }

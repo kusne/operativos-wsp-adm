@@ -8,7 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
-  const REPO_VERSION = "paso92-wsp-reparacion-estable-inicio-finaliza-20260609";
+  const REPO_VERSION = "paso98-wsp-finalizado-acepta-repo-paso97-20260610";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -323,6 +323,40 @@
     return [getGuardiaFecha(payload), getOperativoKey(payload), normalizarTipo(tipoEvento)].map(claveTipo).join("|");
   }
 
+  function esTipoInformeIntermedio(tipoEvento) {
+    const tipo = normalizarTipo(tipoEvento);
+    return ["ALCOHOLEMIA_POSITIVA", "DECTO_460_22", "DECRETO_460_22", "CONTROL_SUPERIOR"].includes(tipo);
+  }
+
+  function extraerInformeKeyPayload(payload = {}) {
+    return limpiarTexto(
+      payload.informe_key
+      || payload.payload_completo?.informe_key
+      || payload.metadata?.informe_key
+      || payload.payload_completo?.datos_formulario?.informe_key
+      || ""
+    );
+  }
+
+  function extraerActaInformePayload(payload = {}) {
+    return limpiarTexto(
+      payload.nro_acta
+      || payload.acta
+      || payload.numero_acta
+      || payload.payload_completo?.datos_formulario?.nro_acta
+      || payload.payload_completo?.nro_acta
+      || ""
+    ).replace(/\D+/g, "").slice(0, 16);
+  }
+
+  function eventoKeyInforme(tipoEvento, payload = {}) {
+    const base = eventoKey(tipoEvento, payload);
+    const informeKey = extraerInformeKeyPayload(payload);
+    const acta = extraerActaInformePayload(payload);
+    const componente = claveTipo(informeKey || acta || payload.evento_ts || isoAhora()) || "sin_acta";
+    return [base, componente].filter(Boolean).join("|");
+  }
+
 
   function arrayDesdeLineaValor(linea) {
     const raw = limpiarTexto(linea || "");
@@ -523,7 +557,9 @@
 
   function eventoBaseDesdePayload(tipoEvento, payload = {}, estadoId = null) {
     const tipo = normalizarTipo(tipoEvento || payload.tipo_evento || "INFORME");
-    const alimentaFinalizado = ["ALCOHOLEMIA_POSITIVA", "DECTO_460_22", "DECRETO_460_22"].includes(tipo);
+    // Paso 97: los INFORMES son eventos autónomos. Se guardan con fotos e informe_key,
+    // pero NO alimentan ni precargan el FINALIZADO del operativo.
+    const alimentaFinalizado = !esTipoInformeIntermedio(tipo) && payload.alimenta_finalizado === true;
     const tipoInicio = resolverTipoInicioDesdePayload(payload) || limpiarTexto(payload.tipo_operativo || payload.tipo_corto || payload.tipo || "");
     const horario = getHorario(payload);
     const partes = partesHorario({ ...payload, horario });
@@ -534,8 +570,8 @@
     return {
       operativo_estado_id: estadoId || payload.operativo_estado_id || null,
       operativo_key: getOperativoKey(payload),
-      evento_key: limpiarTexto(payload.evento_key || eventoKey(tipo, payload)),
-      informe_key: limpiarTexto(payload.informe_key || "") || null,
+      evento_key: esTipoInformeIntermedio(tipo) ? eventoKeyInforme(tipo, payload) : limpiarTexto(payload.evento_key || eventoKey(tipo, payload)),
+      informe_key: extraerInformeKeyPayload(payload) || null,
       guardia_fecha: getGuardiaFecha(payload),
       fuente: limpiarTexto(payload.fuente || payload.origen || "WSP"),
       tipo_evento: tipo,
@@ -573,7 +609,7 @@
         actualizado_desde: "wsp-operativos-repo.js",
         repo_version: REPO_VERSION,
       },
-      alimenta_finalizado: !!payload.alimenta_finalizado || alimentaFinalizado,
+      alimenta_finalizado: alimentaFinalizado,
       updated_at: isoAhora(),
     };
   }
@@ -924,6 +960,58 @@
     return { ok: true, estado: estadoActualizado || estado, evento };
   }
 
+  async function buscarEventoInformeExistente({ eventoKeyActual, eventoKeyLegacy, informeKey, operativoKey, guardiaFecha, tipoEvento } = {}) {
+    const baseSelect = "*";
+    const filtrosBase = {
+      select: baseSelect,
+      order: "updated_at.desc,created_at.desc",
+      limit: "1",
+    };
+
+    async function buscar(paramsExtra) {
+      const params = new URLSearchParams({ ...filtrosBase, ...paramsExtra });
+      const rows = await selectRows(EVENTOS_TABLE, params);
+      return rows[0] || null;
+    }
+
+    if (informeKey) {
+      const porInforme = await buscar({
+        informe_key: `eq.${informeKey}`,
+        ...(operativoKey ? { operativo_key: `eq.${operativoKey}` } : {}),
+        ...(guardiaFecha ? { guardia_fecha: `eq.${guardiaFecha}` } : {}),
+      });
+      if (porInforme?.id) return porInforme;
+    }
+
+    if (eventoKeyActual) {
+      const porKeyActual = await buscar({ evento_key: `eq.${eventoKeyActual}` });
+      if (porKeyActual?.id) return porKeyActual;
+    }
+
+    // Compatibilidad con informes guardados antes del Paso 96, cuando el evento_key
+    // no diferenciaba nro de acta/informe_key y chocaba con ux_operativos_eventos_evento_key.
+    if (!informeKey && eventoKeyLegacy && eventoKeyLegacy !== eventoKeyActual) {
+      const porKeyLegacy = await buscar({ evento_key: `eq.${eventoKeyLegacy}` });
+      if (porKeyLegacy?.id) return porKeyLegacy;
+    }
+
+    if (operativoKey && guardiaFecha && tipoEvento) {
+      const porTipoLegacy = await buscar({
+        operativo_key: `eq.${operativoKey}`,
+        guardia_fecha: `eq.${guardiaFecha}`,
+        tipo_evento: `eq.${normalizarTipo(tipoEvento)}`,
+      });
+      if (porTipoLegacy?.id && !informeKey) return porTipoLegacy;
+    }
+
+    return null;
+  }
+
+  function esErrorConflictoUnico(error) {
+    const msg = String(error?.message || error || "");
+    return /409|duplicate key|conflict|ux_operativos_eventos_evento_key/i.test(msg);
+  }
+
   async function guardarInforme(tipoEvento, payload = {}) {
     const operativoKey = getOperativoKey(payload);
     const guardiaFecha = getGuardiaFecha(payload);
@@ -931,8 +1019,77 @@
       ? { id: payload.operativo_estado_id }
       : await buscarEstadoPorKey({ operativoKey, guardiaFecha });
 
-    const evento = await insertRow(EVENTOS_TABLE, eventoBaseDesdePayload(tipoEvento, payload, estado?.id || null));
-    return { ok: true, estado: estado || null, evento };
+    const eventoBody = eventoBaseDesdePayload(tipoEvento, payload, estado?.id || null);
+    const eventoKeyActual = eventoBody.evento_key;
+    const eventoKeyLegacy = eventoKey(tipoEvento, payload);
+    const informeKey = eventoBody.informe_key || extraerInformeKeyPayload(payload);
+
+    window.WSP = window.WSP || {};
+    window.WSP.debug = window.WSP.debug || {};
+    window.WSP.debug.operativosRepoUltimoInformeBody = {
+      version: REPO_VERSION,
+      eventoBody,
+      eventoKeyActual,
+      eventoKeyLegacy,
+      informeKey,
+      payload,
+    };
+
+    const existente = await buscarEventoInformeExistente({
+      eventoKeyActual,
+      eventoKeyLegacy,
+      informeKey,
+      operativoKey,
+      guardiaFecha,
+      tipoEvento,
+    });
+
+    if (existente?.id) {
+      const evento = await patchRows(EVENTOS_TABLE, { id: `eq.${existente.id}` }, {
+        ...eventoBody,
+        evento_key: existente.evento_key || eventoBody.evento_key,
+        informe_key: informeKey || existente.informe_key || null,
+        updated_at: isoAhora(),
+        metadata: {
+          ...(asObject(existente.metadata)),
+          ...(asObject(eventoBody.metadata)),
+          actualizado_por_upsert_informe: true,
+          repo_version: REPO_VERSION,
+        },
+      });
+      return { ok: true, estado: estado || null, evento };
+    }
+
+    try {
+      const evento = await insertRow(EVENTOS_TABLE, eventoBody);
+      return { ok: true, estado: estado || null, evento };
+    } catch (error) {
+      if (!esErrorConflictoUnico(error)) throw error;
+
+      const existenteTrasConflicto = await buscarEventoInformeExistente({
+        eventoKeyActual,
+        eventoKeyLegacy,
+        informeKey,
+        operativoKey,
+        guardiaFecha,
+        tipoEvento,
+      });
+      if (!existenteTrasConflicto?.id) throw error;
+
+      const evento = await patchRows(EVENTOS_TABLE, { id: `eq.${existenteTrasConflicto.id}` }, {
+        ...eventoBody,
+        evento_key: existenteTrasConflicto.evento_key || eventoBody.evento_key,
+        informe_key: informeKey || existenteTrasConflicto.informe_key || null,
+        updated_at: isoAhora(),
+        metadata: {
+          ...(asObject(existenteTrasConflicto.metadata)),
+          ...(asObject(eventoBody.metadata)),
+          recuperado_de_conflicto_409: true,
+          repo_version: REPO_VERSION,
+        },
+      });
+      return { ok: true, estado: estado || null, evento };
+    }
   }
 
   async function leerOperativosGuardia({ guardiaFecha, limit = 500 } = {}) {
