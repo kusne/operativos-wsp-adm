@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso105-wsp-bloquea-envio-hasta-fotos-listas-20260610";
+  const WSP_BOOTSTRAP_VERSION = "paso106-wsp-foto-abre-camara-por-defecto-20260610";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",

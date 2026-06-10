@@ -269,12 +269,11 @@
     const sujeto = `${superior.rol} ${superior.nombre}`.replace(/\s+/g, " ").trim();
     const partes = [`Se hace presente ${sujeto}`];
 
-    if (conMovil) partes.push("con móvil 12428");
+    if (conMovil) partes.push("con móvil");
 
     partes.push("realizando control superior");
 
     if (seAcopla) partes.push("y se acopla al operativo");
-    else partes.push(". Acto seguido se retira sin novedad");
 
     return partes.join(" ").replace(/\s+/g, " ").trim() + ".";
   }

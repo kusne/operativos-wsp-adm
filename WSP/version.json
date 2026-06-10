@@ -1,5 +1,5 @@
 {
-  "version": "paso105-wsp-bloquea-envio-hasta-fotos-listas-20260610",
+  "version": "paso106-wsp-foto-abre-camara-por-defecto-20260610",
   "updated_at": "2026-06-10",
-  "descripcion": "WSP bloquea Enviar mientras cualquier foto seleccionada no está lista, evita doble envío y mantiene fotos opcionales para inicio, finalizado e informes."
+  "descripcion": "WSP mantiene bloqueo de Enviar hasta fotos listas y el botón principal de foto abre cámara por defecto en celular."
 }

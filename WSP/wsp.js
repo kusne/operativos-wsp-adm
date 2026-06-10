@@ -150,7 +150,7 @@ window.WSP.config = {
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
-  const WSP_FOTOS_PREPARADAS_VERSION = "paso105-wsp-bloquea-envio-hasta-fotos-listas-20260610";
+  const WSP_FOTOS_PREPARADAS_VERSION = "paso106-wsp-foto-abre-camara-por-defecto-20260610";
   const WSP_FOTO_READY_MS = 900;
   let envioWspPaso105EnCurso = false;
   const WSP_FOTO_ICON_URL = "./assets/camera_1.png";
@@ -445,6 +445,9 @@ window.WSP.config = {
     if (!input || input.__wspFotoDecoradoPaso104) return;
     if (!input.id) input.id = `wspFotoPaso104_${Math.random().toString(36).slice(2)}`;
     input.accept = input.accept || "image/*";
+    // Paso 106: botón principal de foto abre cámara trasera por defecto en celular.
+    // No cambia la preparación/bloqueo de fotos; solo agrega la pista capture.
+    if (!input.getAttribute("capture")) input.setAttribute("capture", "environment");
     input.classList.add("wsp-foto-input-oculto-paso104");
 
     const wrap = document.createElement("div");
@@ -485,6 +488,7 @@ window.WSP.config = {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "image/*";
+      input.setAttribute("capture", "environment");
       input.id = `wspOperativoFoto${n}`;
       grid.appendChild(input);
       decorarInputFotoPaso104(input, `Foto ${n}`);
