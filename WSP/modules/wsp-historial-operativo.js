@@ -197,12 +197,48 @@
       horario,
       lugar: row?.lugar_inicio || row?.lugar || "",
       tipo_corto: row?.tipo_operativo || metadataEstado?.tipo_operativo_inicio_texto || metadataEstado?.tipo_operativo || metadataEstado?.titulo || "Operativo iniciado",
-      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.personal_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_personal : []) || metadataEstado?.personal || [],
-      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.moviles_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_moviles : []) || metadataEstado?.moviles || [],
-      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.motos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_motos : []) || metadataEstado?.motos || [],
-      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.elementos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_elementos : {}) || metadataEstado?.elementos || {},
+      personal: row?.inicio_personal || row?.personal_inicio || metadataEstado?.ultimo_personal_inicio || metadataEstado?.personal_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_personal : []) || metadataEstado?.personal || [],
+      moviles: row?.inicio_moviles || row?.moviles_inicio || metadataEstado?.ultimo_moviles_inicio || metadataEstado?.moviles_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_moviles : []) || metadataEstado?.moviles || [],
+      motos: row?.inicio_motos || row?.motos_inicio || metadataEstado?.ultimo_motos_inicio || metadataEstado?.motos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_motos : []) || metadataEstado?.motos || [],
+      elementos: row?.inicio_elementos || row?.elementos_inicio || metadataEstado?.ultimo_elementos_inicio || metadataEstado?.elementos_inicio || (puedeUsarUltimoComoInicio ? metadataEstado?.ultimo_elementos : {}) || metadataEstado?.elementos || {},
       ts: d.timestampOperativoAMs(row?.updated_at || row?.created_at) || Date.now(),
     });
+  }
+
+  async function leerEstadoEnCursoPorKeySupabase(operativoKey, deps = {}) {
+    const key = limpiarTextoSimple(operativoKey || "");
+    if (!key) return null;
+    const d = getDeps(deps);
+    const selectCols = "id,operativo_key,guardia_fecha,fecha_operativo,hora_desde,hora_hasta,franja_horaria,hora_inicio,hora_finalizacion,lugar,tipo_operativo,ordenes_origen,estado,inicio_evento_id,finalizado_evento_id,metadata,created_at,updated_at,personal_inicio,moviles_inicio,motos_inicio,elementos_inicio,texto_inicio,horario_inicio,lugar_inicio";
+
+    try {
+      const data = await leerTabla("operativos_estado", {
+        select: selectCols,
+        operativo_key: `eq.${key}`,
+        guardia_fecha: `eq.${d.getGuardiaFechaISO()}`,
+        deleted_at: "is.null",
+        order: "updated_at.desc",
+        limit: "1",
+      }, d);
+
+      const row = (Array.isArray(data) ? data : [])[0] || null;
+      const inicio = row && estadoOperativoEsEnCursoWsp(row) ? normalizarEstadoOperativoEnCurso(row, d) : null;
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.inicioCanonicoPorKeyPaso103 = {
+        version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
+        key,
+        encontrado: !!row,
+        enCurso: !!inicio,
+        rowUpdatedAt: row?.updated_at || null,
+        inicio,
+        timestamp: new Date().toISOString(),
+      };
+      return inicio;
+    } catch (e) {
+      console.warn("[WSP historial operativo] No se pudo leer INICIO vigente desde operativos_estado por key.", e);
+      return null;
+    }
   }
 
   async function leerInicioDesdeSupabase(franja, deps = {}) {
@@ -211,6 +247,14 @@
     const keysPosibles = new Set(d.construirOperativoKeysPosibles(franja).map((v) => limpiarTextoSimple(v)).filter(Boolean));
     const keyDirecta = limpiarTextoSimple(franja?.__operativoKey || franja?.operativo_key || franja?.__inicioGuardadoPayload?.operativo_key || "");
     if (keyDirecta) keysPosibles.add(keyDirecta);
+
+    // Paso 103: fuente única para INICIO vigente = operativos_estado actualizado.
+    // No se usa primero la vista ni el snapshot embebido, porque pueden conservar el primer INICIO.
+    const keysOrdenadas = Array.from(keysPosibles).filter(Boolean);
+    for (const key of keysOrdenadas) {
+      const directo = await leerEstadoEnCursoPorKeySupabase(key, d);
+      if (directo) return directo;
+    }
 
     const normalizarFilas = (rows) => (Array.isArray(rows) ? rows : []).filter(Boolean);
 
@@ -229,8 +273,8 @@
           window.WSP = window.WSP || {};
           window.WSP.debug = window.WSP.debug || {};
           window.WSP.debug.ultimoInicioFinalizaExacto = {
-            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
-            fuente: "OperativosRepo.leerOperativosGuardia_key_exacta",
+            version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
+            fuente: "OperativosRepo.leerOperativosGuardia_key_exacta_fallback",
             keyDirecta,
             operativo_key: elegido.operativo_key,
             inicio_evento_id: elegido.inicio_evento_id || elegido.operativo_estado_id || "",
@@ -239,15 +283,11 @@
           return elegido;
         }
 
-        // Si el selector trae operativo_key, NO se permite caer por puntaje a otro operativo.
-        // Esto evita cruzar datos entre operativos parecidos o entre formularios anteriores.
         if (keyDirecta) {
-          const embebido = d.normalizarInicioGuardado(franja?.__inicioGuardadoPayload);
-          if (embebido && limpiarTextoSimple(embebido.operativo_key || "") === keyDirecta) return embebido;
           window.WSP = window.WSP || {};
           window.WSP.debug = window.WSP.debug || {};
           window.WSP.debug.ultimoInicioFinalizaExacto = {
-            version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+            version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
             fuente: "sin_inicio_exact_key",
             keyDirecta,
             filasLeidas: rows.length,
@@ -405,11 +445,23 @@
   async function leerIniciosGuardiaDesdeSupabase(deps = {}) {
     const d = getDeps(deps);
     const debug = {
-      version: "paso92-wsp-reparacion-estable-inicio-finaliza-20260609",
+      version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       guardiaFecha: d.getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
     };
+
+    // Paso 103: para Informes / Control Superior / Finalizado, la fuente canónica
+    // del INICIO actualizado es operativos_estado. La vista puede conservar snapshots viejos.
+    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase(d);
+    const unicosDirectos = d.deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
+    debug.fuentes.push({ fuente: "operativos_estado_directo_preferido", enCurso: unicosDirectos.length });
+    if (unicosDirectos.length) {
+      window.WSP = window.WSP || {};
+      window.WSP.debug = window.WSP.debug || {};
+      window.WSP.debug.historialLeerIniciosGuardia = debug;
+      return unicosDirectos;
+    }
 
     try {
       if (window.BMZCN?.OperativosRepo?.leerOperativosGuardia) {
@@ -419,26 +471,21 @@
           .map((row) => normalizarInicioDesdeVistaGuardiaWsp(row, d))
           .filter((item) => item && item.operativo_key);
         const unicos = d.deduplicarIniciosInformeWsp(inicios);
-        debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", filas: Array.isArray(rows) ? rows.length : 0, enCurso: unicos.length });
-        if (unicos.length) {
-          window.WSP = window.WSP || {};
-          window.WSP.debug = window.WSP.debug || {};
-          window.WSP.debug.historialLeerIniciosGuardia = debug;
-          return unicos;
-        }
+        debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia_fallback", filas: Array.isArray(rows) ? rows.length : 0, enCurso: unicos.length });
+        window.WSP = window.WSP || {};
+        window.WSP.debug = window.WSP.debug || {};
+        window.WSP.debug.historialLeerIniciosGuardia = debug;
+        return unicos;
       }
     } catch (e) {
-      debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia", error: e?.message || String(e) });
+      debug.fuentes.push({ fuente: "OperativosRepo.leerOperativosGuardia_fallback", error: e?.message || String(e) });
       console.warn("[WSP historial operativo] Error leyendo operativos EN CURSO desde OperativosRepo.", e);
     }
 
-    const enCurso = await leerOperativosEnCursoDesdeEstadoSupabase(d);
-    const unicos = d.deduplicarIniciosInformeWsp(Array.isArray(enCurso) ? enCurso : []);
-    debug.fuentes.push({ fuente: "operativos_estado_directo", enCurso: unicos.length });
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.historialLeerIniciosGuardia = debug;
-    return unicos;
+    return [];
   }
 
   function esEventoOperativoCriticoWsp(tipoEvento) {
@@ -503,6 +550,7 @@
     leerInicioDesdeSupabase,
     estadoOperativoEsEnCursoWsp,
     normalizarEstadoOperativoEnCurso,
+    leerEstadoEnCursoPorKeySupabase,
     leerOperativoKeysFinalizadosGuardiaSupabase,
     leerOperativosEnCursoDesdeEstadoSupabase,
     leerIniciosGuardiaDesdeWspIniciosFallback,

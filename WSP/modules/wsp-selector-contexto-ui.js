@@ -231,15 +231,25 @@
     }
 
     if (!franja) return null;
+
+    // Paso 103: no devolver primero el snapshot embebido del selector.
+    // Puede ser el primer INICIO. Primero se consulta Supabase/operativos_estado.
+    const lectoresRemotos = [config.leerInicio].filter((fn) => typeof fn === "function");
+    for (const leer of lectoresRemotos) {
+      try {
+        const inicio = await leer(franja);
+        if (inicio) return inicio;
+      } catch {}
+    }
+
     if (franja.__inicioGuardadoPayload) return franja.__inicioGuardadoPayload;
 
-    const lectores = [
-      config.leerInicio,
+    const lectoresLocales = [
       config.cargarInicioGuardadoCoincidente,
       config.cargarInicioLocal,
     ].filter((fn) => typeof fn === "function");
 
-    for (const leer of lectores) {
+    for (const leer of lectoresLocales) {
       try {
         const inicio = await leer(franja);
         if (inicio) return inicio;

@@ -8,7 +8,7 @@
 
   const ESTADO_TABLE = "operativos_estado";
   const EVENTOS_TABLE = "operativos_eventos";
-  const REPO_VERSION = "paso98-wsp-finalizado-acepta-repo-paso97-20260610";
+  const REPO_VERSION = "paso103-wsp-inicio-actualizado-canonico-supabase-20260610";
 
   function configSupabase() {
     const cfg = window.WSP?.config || {};
@@ -832,6 +832,16 @@
         elementos_inicio: eventoBody.elementos,
         texto_inicio: eventoBody.texto_generado,
         horario_inicio: eventoBody.franja_horaria || eventoBody.horario,
+        lugar_inicio: eventoBody.lugar,
+        ultimo_personal_inicio: eventoBody.personal,
+        ultimo_moviles_inicio: eventoBody.moviles,
+        ultimo_motos_inicio: eventoBody.motos,
+        ultimo_elementos_inicio: eventoBody.elementos,
+        ultimo_texto_inicio: eventoBody.texto_generado,
+        ultimo_horario_inicio: eventoBody.franja_horaria || eventoBody.horario,
+        ultimo_lugar_inicio: eventoBody.lugar,
+        inicio_actualizado_at: isoAhora(),
+        fuente_inicio_canonica: "operativos_estado",
         repo_version: REPO_VERSION,
       },
     });

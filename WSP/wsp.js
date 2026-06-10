@@ -1799,7 +1799,7 @@ window.WSP.config = {
 
   async function leerIniciosGuardiaDesdeSupabase() {
     const debug = {
-      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       guardiaFecha: getGuardiaFechaISO(),
       fuentes: [],
       timestamp: new Date().toISOString(),
@@ -3142,6 +3142,23 @@ window.WSP.config = {
   }
 
 
+
+  function construirEtiquetaOperativoInformeWsp(tipoRaw = "", ordenRaw = "", fallback = "OPERATIVO") {
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    const tipoBase = limpiarTextoSimple(tipoRaw || fallback || "OPERATIVO");
+    const tipoLimpio = limpiarOrdenDentroDeTipoFinalizaWsp(tipoBase, orden)
+      || limpiarOrdenDentroDeTipoFinalizaWsp(fallback, orden)
+      || tipoBase
+      || "OPERATIVO";
+    const tipoNorm = normalizarMayusInforme(tipoLimpio || "OPERATIVO");
+    const ordenNorm = normalizarMayusInforme(orden || "");
+    if (ordenNorm && !normalizarTipoOrdenFinalizaWsp(tipoNorm).includes(normalizarTipoOrdenFinalizaWsp(ordenNorm))) {
+      return `${tipoNorm} ${ordenNorm}`.replace(/\s{2,}/g, " ").trim();
+    }
+    return (tipoNorm || ordenNorm || "OPERATIVO").replace(/\s{2,}/g, " ").trim();
+  }
+
+
   function normalizarHoraRangoFinalizaWsp(value = "") {
     const raw = limpiarTextoSimple(value || "").replace(/[–—]/g, "-");
     if (!raw) return "";
@@ -3352,7 +3369,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       etapa: "inicio_carga_finaliza",
       valorSeleccionado: valorSeleccionado || "",
       timestamp: new Date().toISOString(),
@@ -3406,7 +3423,7 @@ window.WSP.config = {
     window.WSP = window.WSP || {};
     window.WSP.debug = window.WSP.debug || {};
     window.WSP.debug.finalizaSelectorEstado = {
-      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       publicados: publicadosFinaliza.length,
       enCurso: indice.lista.length,
       seleccionables: cantidadSeleccionables,
@@ -7095,7 +7112,7 @@ ${bold(`Moviles ${organismo}:`)}`)
   function obtenerEstadoDecisionFinalizaWsp() {
     asegurarEstadoMismosDatosFinalizaWsp();
     return {
-      version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+      version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       checks: {
         personal: !!chkMismoPersonal?.checked,
         movilidad: !!chkMismoMovil?.checked,
@@ -8097,7 +8114,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     const esClaseLicencia = !esDniSinLicencia && /^[A-Z0-9.]{2,5}$/.test(valor);
     return {
       valor,
-      digital: digital && !esDniSinLicencia,
+      digital,
       esDniSinLicencia,
       esClaseLicencia,
       retencionAutomatica: !!valor && esClaseLicencia && !digital,
@@ -8226,7 +8243,17 @@ ${bold(`Moviles ${organismo}:`)}`)
     escribirResultadoAutoAlcoholemiaWsp(calc, grad, tipoVehiculo);
 
     const lic = infoLicenciaInformeAlcoholemia();
-    if (infAlcoMedRetencion && lic.retencionAutomatica) infAlcoMedRetencion.checked = true;
+    if (infAlcoMedRetencion) {
+      if (lic.digital || lic.esDniSinLicencia) {
+        infAlcoMedRetencion.checked = false;
+        infAlcoMedRetencion.disabled = true;
+      } else if (lic.retencionAutomatica) {
+        infAlcoMedRetencion.checked = true;
+        infAlcoMedRetencion.disabled = true;
+      } else {
+        infAlcoMedRetencion.disabled = false;
+      }
+    }
     if ((infAlco460?.checked || infAlcoMedRemision?.checked) && infAlcoMedRemision) {
       infAlcoMedRemision.checked = true;
       completarDestinoRemisionSiVacio();
@@ -8418,11 +8445,12 @@ ${bold(`Moviles ${organismo}:`)}`)
       return mod.medidas(refsInformeAlcoholemiaWsp());
     }
     const lic = infoLicenciaInformeAlcoholemia();
+    const permiteRetencion = lic.esClaseLicencia && !lic.digital && !lic.esDniSinLicencia;
     return {
       prohibicion: !!infAlcoMedProhibicion?.checked,
       cesion: !!infAlcoMedCesion?.checked,
       remision: !!infAlcoMedRemision?.checked,
-      retencion: !!infAlcoMedRetencion?.checked || lic.retencionAutomatica,
+      retencion: permiteRetencion && (!!infAlcoMedRetencion?.checked || lic.retencionAutomatica),
     };
   }
 
@@ -8458,6 +8486,14 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (!normalizarMayusInforme(infAlcoMarca?.value)) return marcarErrorCampo(infAlcoMarca, "Complete la marca del vehículo.");
     if (!normalizarDominioInforme(infAlcoDominio?.value)) return marcarErrorCampo(infAlcoDominio, "Complete el dominio del vehículo.");
     if (!normalizarNumeroActaInforme(infAlcoActa?.value)) return marcarErrorCampo(infAlcoActa, "Complete el N° de acta.");
+
+    const lic = infoLicenciaInformeAlcoholemia();
+    if (infAlcoLicenciaDigital?.checked && !lic.valor) {
+      return marcarErrorCampo(infAlcoLicenciaClase, "Si marca licencia digital, complete Clase o DNI en el campo Clase.");
+    }
+    if (lic.valor && !lic.esClaseLicencia && !lic.esDniSinLicencia) {
+      return marcarErrorCampo(infAlcoLicenciaClase, "Licencia: ingrese clase de 2 a 5 caracteres o DNI de 7/8 dígitos si no posee licencia.");
+    }
 
     const otros = parseCodigosInputInforme(infAlcoOtrosCodigos?.value || "");
     const invalidos = codigosInvalidosNomenclador(otros);
@@ -8602,23 +8638,37 @@ ${bold(`Moviles ${organismo}:`)}`)
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
     const tipoOpRaw = inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO";
-    const tipoOp = normalizarMayusInforme(limpiarOrdenDentroDeTipoFinalizaWsp(tipoOpRaw, orden || tipoOpRaw) || "OPERATIVO");
+    const tipoOp = construirEtiquetaOperativoInformeWsp(tipoOpRaw, orden, "OPERATIVO");
     const marca = normalizarMayusInforme(infAlcoMarca?.value);
     const modelo = normalizarMayusInforme(infAlcoModelo?.value);
     const dominio = normalizarDominioInforme(infAlcoDominio?.value);
     const conductor = normalizarMayusInforme(infAlcoConductor?.value);
     const nroActa = normalizarNumeroActaInforme(infAlcoActa?.value);
-    const licenciaClase = normalizarMayusInforme(infAlcoLicenciaClase?.value);
-    const licenciaTxt = licenciaClase ? ` LICENCIA CLASE ${licenciaClase}${infAlcoLicenciaDigital?.checked ? " DIGITAL" : ""}.` : "";
+    const licenciaInfo = infoLicenciaInformeAlcoholemia();
+    const licenciaClase = licenciaInfo.valor || normalizarMayusInforme(infAlcoLicenciaClase?.value);
+    let licenciaTxt = "";
+    if (licenciaInfo.esDniSinLicencia) {
+      licenciaTxt = licenciaInfo.digital
+        ? ` NO POSEE LICENCIA DE CONDUCIR, POSEE DNI DIGITAL ${licenciaClase}.`
+        : ` NO POSEE LICENCIA DE CONDUCIR, POSEE DNI ${licenciaClase}.`;
+    } else if (licenciaInfo.esClaseLicencia) {
+      licenciaTxt = licenciaInfo.digital
+        ? ` POSEE LICENCIA DIGITAL CLASE ${licenciaClase}.`
+        : ` LICENCIA CLASE ${licenciaClase}.`;
+    } else if (licenciaClase) {
+      licenciaTxt = ` LICENCIA CLASE ${licenciaClase}.`;
+    }
     const codigosTxt = codigos.join("/");
-    const medidasTxt = textoMedidasInforme(medidas);
+    const permiteRetencionLicencia = licenciaInfo.esClaseLicencia && !licenciaInfo.digital && !licenciaInfo.esDniSinLicencia;
+    const medidasTextoSeguro = { ...medidas, retencion: !!medidas.retencion && permiteRetencionLicencia };
+    const medidasTxt = textoMedidasInforme(medidasTextoSeguro);
     const medidaFrase = medidasTxt.length ? ` Como medida cautelar se realiza ${medidasTxt.join(", ")}.` : "";
     const remisionFrase = (infAlco460?.checked || medidas.remision)
       ? ` Remitiendo el vehículo al destino/corralón ${normalizarMayusInforme(infAlcoCorralon?.value)}.`
       : "";
     const inventarioFrase = infAlcoInventario?.checked ? " Labrando acta de inventario." : "";
     const obs = [
-      `En momentos que nos encontrábamos realizando ${tipoOp}${orden ? ` ${orden}` : ""} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
+      `En momentos que nos encontrábamos realizando ${tipoOp} se detiene la marcha de un vehiculo tipo ${tipoVehiculo} marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}${conductor ? `, conducido por ${conductor}` : ""}, constatando que circula con alcoholemia positiva ${calc.sancionable ? "sancionable" : "no sancionable"} de ${grad} G/L. Se labra acta de infracción N° ${nroActa} por código/s ${codigosTxt}.${licenciaTxt}${medidaFrase}${remisionFrase}${inventarioFrase}`,
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
@@ -9016,6 +9066,8 @@ ${bold(`Moviles ${organismo}:`)}`)
           normalizarNumeroActaInforme,
           obtenerNumeroOrdenDeFranja,
           obtenerTipoCortoFranja,
+          limpiarOrdenDentroDeTipoFinalizaWsp,
+          construirEtiquetaOperativoInformeWsp,
           compactarSaltos,
           bold,
         },
@@ -9162,8 +9214,11 @@ ${bold(`Moviles ${organismo}:`)}`)
     } else if (fotos.length && !resultadoHistorial?.supabase_ok) {
       console.warn("[WSP] Se omite archivo de fotos en Supabase porque el informe no quedó guardado con ID. WhatsApp continúa igual.", resultadoHistorial?.motivo_error || "");
     }
+    // Paso 101: en DECTO 460/22 no limpiar la pantalla antes de invocar el envío
+    // con fotos. En algunos navegadores eso hacía que WhatsApp recibiera solo texto
+    // aunque las fotos estuvieran seleccionadas y archivadas en Supabase.
+    await abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
     resetUI();
-    abrirWhatsappYCerrarWspLuego(textoFinal, fotos);
   }
 
   function valorAgregadoResultado(agregado, keys) {
@@ -9995,7 +10050,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         Alcoholimetro: String(alcoTXT || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/"),
       };
       window.WSP.debug.payloadHistorialFinalizadoAntesGuardar = {
-        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+        version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
         personal: payloadHistorial.personal,
         moviles: payloadHistorial.moviles,
         motos: payloadHistorial.motos,
@@ -10015,7 +10070,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       payloadHistorial.metadata = {
         ...(payloadHistorial.metadata || {}),
         finaliza_fuentes_datos: fuentesFinaliza,
-        finaliza_version_envio: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+        finaliza_version_envio: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
       };
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.textoFinal = textoFinal;
@@ -10064,7 +10119,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaErrorEstructuraSupabase = {
-        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+        version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
         resultadoHistorial,
         payloadHistorial,
         repoVersion: versionRepoOperativosWsp(),
@@ -10078,7 +10133,7 @@ ${bold(`Moviles ${organismo}:`)}`)
       window.WSP = window.WSP || {};
       window.WSP.debug = window.WSP.debug || {};
       window.WSP.debug.finalizaSupabaseGuardado = {
-        version: "paso88r-finaliza-lee-en-curso-tabla-base-20260608",
+        version: "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
         evento_id: resultadoHistorial?.evento?.id || null,
         estado_id: resultadoHistorial?.estado?.id || null,
         evento: {

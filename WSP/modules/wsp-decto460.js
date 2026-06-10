@@ -42,6 +42,56 @@
       .trim();
   }
 
+  function escapeRegexDecto460(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function normalizarTipoOrdenDecto460(value = "") {
+    return normalizarBasicoSinAcentosLocal(value).replace(/[^a-z0-9]+/g, "");
+  }
+
+  function extraerNumeroOrdenServicioDecto460(value = "") {
+    const texto = limpiarTextoSimple(value || "");
+    const match = texto.match(/(\d{1,6}\s*\/\s*\d{2,4})/);
+    return match ? match[1].replace(/\s+/g, "") : "";
+  }
+
+  function limpiarOrdenDentroDeTipoDecto460(tipoRaw = "", ordenRaw = "") {
+    let tipo = limpiarTextoSimple(tipoRaw || "");
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    if (!tipo) return "";
+    if (orden) tipo = tipo.replace(new RegExp(escapeRegexDecto460(orden), "ig"), " ");
+    const numeroOrden = extraerNumeroOrdenServicioDecto460(orden || tipo);
+    if (numeroOrden) {
+      const numeroFlexible = numeroOrden.replace(/\//g, "\\s*\/\\s*");
+      tipo = tipo
+        .replace(new RegExp(`\b(?:O\.?\s*S\.?\s*G\.?\s*P\.?|OSGP|O\.?\s*S\.?|ORDEN(?:\s+DE\s+SERVICIO)?|ORD\.?)\s*(?:N[°º]?\s*)?${numeroFlexible}\b`, "ig"), " ")
+        .replace(new RegExp(`\b(?:N[°º]?\s*)?${numeroFlexible}\b`, "ig"), " ");
+    }
+    tipo = tipo
+      .replace(/(?:O\.?\s*S\.?\s*G\.?\s*P\.?|OSGP|O\.?\s*S\.?|ORDEN(?:\s+DE\s+SERVICIO)?|ORD\.?)\s*(?:N[°º]?\s*)?$/ig, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+[-–—]\s*$/g, "")
+      .trim();
+    if (!tipo || normalizarTipoOrdenDecto460(tipo) === normalizarTipoOrdenDecto460(orden)) return "";
+    return tipo;
+  }
+
+  function construirEtiquetaOperativoDecto460(tipoRaw = "", ordenRaw = "", fallback = "OPERATIVO") {
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    const tipoBase = limpiarTextoSimple(tipoRaw || fallback || "OPERATIVO");
+    const tipoLimpio = limpiarOrdenDentroDeTipoDecto460(tipoBase, orden)
+      || limpiarOrdenDentroDeTipoDecto460(fallback, orden)
+      || tipoBase
+      || "OPERATIVO";
+    const tipoNorm = normalizarMayus(tipoLimpio || "OPERATIVO");
+    const ordenNorm = normalizarMayus(orden || "");
+    if (ordenNorm && !normalizarTipoOrdenDecto460(tipoNorm).includes(normalizarTipoOrdenDecto460(ordenNorm))) {
+      return `${tipoNorm} ${ordenNorm}`.replace(/\s{2,}/g, " ").trim();
+    }
+    return (tipoNorm || ordenNorm || "OPERATIVO").replace(/\s{2,}/g, " ").trim();
+  }
+
   function normalizarMayus(value) {
     return limpiarTextoSimple(value || "").toUpperCase();
   }
@@ -248,6 +298,9 @@
     const normalizarNumeroActaInforme = typeof deps.normalizarNumeroActaInforme === "function" ? deps.normalizarNumeroActaInforme : normalizarNumeroActa;
     const obtenerNumeroOrdenDeFranja = typeof deps.obtenerNumeroOrdenDeFranja === "function" ? deps.obtenerNumeroOrdenDeFranja : (() => "");
     const obtenerTipoCortoFranja = typeof deps.obtenerTipoCortoFranja === "function" ? deps.obtenerTipoCortoFranja : (() => "");
+    const construirEtiquetaOperativoInformeWsp = typeof deps.construirEtiquetaOperativoInformeWsp === "function"
+      ? deps.construirEtiquetaOperativoInformeWsp
+      : construirEtiquetaOperativoDecto460;
     const compactarSaltos = typeof deps.compactarSaltos === "function" ? deps.compactarSaltos : ((txt) => String(txt || "").replace(/\n{3,}/g, "\n\n").trim());
     const bold = typeof deps.bold === "function" ? deps.bold : ((txt) => `*${String(txt || "").trim()}*`);
 
@@ -255,7 +308,7 @@
     const moviles = [lineaDesdeArray(inicio?.moviles, "/"), lineaDesdeArray(inicio?.motos, "/")].filter((v) => v && v !== "/").join("/") || "/";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const orden = normalizarMayusInforme(obtenerNumeroOrdenDeFranja(franjaSeleccionada) || inicio?.orden_num || "");
-    const tipoOp = normalizarMayusInforme(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO");
+    const tipoOp = construirEtiquetaOperativoInformeWsp(inicio?.tipo_corto || obtenerTipoCortoFranja(franjaSeleccionada) || "OPERATIVO", orden, "OPERATIVO");
     const marca = normalizarMayusInforme(r.inf460Marca?.value);
     const modelo = normalizarMayusInforme(r.inf460Modelo?.value);
     const dominio = normalizarDominioInforme(r.inf460Dominio?.value);
@@ -264,7 +317,7 @@
     const corralonTexto = textoCorralonInforme(corralon);
     const codigosTxt = (Array.isArray(codigos) ? codigos : []).join("/");
     const inventarioFrase = r.inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp}${orden ? ` ${orden}` : ""} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
+    const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
 
     return compactarSaltos([
       bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),

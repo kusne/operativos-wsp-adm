@@ -1,5 +1,5 @@
 {
-  "version": "paso99-wsp-informes-observacion-no-duplica-orden-20260610",
+  "version": "paso103-wsp-inicio-actualizado-canonico-supabase-20260610",
   "updated_at": "2026-06-10",
-  "descripcion": "WSP corrige observación de informes para no duplicar el número de orden de servicio."
+  "descripcion": "WSP usa el INICIO actualizado vigente de operativos_estado como fuente canónica para Informes, Control Superior y Finalizado."
 }

@@ -35,6 +35,12 @@
     return String(getEl(id)?.value || "").replace(/\s+/g, " ").trim();
   }
 
+  function limpiarTextoSimple(txt) {
+    return String(txt || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function upperTexto(txt) {
     return String(txt || "")
       .replace(/\s+/g, " ")
@@ -81,6 +87,41 @@
     return String(txt || "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function escapeRegexSuperior(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function normalizarBasicoSuperior(txt) {
+    return String(txt || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  function extraerNumeroOrdenSuperior(value = "") {
+    const texto = limpiarTextoSimple(value || "");
+    const match = texto.match(/\b(\d{1,6}\s*\/\s*\d{2,4})\b/);
+    return match ? match[1].replace(/\s+/g, "") : "";
+  }
+
+  function limpiarOrdenDentroDeTituloSuperior(tipoRaw = "", ordenRaw = "") {
+    let tipo = limpiarTextoSimple(tipoRaw || "");
+    const orden = limpiarTextoSimple(ordenRaw || "");
+    if (!tipo) return "";
+    if (orden) tipo = tipo.replace(new RegExp(escapeRegexSuperior(orden), "ig"), " ");
+    const numero = extraerNumeroOrdenSuperior(orden || tipo);
+    if (numero) {
+      const flex = numero.replace(/\//g, "\\s*\/\\s*");
+      tipo = tipo
+        .replace(new RegExp(`\b(?:O\.?\s*S\.?\s*G\.?\s*P\.?|OSGP|O\.?\s*S\.?|ORDEN(?:\s+DE\s+SERVICIO)?|ORD\.?)\s*(?:N[°º]?\s*)?${flex}\b`, "ig"), " ")
+        .replace(new RegExp(`\b(?:N[°º]?\s*)?${flex}\b`, "ig"), " ");
+    }
+    tipo = tipo.replace(/\s{2,}/g, " ").trim();
+    if (!tipo || normalizarBasicoSuperior(tipo) === normalizarBasicoSuperior(orden)) return "";
+    return normalizarTituloLocal(tipo);
   }
 
   function getSelectTipo() {
@@ -228,11 +269,12 @@
     const sujeto = `${superior.rol} ${superior.nombre}`.replace(/\s+/g, " ").trim();
     const partes = [`Se hace presente ${sujeto}`];
 
-    if (conMovil) partes.push("con móvil");
+    if (conMovil) partes.push("con móvil 12428");
 
     partes.push("realizando control superior");
 
     if (seAcopla) partes.push("y se acopla al operativo");
+    else partes.push(". Acto seguido se retira sin novedad");
 
     return partes.join(" ").replace(/\s+/g, " ").trim() + ".";
   }
@@ -267,8 +309,9 @@
     const hora = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
     const lugar = normalizarLugar(inicio?.lugar || franja?.lugar || "");
     const horario = normalizarHorarioLocal(inicio?.horario || franja?.horario || "");
-    const tipoOperativo = normalizarTituloLocal(inicio?.tipo_corto || franja?.titulo || "OPERATIVO");
     const orden = normalizarTituloLocal(inicio?.orden_num || franja?.__ordenNum || "");
+    const tipoOperativoRaw = normalizarTituloLocal(inicio?.tipo_corto || franja?.titulo || "OPERATIVO");
+    const tipoOperativo = limpiarOrdenDentroDeTituloSuperior(tipoOperativoRaw, orden) || "OPERATIVO";
     const personal = normalizarArrayTexto(inicio?.personal).join("\n") || "/";
     const moviles = [
       lineaDesdeArray(inicio?.moviles, "/"),

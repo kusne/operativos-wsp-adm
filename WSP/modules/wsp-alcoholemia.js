@@ -120,7 +120,7 @@
 
     return {
       valor,
-      digital: digital && !esDniSinLicencia,
+      digital,
       esDniSinLicencia,
       esClaseLicencia,
       retencionAutomatica: !!valor && esClaseLicencia && !digital,
@@ -206,17 +206,14 @@
 
     const info = infoLicencia(r);
 
-    if (info.esDniSinLicencia && r.infAlcoLicenciaDigital) r.infAlcoLicenciaDigital.checked = false;
-
+    // Paso 102: DNI digital es una opción válida. No se destilda "digital" automáticamente.
+    // En licencia digital, DNI físico o DNI digital no corresponde retención de licencia física.
     if (r.infAlcoMedRetencion) {
-      if (info.digital) {
+      if (info.digital || info.esDniSinLicencia) {
         r.infAlcoMedRetencion.checked = false;
         r.infAlcoMedRetencion.disabled = true;
       } else if (info.retencionAutomatica) {
         r.infAlcoMedRetencion.checked = true;
-        r.infAlcoMedRetencion.disabled = true;
-      } else if (info.esDniSinLicencia) {
-        r.infAlcoMedRetencion.checked = false;
         r.infAlcoMedRetencion.disabled = true;
       } else {
         r.infAlcoMedRetencion.disabled = false;
@@ -341,11 +338,13 @@
     const r = withRefs(refs);
     const lic = infoLicencia(r);
 
+    const permiteRetencion = lic.esClaseLicencia && !lic.digital && !lic.esDniSinLicencia;
+
     return {
       prohibicion: !!r.infAlcoMedProhibicion?.checked,
       cesion: !!r.infAlcoMedCesion?.checked,
       remision: !!r.infAlcoMedRemision?.checked,
-      retencion: !!r.infAlcoMedRetencion?.checked || lic.retencionAutomatica,
+      retencion: permiteRetencion && (!!r.infAlcoMedRetencion?.checked || lic.retencionAutomatica),
     };
   }
 
@@ -398,8 +397,8 @@
       return marcarErrorCampo(r.infAlcoLicenciaClase, "Licencia: ingrese clase de 2 a 5 caracteres o DNI de 7/8 dígitos si no posee licencia.");
     }
 
-    if (lic.digital && !lic.esClaseLicencia) {
-      return marcarErrorCampo(r.infAlcoLicenciaClase, "Si marca Digital debe ingresar la clase de licencia, no DNI.");
+    if (r.infAlcoLicenciaDigital?.checked && !lic.valor) {
+      return marcarErrorCampo(r.infAlcoLicenciaClase, "Si marca licencia digital, complete Clase o DNI en el campo Clase.");
     }
 
     if (r.infAlco460?.checked || r.infAlcoMedRemision?.checked) {
