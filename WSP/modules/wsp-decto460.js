@@ -320,7 +320,7 @@
     const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
 
     return compactarSaltos([
-      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
+      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - DIRECCION GENERAL GUARDIA PROVINCIAL"),
       bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE SANTA FE"),
       bold("TERCIO CHARLIE"),
       "",
