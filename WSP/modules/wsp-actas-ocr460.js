@@ -188,22 +188,66 @@
 
   function extraerActa(texto) {
     const limpio = normalizarBusqueda(texto);
-    const acta = buscarPrimero(limpio, [
-      /ACTA\s*(?:NRO|NR0|Nº|N°|NO|N0)\.?\s*[:.]?\s*([0-9OoIl\s]{6,14})/i,
-      /NRO\.?\s*[:.]?\s*([0-9OoIl\s]{6,14})/i,
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+
+    // Primer intento: línea del encabezado del acta. Ejemplos reales/OCR:
+    // "ACTA NRO. 070544272", "ACTA NRO . 070544272", "ACTA N° 070544272".
+    const lineasActa = lineas.filter((linea) => /ACTA/i.test(linea));
+    for (const linea of lineasActa) {
+      const porEtiqueta = linea.match(/ACTA\s*(?:N\s*)?(?:RO|R0|º|°|O|0|UMERO|ÚMERO)?\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i);
+      if (porEtiqueta && porEtiqueta[1]) {
+        const numero = normalizarNumero(porEtiqueta[1]).slice(0, 12);
+        if (numero.length >= 6) return numero;
+      }
+
+      const primerNumeroEnLineaActa = linea.match(/([0-9OoIl ]{6,16})/i);
+      if (primerNumeroEnLineaActa && primerNumeroEnLineaActa[1]) {
+        const numero = normalizarNumero(primerNumeroEnLineaActa[1]).slice(0, 12);
+        if (numero.length >= 6) return numero;
+      }
+    }
+
+    // Segundo intento: texto plano, por si Tesseract partió el renglón o perdió el punto.
+    const plano = limpio.replace(/\n+/g, " ");
+    const acta = buscarPrimero(plano, [
+      /ACTA\s*(?:NRO|NR0|N\s*RO|N\s*R0|Nº|N°|NO|N0|NUMERO|NÚMERO)\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i,
+      /ACTA[^0-9OoIl]{0,50}([0-9OoIl ]{6,16})/i,
+      /NRO\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i,
     ]);
     return normalizarNumero(acta).slice(0, 12);
+  }
+
+  function agregarCodigoUnico(codigos, value) {
+    const codigo = normalizarNumero(value).slice(0, 8);
+    if (codigo.length >= 3 && codigo.length <= 6 && !codigos.includes(codigo)) codigos.push(codigo);
   }
 
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
-    const re = /C[o0]d\s*[:.]?\s*([0-9OoIl]{3,8})/ig;
+
+    // Campo del acta: debajo de "INFRACCIONES" suele figurar "Cod: 5041".
+    // Se aceptan variantes normales del OCR: "Cód", "Codigo", "Cod .", "Cod : 5 041".
+    const re = /\bC[o0]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl ]{3,12})/ig;
     let match;
     while ((match = re.exec(limpio))) {
-      const codigo = normalizarNumero(match[1]);
-      if (codigo && !codigos.includes(codigo)) codigos.push(codigo);
+      agregarCodigoUnico(codigos, match[1]);
     }
+
+    if (codigos.length) return codigos;
+
+    // Fallback acotado: buscar números de código solo dentro del bloque INFRACCIONES.
+    // No se buscan números en todo el acta para no confundir DNI, dominio o número de acta.
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+    const idx = lineas.findIndex((linea) => /INFRACCIONES?/i.test(linea));
+    if (idx >= 0) {
+      const bloque = lineas.slice(idx, idx + 10).join(" ");
+      const reBloque = /(?:\bC[o0]d(?:igo)?\b[^0-9OoIl]{0,20})?\b([0-9OoIl ]{3,8})\b/ig;
+      while ((match = reBloque.exec(bloque))) {
+        agregarCodigoUnico(codigos, match[1]);
+      }
+    }
+
     return codigos;
   }
 
