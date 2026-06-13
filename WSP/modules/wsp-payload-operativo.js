@@ -339,8 +339,97 @@
     return raw.split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
   }
 
-  function fechaFranjaHistorialWsp(franja) {
-    return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
+  function fechaIsoValidaSupabaseWsp(yyyy, mm, dd) {
+    const y = Number(yyyy);
+    const m = Number(mm);
+    const d = Number(dd);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return "";
+    if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+    const check = new Date(Date.UTC(y, m - 1, d));
+    if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return "";
+    return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  function normalizarAnioFechaSupabaseWsp(value) {
+    const raw = String(value || "").trim();
+    if (!/^\d{2,4}$/.test(raw)) return NaN;
+    if (raw.length === 2) return 2000 + Number(raw);
+    return Number(raw);
+  }
+
+  function mesTextoNumeroSupabaseWsp(value) {
+    const key = String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\./g, "")
+      .trim();
+
+    const meses = {
+      ene: 1, enero: 1, jan: 1, january: 1,
+      feb: 2, febrero: 2, february: 2,
+      mar: 3, marzo: 3, march: 3,
+      abr: 4, abril: 4, apr: 4, april: 4,
+      may: 5, mayo: 5,
+      jun: 6, junio: 6, june: 6,
+      jul: 7, julio: 7, july: 7,
+      ago: 8, agosto: 8, aug: 8, august: 8,
+      sep: 9, sept: 9, septiembre: 9, september: 9,
+      oct: 10, octubre: 10, october: 10,
+      nov: 11, noviembre: 11, november: 11,
+      dic: 12, diciembre: 12, dec: 12, december: 12,
+    };
+
+    return meses[key] || NaN;
+  }
+
+  function normalizarFechaISOParaSupabaseWsp(value, fallback = "") {
+    const rawBase = value instanceof Date && !Number.isNaN(value.getTime())
+      ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+      : limpiarTextoSimple(value || "");
+    if (!rawBase) return fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "";
+
+    const raw = rawBase
+      .replace(/[–—]/g, "-")
+      .replace(/,/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    let m = raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:[T\s].*)?$/);
+    if (m) return fechaIsoValidaSupabaseWsp(m[1], m[2], m[3]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+
+    m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[T\s].*)?$/);
+    if (m) {
+      const yyyy = normalizarAnioFechaSupabaseWsp(m[3]);
+      return fechaIsoValidaSupabaseWsp(yyyy, m[2], m[1]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+    }
+
+    m = raw.match(/^(\d{8})$/);
+    if (m) {
+      const s = m[1];
+      const yyyyFirst = fechaIsoValidaSupabaseWsp(s.slice(0, 4), s.slice(4, 6), s.slice(6, 8));
+      if (yyyyFirst) return yyyyFirst;
+      const dmy = fechaIsoValidaSupabaseWsp(s.slice(4, 8), s.slice(2, 4), s.slice(0, 2));
+      if (dmy) return dmy;
+    }
+
+    m = raw.match(/^(\d{1,2})\s*(?:de\s*)?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ\.]+)\s*(?:de\s*)?(\d{2,4})$/i);
+    if (m) {
+      const yyyy = normalizarAnioFechaSupabaseWsp(m[3]);
+      const mes = mesTextoNumeroSupabaseWsp(m[2]);
+      return fechaIsoValidaSupabaseWsp(yyyy, mes, m[1]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+    }
+
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      const parsed = fechaIsoValidaSupabaseWsp(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      if (parsed) return parsed;
+    }
+
+    return fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "";
+  }
+  function fechaFranjaHistorialWsp(franja, fallback = "") {
+    return normalizarFechaISOParaSupabaseWsp(limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || ""), fallback);
   }
 
   function extraerMapasResultadosHistorialWsp(lineas = []) {
@@ -384,7 +473,7 @@
       operativo_key: limpiarTextoSimple(franja?.__operativoKey || construirOperativoKeyEstable(franja, deps)),
       operativo_publicado_id: franja?.__operativoPublicadoId || null,
       guardia_fecha: getGuardiaFechaISO(),
-      fecha_operativo: fechaFranjaHistorialWsp(franja),
+      fecha_operativo: fechaFranjaHistorialWsp(franja, getGuardiaFechaISO()),
       fecha: ctx.fecha || new Date().toLocaleDateString("es-AR"),
       horario: horarioPayload,
       hora_desde: partesHorario.desde || "",
