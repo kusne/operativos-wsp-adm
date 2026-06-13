@@ -154,10 +154,12 @@ window.WSP.config = {
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
-  const WSP_FOTOS_PREPARADAS_VERSION = "paso106-wsp-foto-abre-camara-por-defecto-20260610";
+  const WSP_FOTOS_PREPARADAS_VERSION = "paso107-wsp-fotos-camara-galeria-sticker-dggp-20260613";
   const WSP_FOTO_READY_MS = 900;
   let envioWspPaso105EnCurso = false;
   const WSP_FOTO_ICON_URL = "./assets/camera_1.png";
+  const WSP_FOTO_STICKER_DGGP_URL = "./assets/stiker_dggp.jpeg";
+  let stickerDggpPaso104Promise = null;
   let fotosOperativoPaso104Panel = null;
   let fotosOperativoPaso104Inputs = [];
   const fotosPaso104Estados = new WeakMap();
@@ -194,6 +196,18 @@ window.WSP.config = {
         gap: 4px;
         min-width: 0;
       }
+      .wsp-foto-slot-titulo-paso104 {
+        font-size: 12px;
+        line-height: 1.2;
+        font-weight: 800;
+        color: #f5d44c;
+        padding: 0 2px;
+      }
+      .wsp-foto-acciones-paso104 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
       input.wsp-foto-input-oculto-paso104 {
         position: absolute !important;
         width: 1px !important;
@@ -214,6 +228,8 @@ window.WSP.config = {
         font-weight: 800;
         cursor: pointer;
         user-select: none;
+        font-size: 13px;
+        text-align: center;
       }
       .wsp-foto-boton-paso104 img {
         width: 22px;
@@ -260,9 +276,114 @@ window.WSP.config = {
     return nombre.length > 24 ? `${nombre.slice(0, 10)}…${nombre.slice(-10)}` : nombre;
   }
 
+  function archivoFuenteFotoInputPaso104(input) {
+    if (!input) return null;
+    return input.files?.[0]
+      || input.__wspFotoGaleriaInputPaso104?.files?.[0]
+      || input.__wspFotoOriginalPaso104
+      || null;
+  }
+
   function archivoFotoInputPaso104(input) {
     if (!input) return null;
-    return input.__wspFotoPreparadaPaso104 || input.files?.[0] || null;
+    return input.__wspFotoPreparadaPaso104 || archivoFuenteFotoInputPaso104(input) || null;
+  }
+
+  function cargarImagenPaso104(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      let url = "";
+      img.onload = () => {
+        if (url) URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        if (url) URL.revokeObjectURL(url);
+        reject(new Error("No se pudo cargar la imagen."));
+      };
+      if (src instanceof Blob) {
+        url = URL.createObjectURL(src);
+        img.src = url;
+      } else {
+        img.src = String(src || "");
+      }
+    });
+  }
+
+  function cargarStickerDggpPaso104() {
+    if (!stickerDggpPaso104Promise) {
+      stickerDggpPaso104Promise = cargarImagenPaso104(WSP_FOTO_STICKER_DGGP_URL);
+    }
+    return stickerDggpPaso104Promise;
+  }
+
+  function canvasToBlobPaso104(canvas, type = "image/jpeg", quality = 0.9) {
+    return new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("No se pudo generar la imagen final."));
+        }, type, quality);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  function nombreFotoConStickerPaso104(file) {
+    const nombre = limpiarTextoSimple(file?.name || "foto");
+    const base = nombre.replace(/\.[^.]+$/, "") || "foto";
+    return `${base}_dggp.jpg`;
+  }
+
+  async function aplicarStickerDggpAFotoPaso104(file) {
+    if (!file || !/^image\//i.test(String(file.type || ""))) return file;
+
+    const [img, sticker] = await Promise.all([
+      cargarImagenPaso104(file),
+      cargarStickerDggpPaso104(),
+    ]);
+
+    const srcW = img.naturalWidth || img.width || 0;
+    const srcH = img.naturalHeight || img.height || 0;
+    if (!srcW || !srcH) return file;
+
+    const maxDim = 2560;
+    const escala = Math.min(1, maxDim / Math.max(srcW, srcH));
+    const dstW = Math.max(1, Math.round(srcW * escala));
+    const dstH = Math.max(1, Math.round(srcH * escala));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = dstW;
+    canvas.height = dstH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(img, 0, 0, dstW, dstH);
+
+    const stickerW0 = sticker.naturalWidth || sticker.width || 1;
+    const stickerH0 = sticker.naturalHeight || sticker.height || 1;
+    const ratio = stickerH0 / stickerW0;
+
+    let stickerW = Math.round(dstW * (dstW >= dstH ? 0.62 : 0.88));
+    let stickerH = Math.round(stickerW * ratio);
+    const maxStickerH = Math.round(dstH * 0.22);
+    if (stickerH > maxStickerH) {
+      stickerH = maxStickerH;
+      stickerW = Math.round(stickerH / ratio);
+    }
+
+    const margenInferior = Math.max(12, Math.round(dstH * 0.025));
+    const x = Math.round((dstW - stickerW) / 2);
+    const y = Math.max(0, dstH - stickerH - margenInferior);
+
+    ctx.drawImage(sticker, x, y, stickerW, stickerH);
+
+    const blob = await canvasToBlobPaso104(canvas, "image/jpeg", 0.9);
+    return new File([blob], nombreFotoConStickerPaso104(file), {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
   }
 
   function fotosDesdeInputsPaso104(inputs) {
@@ -275,20 +396,23 @@ window.WSP.config = {
   function setEstadoVisualFotoPaso104(input, estado) {
     if (!input) return;
     const status = input.__wspFotoStatusPaso104;
-    const boton = input.__wspFotoBotonPaso104;
-    if (!status || !boton) return;
-    boton.classList.remove("wsp-foto-lista-paso104", "wsp-foto-cargando-paso104");
+    const botones = Array.isArray(input.__wspFotoBotonesPaso104)
+      ? input.__wspFotoBotonesPaso104
+      : [input.__wspFotoBotonPaso104].filter(Boolean);
+    const botonActivo = input.__wspFotoBotonActivoPaso104 || input.__wspFotoBotonPaso104 || botones[0];
+    if (!status || !botones.length) return;
+    botones.forEach((boton) => boton.classList.remove("wsp-foto-lista-paso104", "wsp-foto-cargando-paso104"));
     status.classList.remove("wsp-cargando");
     if (estado === "cargando") {
-      boton.classList.add("wsp-foto-cargando-paso104");
-      status.textContent = "Cargando foto";
+      if (botonActivo) botonActivo.classList.add("wsp-foto-cargando-paso104");
+      status.textContent = "Preparando foto con sello DGGP";
       status.classList.add("wsp-cargando");
       return;
     }
     if (estado === "lista") {
       const file = archivoFotoInputPaso104(input);
-      boton.classList.add("wsp-foto-lista-paso104");
-      status.textContent = file ? `Lista: ${nombreCortoFotoPaso104(file)}` : "Foto lista";
+      if (botonActivo) botonActivo.classList.add("wsp-foto-lista-paso104");
+      status.textContent = file ? `Lista con sello DGGP: ${nombreCortoFotoPaso104(file)}` : "Foto lista con sello DGGP";
       return;
     }
     if (estado === "error") {
@@ -306,7 +430,7 @@ window.WSP.config = {
   }
 
   function fotoInputTieneArchivoPaso105(input) {
-    return !!(input && input.files && input.files[0]);
+    return !!archivoFotoInputPaso104(input);
   }
 
   function fotoInputListaPaso105(input) {
@@ -401,38 +525,43 @@ window.WSP.config = {
     return true;
   }
 
-  async function prepararFotoInputPaso104(input) {
+  async function prepararFotoInputPaso104(input, fuenteInput = input) {
     if (!input) return null;
     if (input.__wspFotoPreparandoPromisePaso104) return input.__wspFotoPreparandoPromisePaso104;
 
     const tarea = (async () => {
-      const file = input.files?.[0] || null;
+      const esGaleria = fuenteInput && fuenteInput === input.__wspFotoGaleriaInputPaso104;
+      const file = fuenteInput?.files?.[0] || archivoFuenteFotoInputPaso104(input);
+      input.__wspFotoBotonActivoPaso104 = esGaleria ? input.__wspFotoBotonGaleriaPaso104 : input.__wspFotoBotonCamaraPaso104;
       input.__wspFotoPreparadaPaso104 = null;
+      input.__wspFotoOriginalPaso104 = file || null;
+
+      if (esGaleria) {
+        try { input.value = ""; } catch {}
+      } else if (input.__wspFotoGaleriaInputPaso104) {
+        try { input.__wspFotoGaleriaInputPaso104.value = ""; } catch {}
+      }
+
       if (!file) {
         fotosPaso104Estados.set(input, { pendiente: false, listo: false });
         setEstadoVisualFotoPaso104(input, "vacia");
         actualizarBloqueoEnvioPorFotosPaso104();
         return null;
       }
-      fotosPaso104Estados.set(input, { pendiente: true, listo: false, nombre: file.name });
+      fotosPaso104Estados.set(input, { pendiente: true, listo: false, nombre: file.name, fuente: esGaleria ? "galeria" : "camara" });
       setEstadoVisualFotoPaso104(input, "cargando");
       actualizarBloqueoEnvioPorFotosPaso104();
       try {
-        const buffer = await file.arrayBuffer();
-        // Crear una copia en memoria evita que el botón Enviar pise la carga interna
-        // del input si se presiona inmediatamente después de elegir la foto.
-        input.__wspFotoPreparadaPaso104 = new File([buffer], file.name || "foto.jpg", {
-          type: file.type || "image/jpeg",
-          lastModified: file.lastModified || Date.now(),
-        });
+        // La foto final queda marcada con el sticker DGGP antes de enviarse por WhatsApp o subirse a Supabase.
+        input.__wspFotoPreparadaPaso104 = await aplicarStickerDggpAFotoPaso104(file);
         await new Promise((resolve) => setTimeout(resolve, WSP_FOTO_READY_MS));
-        fotosPaso104Estados.set(input, { pendiente: false, listo: true, nombre: file.name });
+        fotosPaso104Estados.set(input, { pendiente: false, listo: true, nombre: input.__wspFotoPreparadaPaso104?.name || file.name, fuente: esGaleria ? "galeria" : "camara", sticker: true });
         setEstadoVisualFotoPaso104(input, "lista");
         return input.__wspFotoPreparadaPaso104;
       } catch (e) {
-        console.warn("[WSP fotos] No se pudo preparar la foto; se usará el archivo original.", e);
+        console.warn("[WSP fotos] No se pudo aplicar el sticker DGGP; se usará el archivo original.", e);
         input.__wspFotoPreparadaPaso104 = file;
-        fotosPaso104Estados.set(input, { pendiente: false, listo: true, nombre: file.name, error: true });
+        fotosPaso104Estados.set(input, { pendiente: false, listo: true, nombre: file.name, error: true, sticker: false });
         setEstadoVisualFotoPaso104(input, "lista");
         return file;
       } finally {
@@ -449,8 +578,7 @@ window.WSP.config = {
     if (!input || input.__wspFotoDecoradoPaso104) return;
     if (!input.id) input.id = `wspFotoPaso104_${Math.random().toString(36).slice(2)}`;
     input.accept = input.accept || "image/*";
-    // Paso 106: botón principal de foto abre cámara trasera por defecto en celular.
-    // No cambia la preparación/bloqueo de fotos; solo agrega la pista capture.
+    // Cámara trasera por defecto para el botón Cámara.
     if (!input.getAttribute("capture")) input.setAttribute("capture", "environment");
     input.classList.add("wsp-foto-input-oculto-paso104");
 
@@ -462,19 +590,52 @@ window.WSP.config = {
       wrap.appendChild(input);
     }
 
-    const label = document.createElement("label");
-    label.className = "wsp-foto-boton-paso104";
-    label.htmlFor = input.id;
-    label.innerHTML = `<img alt="" src="${WSP_FOTO_ICON_URL}"><span>${etiqueta || "Foto"}</span>`;
+    const galleryInput = document.createElement("input");
+    galleryInput.type = "file";
+    galleryInput.accept = "image/*";
+    galleryInput.id = `${input.id}_galeria`;
+    galleryInput.className = "wsp-foto-input-oculto-paso104";
+    (wrap || parent)?.appendChild(galleryInput);
+
+    const titulo = document.createElement("div");
+    titulo.className = "wsp-foto-slot-titulo-paso104";
+    titulo.textContent = etiqueta || "Foto";
+
+    const acciones = document.createElement("div");
+    acciones.className = "wsp-foto-acciones-paso104";
+
+    const labelCamara = document.createElement("label");
+    labelCamara.className = "wsp-foto-boton-paso104 wsp-foto-boton-camara-paso104";
+    labelCamara.htmlFor = input.id;
+    labelCamara.innerHTML = `<img alt="" src="${WSP_FOTO_ICON_URL}"><span>Cámara</span>`;
+
+    const labelGaleria = document.createElement("label");
+    labelGaleria.className = "wsp-foto-boton-paso104 wsp-foto-boton-galeria-paso104";
+    labelGaleria.htmlFor = galleryInput.id;
+    labelGaleria.innerHTML = `<span aria-hidden="true">🖼️</span><span>Galería</span>`;
+
+    acciones.appendChild(labelCamara);
+    acciones.appendChild(labelGaleria);
+
     const status = document.createElement("div");
     status.className = "wsp-foto-status-paso104";
     status.textContent = "Sin foto";
-    (wrap || parent)?.appendChild(label);
+
+    (wrap || parent)?.appendChild(titulo);
+    (wrap || parent)?.appendChild(acciones);
     (wrap || parent)?.appendChild(status);
+
     input.__wspFotoStatusPaso104 = status;
-    input.__wspFotoBotonPaso104 = label;
+    input.__wspFotoBotonPaso104 = labelCamara;
+    input.__wspFotoBotonCamaraPaso104 = labelCamara;
+    input.__wspFotoBotonGaleriaPaso104 = labelGaleria;
+    input.__wspFotoBotonesPaso104 = [labelCamara, labelGaleria];
+    input.__wspFotoBotonActivoPaso104 = labelCamara;
+    input.__wspFotoGaleriaInputPaso104 = galleryInput;
     input.__wspFotoDecoradoPaso104 = true;
-    input.addEventListener("change", () => { prepararFotoInputPaso104(input); });
+
+    input.addEventListener("change", () => { prepararFotoInputPaso104(input, input); });
+    galleryInput.addEventListener("change", () => { prepararFotoInputPaso104(input, galleryInput); });
   }
 
   function crearPanelFotosOperativoPaso104() {
@@ -509,7 +670,12 @@ window.WSP.config = {
     (Array.isArray(inputs) ? inputs : []).forEach((input) => {
       if (!input) return;
       try { input.value = ""; } catch {}
+      if (input.__wspFotoGaleriaInputPaso104) {
+        try { input.__wspFotoGaleriaInputPaso104.value = ""; } catch {}
+      }
       input.__wspFotoPreparadaPaso104 = null;
+      input.__wspFotoOriginalPaso104 = null;
+      input.__wspFotoBotonActivoPaso104 = input.__wspFotoBotonCamaraPaso104 || input.__wspFotoBotonPaso104;
       fotosPaso104Estados.set(input, { pendiente: false, listo: false });
       setEstadoVisualFotoPaso104(input, "vacia");
     });
@@ -9173,7 +9339,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (mod && typeof mod.fotos === "function") {
       return mod.fotos(refsInformeAlcoholemiaWsp());
     }
-    return infAlcoFotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
+    return infAlcoFotos.map((el) => archivoFotoInputPaso104(el)).filter(Boolean).slice(0, 4);
   }
 
   function validarInformeAlcoholemiaLocal87H() {
@@ -9726,7 +9892,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     if (preparadas.length) return preparadas;
     const mod = moduloInformeDecto460Wsp();
     if (mod && typeof mod.fotosSeleccionadasInformeDecto460 === "function") return mod.fotosSeleccionadasInformeDecto460(refsInformeDecto460Wsp());
-    return inf460Fotos.map((el) => el?.files?.[0] || null).filter(Boolean).slice(0, 4);
+    return inf460Fotos.map((el) => archivoFotoInputPaso104(el)).filter(Boolean).slice(0, 4);
   }
 
     function limpiarInformeDecto460() {
