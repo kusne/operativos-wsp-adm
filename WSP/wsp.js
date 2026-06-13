@@ -154,7 +154,7 @@ window.WSP.config = {
   const INFORME_DECRETO_460_TIPO = "INFORME DECTO 460/22";
   const HISTORIAL_FOTOS_BUCKET = "operativos-historial-fotos";
   const HISTORIAL_FOTOS_TABLE = "operativos_eventos_fotos";
-  const WSP_FOTOS_PREPARADAS_VERSION = "paso108-wsp-fotos-chip-unico-selector-nativo-20260613";
+  const WSP_FOTOS_PREPARADAS_VERSION = "paso109-wsp-fotos-chip-camara-galeria-estetica-20260613";
   const WSP_FOTO_READY_MS = 900;
   let envioWspPaso105EnCurso = false;
   const WSP_FOTO_ICON_URL = "./assets/camera_1.png";
@@ -188,16 +188,23 @@ window.WSP.config = {
       .wsp-fotos-grid-paso104 {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
+        column-gap: 12px;
+        row-gap: 16px;
       }
       .wsp-foto-wrap-paso104 {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 5px;
         min-width: 0;
+        margin-bottom: 8px;
       }
       .wsp-foto-slot-titulo-paso104 { display: none !important; }
-      .wsp-foto-acciones-paso104 { display: block; }
+      .wsp-foto-acciones-paso104 {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        width: 100%;
+      }
       input.wsp-foto-input-oculto-paso104 {
         position: absolute !important;
         width: 1px !important;
@@ -208,12 +215,12 @@ window.WSP.config = {
       .wsp-foto-boton-paso104 {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        justify-content: center;
+        gap: 7px;
         min-height: 48px;
         width: 100%;
         box-sizing: border-box;
-        padding: 0 14px;
+        padding: 0 12px;
         border-radius: 16px;
         border: 1px solid rgba(255,255,255,.22);
         background: rgba(255,255,255,.12);
@@ -221,37 +228,51 @@ window.WSP.config = {
         font-weight: 900;
         cursor: pointer;
         user-select: none;
-        font-size: 14px;
-        text-align: left;
+        font-size: 15px;
+        text-align: center;
       }
       .wsp-foto-chip-texto-paso104 {
-        min-width: 0;
-        overflow: hidden;
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
         white-space: nowrap;
-        text-overflow: ellipsis;
       }
       .wsp-foto-chip-iconos-paso104 {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 10px;
+        gap: 0;
         flex: 0 0 auto;
       }
       .wsp-foto-boton-paso104 img {
-        width: 24px;
-        height: 24px;
+        width: 25px;
+        height: 25px;
         object-fit: contain;
         filter: drop-shadow(0 1px 2px rgba(0,0,0,.35));
       }
-      .wsp-foto-icono-galeria-paso104 {
-        display: inline-flex;
+      .wsp-foto-galeria-paso104 {
+        display: flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
-        font-size: 21px;
+        min-height: 34px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,0,0,.28);
+        background: #d1d5db;
+        color: #111827;
+        font-size: 14px;
+        font-weight: 900;
         line-height: 1;
-        filter: drop-shadow(0 1px 2px rgba(0,0,0,.35));
+        cursor: pointer;
+        user-select: none;
+        text-align: center;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+      }
+      .wsp-foto-galeria-paso104:active {
+        transform: translateY(1px);
+        background: #c7cbd1;
       }
       .wsp-foto-boton-paso104.wsp-foto-lista-paso104 {
         border-color: rgba(56, 189, 248, .85);
@@ -594,8 +615,8 @@ window.WSP.config = {
     if (!input || input.__wspFotoDecoradoPaso104) return;
     if (!input.id) input.id = `wspFotoPaso104_${Math.random().toString(36).slice(2)}`;
     input.accept = input.accept || "image/*";
-    // Selector nativo del navegador: sin capture para que el celular ofrezca cámara/galería según configuración propia.
-    try { input.removeAttribute("capture"); } catch {}
+    // Chip principal: cámara trasera por defecto. Botón inferior: galería sin capture.
+    try { input.setAttribute("capture", "environment"); } catch {}
     input.classList.add("wsp-foto-input-oculto-paso104");
 
     const wrap = document.createElement("div");
@@ -606,21 +627,34 @@ window.WSP.config = {
       wrap.appendChild(input);
     }
 
+    const galeriaInput = document.createElement("input");
+    galeriaInput.type = "file";
+    galeriaInput.accept = "image/*";
+    galeriaInput.id = `${input.id}_galeria`;
+    galeriaInput.className = "wsp-foto-input-oculto-paso104";
+    try { galeriaInput.removeAttribute("capture"); } catch {}
+    wrap.appendChild(galeriaInput);
+
     const acciones = document.createElement("div");
     acciones.className = "wsp-foto-acciones-paso104";
 
     const labelFoto = document.createElement("label");
-    labelFoto.className = "wsp-foto-boton-paso104 wsp-foto-boton-selector-paso104";
+    labelFoto.className = "wsp-foto-boton-paso104 wsp-foto-boton-camara-paso104";
     labelFoto.htmlFor = input.id;
     labelFoto.innerHTML = `
       <span class="wsp-foto-chip-texto-paso104">${etiqueta || "Foto"}</span>
       <span class="wsp-foto-chip-iconos-paso104" aria-hidden="true">
         <img alt="" src="${WSP_FOTO_ICON_URL}">
-        <span class="wsp-foto-icono-galeria-paso104">🖼️</span>
       </span>
     `;
 
+    const labelGaleria = document.createElement("label");
+    labelGaleria.className = "wsp-foto-galeria-paso104";
+    labelGaleria.htmlFor = galeriaInput.id;
+    labelGaleria.textContent = "galeria";
+
     acciones.appendChild(labelFoto);
+    acciones.appendChild(labelGaleria);
 
     const status = document.createElement("div");
     status.className = "wsp-foto-status-paso104";
@@ -632,13 +666,14 @@ window.WSP.config = {
     input.__wspFotoStatusPaso104 = status;
     input.__wspFotoBotonPaso104 = labelFoto;
     input.__wspFotoBotonCamaraPaso104 = labelFoto;
-    input.__wspFotoBotonGaleriaPaso104 = null;
-    input.__wspFotoBotonesPaso104 = [labelFoto];
+    input.__wspFotoBotonGaleriaPaso104 = labelGaleria;
+    input.__wspFotoBotonesPaso104 = [labelFoto, labelGaleria];
     input.__wspFotoBotonActivoPaso104 = labelFoto;
-    input.__wspFotoGaleriaInputPaso104 = null;
+    input.__wspFotoGaleriaInputPaso104 = galeriaInput;
     input.__wspFotoDecoradoPaso104 = true;
 
     input.addEventListener("change", () => { prepararFotoInputPaso104(input, input); });
+    galeriaInput.addEventListener("change", () => { prepararFotoInputPaso104(input, galeriaInput); });
   }
 
   function crearPanelFotosOperativoPaso104() {
