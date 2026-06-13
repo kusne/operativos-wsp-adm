@@ -172,20 +172,33 @@
     });
   }
 
-  function completarDestinoDecto460SiVacio(refs = {}, deps = {}) {
+  function emitirCambioDecto460(el) {
+    if (!el) return;
+    try { el.dispatchEvent(new Event("input", { bubbles: true })); } catch {}
+    try { el.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+  }
+
+  function aplicarDefaultsInformeDecto460(refs = {}, deps = {}) {
     const r = withRefs(refs);
     const normalizarMayusInforme = typeof deps.normalizarMayusInforme === "function"
       ? deps.normalizarMayusInforme
       : normalizarMayus;
 
-    if (!r.inf460Corralon) return;
-    if (normalizarMayusInforme(r.inf460Corralon.value)) return;
+    // Pedido específico 460/22: inventario tildado por defecto.
+    if (r.inf460Inventario && !r.inf460Inventario.checked) {
+      r.inf460Inventario.checked = true;
+      emitirCambioDecto460(r.inf460Inventario);
+    }
 
-    const destino = typeof deps.inferirDestinoRemisionAlcoholemia === "function"
-      ? deps.inferirDestinoRemisionAlcoholemia()
-      : "";
+    // Pedido específico 460/22: destino/corralón RINCÓN por defecto, solo si está vacío.
+    if (r.inf460Corralon && !normalizarMayusInforme(r.inf460Corralon.value)) {
+      r.inf460Corralon.value = "RINCON";
+      emitirCambioDecto460(r.inf460Corralon);
+    }
+  }
 
-    if (destino) r.inf460Corralon.value = destino;
+  function completarDestinoDecto460SiVacio(refs = {}, deps = {}) {
+    aplicarDefaultsInformeDecto460(refs, deps);
   }
 
   function aplicarMayusculasInputsDecto460(refs = {}, deps = {}) {
@@ -447,6 +460,7 @@
     textoCorralonInforme,
     esFranjaPatrullajeInformeDecto460,
     ordenarCandidatosInformeDecto460,
+    aplicarDefaultsInformeDecto460,
     completarDestinoDecto460SiVacio,
     aplicarMayusculasInputsDecto460,
     codigosInformeDecto460,
