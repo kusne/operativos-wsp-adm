@@ -55,7 +55,7 @@
     );
 
     const partes = [];
-    partes.push(bold("Policia de la Provincia de Santa Fe - Guardia Provincial"));
+    partes.push(bold("Policia de la Provincia de Santa Fe - Direccion General Guardia Provincial"));
     partes.push(bold("Brigada Motorizada Centro Norte"));
     partes.push(bold("Tercio Charlie"));
     partes.push("");
