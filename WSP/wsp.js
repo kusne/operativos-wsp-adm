@@ -119,6 +119,11 @@ window.WSP.config = {
   let ordenSeleccionada = null;
   let franjaSeleccionada = null;
   let syncingOrdenes = false;
+  let ordenesPublicadasCargadasWsp = false;
+  let ordenesPublicadasSyncPromiseWsp = null;
+  let operativosPublicadosRealtimeChannel = null;
+  let operativosPublicadosRealtimeClient = null;
+  let operativosPublicadosRealtimeRefreshTimer = null;
 
   // Cache en memoria
   let ordenesCache = [];
@@ -1409,43 +1414,57 @@ window.WSP.config = {
     return ordenes;
   }
 
-  async function syncOrdenesDesdeServidor() {
-    try {
-      const guardiaFecha = getGuardiaFechaISO();
-      const params = new URLSearchParams({
-        select: "id,operativo_key,guardia_fecha,fecha_operativo,inicio_operativo,hora_desde,hora_hasta,lugar,lugar_normalizado,tipo,ordenes_origen,archivos_origen,activo,sin_efecto,error_en_la_orden,error_motivo,registro_original,updated_at",
-        guardia_fecha: `eq.${guardiaFecha}`,
-        activo: "eq.true",
-        sin_efecto: "eq.false",
-        order: "inicio_operativo.asc",
-      });
+  async function syncOrdenesDesdeServidor(opts = {}) {
+    if (ordenesPublicadasSyncPromiseWsp) return ordenesPublicadasSyncPromiseWsp;
 
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          Accept: "application/json",
-        },
-      });
+    const tarea = (async () => {
+      try {
+        const guardiaFecha = getGuardiaFechaISO();
+        const params = new URLSearchParams({
+          select: "id,operativo_key,guardia_fecha,fecha_operativo,inicio_operativo,hora_desde,hora_hasta,lugar,lugar_normalizado,tipo,ordenes_origen,archivos_origen,activo,sin_efecto,error_en_la_orden,error_motivo,registro_original,updated_at",
+          guardia_fecha: `eq.${guardiaFecha}`,
+          activo: "eq.true",
+          sin_efecto: "eq.false",
+          order: "inicio_operativo.asc",
+        });
 
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            Accept: "application/json",
+          },
+        });
+
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
+          guardarOrdenesSeguro([]);
+          ordenesPublicadasCargadasWsp = false;
+          actualizarContadorOperativosWsp(0);
+          return false;
+        }
+
+        const data = await r.json();
+        const ordenes = convertirOperativosPublicadosAFormatoWsp(data);
+
+        guardarOrdenesSeguro(ordenes);
+        ordenesPublicadasCargadasWsp = true;
+        return true;
+      } catch (e) {
+        console.error("Error leyendo operativos_publicados:", opts?.origen || "", e);
         guardarOrdenesSeguro([]);
+        ordenesPublicadasCargadasWsp = false;
         actualizarContadorOperativosWsp(0);
         return false;
       }
+    })();
 
-      const data = await r.json();
-      const ordenes = convertirOperativosPublicadosAFormatoWsp(data);
-
-      guardarOrdenesSeguro(ordenes);
-      return true;
-    } catch (e) {
-      console.error("Error leyendo operativos_publicados:", e);
-      guardarOrdenesSeguro([]);
-      actualizarContadorOperativosWsp(0);
-      return false;
+    ordenesPublicadasSyncPromiseWsp = tarea;
+    try {
+      return await tarea;
+    } finally {
+      if (ordenesPublicadasSyncPromiseWsp === tarea) ordenesPublicadasSyncPromiseWsp = null;
     }
   }
 
@@ -1486,17 +1505,91 @@ window.WSP.config = {
 
     try {
       const cantidad = await contarOperativosPublicadosGuardiaSupabaseWsp();
-      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA") {
+      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA" && !ordenesPublicadasCargadasWsp) {
         actualizarContadorOperativosWsp(cantidad);
       }
       return cantidad;
     } catch (e) {
-      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA") {
+      if (seq === refrescoContadorPublicadosSeq && selTipo?.value === "INICIA" && !ordenesPublicadasCargadasWsp) {
         actualizarContadorOperativosWsp(operativosCache.length);
       }
       console.warn("[WSP] No se pudo refrescar rápido el contador de publicados.", opts?.origen || "", e);
       return null;
     }
+  }
+
+
+  function obtenerClienteRealtimeOperativosPublicadosWsp() {
+    if (operativosPublicadosRealtimeClient) return operativosPublicadosRealtimeClient;
+    try {
+      if (!window.supabase || typeof window.supabase.createClient !== "function") return null;
+      operativosPublicadosRealtimeClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      return operativosPublicadosRealtimeClient;
+    } catch (e) {
+      console.warn("[WSP] Supabase Realtime no disponible para operativos publicados. Queda carga inicial sin recarga automática.", e);
+      return null;
+    }
+  }
+
+  function programarRefreshOperativosPublicadosPorRealtimeWsp(origen = "operativos_publicados") {
+    if (operativosPublicadosRealtimeRefreshTimer) clearTimeout(operativosPublicadosRealtimeRefreshTimer);
+    operativosPublicadosRealtimeRefreshTimer = setTimeout(async () => {
+      try {
+        const seleccionActual = selHorario?.value || "";
+        const ok = await syncOrdenesDesdeServidor({ origen: `realtime_${origen}` });
+        if (ok && String(selTipo?.value || "").toUpperCase() === "INICIA") {
+          cargarOperativosDisponibles(seleccionActual);
+          actualizarDatosFranja();
+        }
+      } catch (e) {
+        console.warn("[WSP] No se pudo refrescar operativos publicados por realtime:", origen, e);
+      }
+    }, 350);
+  }
+
+  function iniciarRealtimeOperativosPublicadosWsp() {
+    const client = obtenerClienteRealtimeOperativosPublicadosWsp();
+    if (!client || typeof client.channel !== "function") return false;
+
+    detenerRealtimeOperativosPublicadosWsp();
+
+    const guardiaFecha = getGuardiaFechaISO();
+    operativosPublicadosRealtimeChannel = client
+      .channel(`wsp-operativos-publicados-${guardiaFecha}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "operativos_publicados",
+          filter: `guardia_fecha=eq.${guardiaFecha}`,
+        },
+        () => programarRefreshOperativosPublicadosPorRealtimeWsp("operativos_publicados")
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") console.log("[WSP] Realtime operativos publicados activo.");
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          console.warn("[WSP] Realtime operativos publicados no está entregando eventos. No se activa polling:", status);
+        }
+      });
+
+    return true;
+  }
+
+  function detenerRealtimeOperativosPublicadosWsp() {
+    if (operativosPublicadosRealtimeRefreshTimer) {
+      clearTimeout(operativosPublicadosRealtimeRefreshTimer);
+      operativosPublicadosRealtimeRefreshTimer = null;
+    }
+    if (!operativosPublicadosRealtimeChannel || !operativosPublicadosRealtimeClient) return;
+    try {
+      operativosPublicadosRealtimeClient.removeChannel(operativosPublicadosRealtimeChannel);
+    } catch (e) {
+      console.warn("[WSP] No se pudo detener canal Realtime de operativos publicados.", e);
+    }
+    operativosPublicadosRealtimeChannel = null;
   }
 
   async function syncAntesDeSeleccion() {
@@ -1540,10 +1633,15 @@ window.WSP.config = {
       return;
     }
 
+    if (String(selTipo?.value || "").toUpperCase() === "INICIA") {
+      const tieneOpciones = Array.from(selHorario?.options || []).some((opt) => limpiarTextoSimple(opt?.value || ""));
+      if (ordenesPublicadasCargadasWsp && tieneOpciones && operativosCache.length) return;
+    }
+
     syncingOrdenes = true;
     try {
       const seleccionActual = selHorario?.value || "";
-      const ok = await syncOrdenesDesdeServidor();
+      const ok = await syncOrdenesDesdeServidor({ origen: "focus_selector_inicia" });
       if (ok) {
         cargarOperativosDisponibles(seleccionActual);
         actualizarDatosFranja();
@@ -3640,12 +3738,12 @@ window.WSP.config = {
 
     ordenes.forEach((orden, idxOrden) => {
       const franjasOrdenadas = (orden.franjas || [])
-        .map((franja, idxFranja) => ({ franja, idxFranja, inicio: construirFechaHoraInicioFranja(franja, orden) }))
-        .sort((a, b) => {
-          const at = a.inicio instanceof Date && !isNaN(a.inicio.getTime()) ? a.inicio.getTime() : Number.MAX_SAFE_INTEGER;
-          const bt = b.inicio instanceof Date && !isNaN(b.inicio.getTime()) ? b.inicio.getTime() : Number.MAX_SAFE_INTEGER;
-          return at - bt;
-        });
+        .map((franja, idxFranja) => ({
+          franja,
+          idxFranja,
+          inicioMs: inicioMsFranjaDisponibleWsp(franja, orden),
+        }))
+        .sort((a, b) => a.inicioMs - b.inicioMs);
 
       const operativosOrden = [];
       franjasOrdenadas.forEach(({ franja, idxFranja }) => {
@@ -4385,6 +4483,15 @@ window.WSP.config = {
       const bt = Number.isFinite(b.__inicioTs) ? b.__inicioTs : Number.MAX_SAFE_INTEGER;
       return at - bt;
     });
+  }
+
+  function inicioMsFranjaDisponibleWsp(franja, orden) {
+    const directo = Number(franja?.__inicioTs ?? franja?.sortKey);
+    if (Number.isFinite(directo)) return directo;
+
+    const inicio = construirFechaHoraInicioFranja(franja, orden);
+    if (inicio instanceof Date && !isNaN(inicio.getTime())) return inicio.getTime();
+    return Number.MAX_SAFE_INTEGER;
   }
 
   function cargarOperativosDisponibles(valorSeleccionado = "") {
@@ -10940,8 +11047,6 @@ ${bold("Se adjunta vista fotográfica")}`);
       window.ControlSuperior.init();
     }
 
-    inicializarFotosWspPaso104();
-
     selTipo.value = "INICIA";
 
     setSelectorOperativosVisibleWsp(true, {
@@ -10956,10 +11061,14 @@ ${bold("Se adjunta vista fotográfica")}`);
       selHorario.value = "";
     }
 
+    const cargaOperativosInicial = syncOrdenesDesdeServidor({ origen: "init_pantalla_principal" });
+    refrescarContadorPublicadosRapidoWsp({ origen: "init_pantalla_principal" });
+
+    inicializarFotosWspPaso104();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
 
-    await syncOrdenesDesdeServidor();
+    await cargaOperativosInicial;
 
     if (selHorario) selHorario.disabled = false;
 
@@ -10968,6 +11077,7 @@ ${bold("Se adjunta vista fotográfica")}`);
 
     actualizarTipo();
     actualizarDatosFranja();
+    iniciarRealtimeOperativosPublicadosWsp();
   })();
 
 })();
