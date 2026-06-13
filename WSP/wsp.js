@@ -136,7 +136,6 @@ window.WSP.config = {
   let controlMovilesCargados = false;
   let controlMovilesLocks = new Map();
   let controlMovilesHeartbeatTimer = null;
-  let controlMovilesPollingTimer = null;
   let controlMovilesRealtimeChannel = null;
   let controlMovilesRealtimeClient = null;
   let controlMovilesRealtimeRefreshTimer = null;
@@ -766,7 +765,6 @@ window.WSP.config = {
   const CONTROL_MOVILES_COMBUSTIBLES = ["", "reserva", "1/4", "+1/4", "-1/2", "1/2", "+1/2", "3/4", "+3/4", "lleno"];
   const CONTROL_MOVILES_BASE_NUMEROS = ["12428", "10139", "12502"];
   const CONTROL_MOVILES_HEARTBEAT_MS = 15000;
-  const CONTROL_MOVILES_POLLING_MS = 45000; // respaldo suave; Realtime hace la actualización inmediata
   const CONTROL_MOVILES_PRESENCE_TTL_MS = 45000;
   const CONTROL_MOVILES_LOCK_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -5802,7 +5800,7 @@ window.WSP.config = {
       });
       return controlMovilesRealtimeClient;
     } catch (e) {
-      console.warn("[WSP] Supabase Realtime no disponible. Se usa polling como respaldo.", e);
+      console.warn("[WSP] Supabase Realtime no disponible. Control de móviles queda con carga inicial y sin recarga periódica automática.", e);
       return null;
     }
   }
@@ -5864,7 +5862,7 @@ window.WSP.config = {
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[WSP] Realtime control de móviles activo.");
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          console.warn("[WSP] Realtime control de móviles no está entregando eventos. Queda activo el polling corto:", status);
+          console.warn("[WSP] Realtime control de móviles no está entregando eventos. No se activa recarga periódica automática:", status);
         }
       });
 
@@ -5888,33 +5886,22 @@ window.WSP.config = {
   function iniciarTimersControlMoviles() {
     detenerTimersControlMoviles();
 
+    // Mantiene presencia/lock vivo; no relee móviles ni bloqueos en forma periódica.
+    // Las lecturas de móviles y bloqueos se actualizan por Supabase Realtime.
     controlMovilesHeartbeatTimer = setInterval(async () => {
       if (!esControlMovilesActivo()) return;
       try {
         await registrarPresenciaControlMoviles();
-        await limpiarSesionVencidaControlMoviles();
-        await cargarBloqueosControlMoviles();
       } catch (e) {
         console.warn("[WSP] Heartbeat de control de móviles falló.", e);
       }
     }, CONTROL_MOVILES_HEARTBEAT_MS);
-
-    controlMovilesPollingTimer = setInterval(async () => {
-      if (!esControlMovilesActivo()) return;
-      await cargarBloqueosControlMoviles();
-      await cargarMovilesControlDesdeSupabase({ forzar: true });
-      await refrescarMovilSeleccionadoDesdeSupabase({ respetarEdicion: true });
-    }, CONTROL_MOVILES_POLLING_MS);
   }
 
   function detenerTimersControlMoviles() {
     if (controlMovilesHeartbeatTimer) {
       clearInterval(controlMovilesHeartbeatTimer);
       controlMovilesHeartbeatTimer = null;
-    }
-    if (controlMovilesPollingTimer) {
-      clearInterval(controlMovilesPollingTimer);
-      controlMovilesPollingTimer = null;
     }
   }
 
