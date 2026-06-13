@@ -9133,7 +9133,7 @@ ${bold(`Moviles ${organismo}:`)}`)
     ].filter(Boolean).join(" ");
 
     return compactarSaltos([
-      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"),
+      bold("POLICÍA DE LA PROVINCIA DE SANTA FE - DIRECCION GENERAL GUARDIA PROVINCIAL"),
       bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE SANTA FE"),
       bold("TERCIO CHARLIE"),
       "",
@@ -10358,7 +10358,7 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       partes = [];
 
-      partes.push(bold("Policia de la Provincia de Santa Fe - Guardia Provincial"));
+      partes.push(bold("Policia de la Provincia de Santa Fe - Direccion General Guardia Provincial"));
       partes.push(bold("Brigada Motorizada Centro Norte"));
       partes.push(bold("Tercio Charlie"));
       partes.push("");
