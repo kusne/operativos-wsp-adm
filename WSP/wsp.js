@@ -10818,17 +10818,28 @@ ${bold("Se adjunta vista fotográfica")}`);
       window.ControlSuperior.init();
     }
 
+    inicializarFotosWspPaso104();
+
     selTipo.value = "INICIA";
 
-    prepararCargaInicialOperativosWsp();
+    setSelectorOperativosVisibleWsp(true, {
+      motivo: "init_pantalla_principal",
+      tipoSelector: "publicados",
+    });
+    setTituloOperativosIniciados(false);
+    marcarContadorOperativosCargandoWsp();
+    if (selHorario) {
+      selHorario.disabled = true;
+      selHorario.innerHTML = '<option value="">Cargando operativos...</option>';
+      selHorario.value = "";
+    }
 
-    const cargaOperativosInicial = syncOrdenesDesdeServidor();
-
-    inicializarFotosWspPaso104();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
 
-    await cargaOperativosInicial;
+    await syncOrdenesDesdeServidor();
+
+    if (selHorario) selHorario.disabled = false;
 
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria de pantalla:", Array.isArray(_tmp) ? _tmp.length : _tmp);
@@ -10836,3 +10847,5 @@ ${bold("Se adjunta vista fotográfica")}`);
     actualizarTipo();
     actualizarDatosFranja();
   })();
+
+})();
