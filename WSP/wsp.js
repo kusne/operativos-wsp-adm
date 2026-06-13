@@ -736,6 +736,21 @@ window.WSP.config = {
     contadorOperativosWsp.classList.add("contador-operativos-cargando");
     contadorOperativosWsp.textContent = "…";
   }
+  function prepararCargaInicialOperativosWsp(texto = "Cargando operativos...") {
+    setSelectorOperativosVisibleWsp(true, {
+      motivo: "carga_inicial_operativos",
+      tipoSelector: "publicados",
+    });
+
+    setTituloOperativosIniciados(false);
+    marcarContadorOperativosCargandoWsp();
+
+    if (selHorario) {
+      selHorario.disabled = true;
+      selHorario.innerHTML = `<option value="">${texto}</option>`;
+      selHorario.value = "";
+    }
+  }
 
   const OBS_PRESENCIA_ACTIVA_INICIA = "Se inicia con Presencia Activa por inclemencias del tiempo ( lluvias).Se adjunta vistas Fotograficas.";
   const OBS_PRESENCIA_ACTIVA_FINALIZA = "Se Realizo Presencia Activa durante todo el operativo por inclemencias del tiempo(lluvias) . Se adjuntas vistas Fotograficas.";
@@ -10802,15 +10817,22 @@ ${bold("Se adjunta vista fotográfica")}`);
     if (window.ControlSuperior && typeof window.ControlSuperior.init === "function") {
       window.ControlSuperior.init();
     }
-    inicializarFotosWspPaso104();
+
     selTipo.value = "INICIA";
-    actualizarTipo();
+
+    prepararCargaInicialOperativosWsp();
+
+    const cargaOperativosInicial = syncOrdenesDesdeServidor();
+
+    inicializarFotosWspPaso104();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
-    refrescarContadorPublicadosRapidoWsp({ origen: "init_pantalla_principal" });
-    await syncOrdenesDesdeServidor();
+
+    await cargaOperativosInicial;
+
     const _tmp = cargarOrdenesSeguro();
     console.log("[WSP] Órdenes en memoria de pantalla:", Array.isArray(_tmp) ? _tmp.length : _tmp);
-    cargarOperativosDisponibles();
+
+    actualizarTipo();
+    actualizarDatosFranja();
   })();
-})();
