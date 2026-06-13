@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const WSP_BOOTSTRAP_VERSION = "paso106-wsp-foto-abre-camara-por-defecto-20260610";
+  const WSP_BOOTSTRAP_VERSION = "paso107-wsp-ocr-acta-460-20260613";
 
   const SCRIPTS_WSP = [
     "./modules/wsp-namespace.js",
@@ -30,6 +30,7 @@
     "./modules/wsp-control-superior.js",
     "./modules/wsp-informes.js",
     "./modules/wsp-decto460.js",
+    "./modules/wsp-actas-ocr460.js",
     "./modules/wsp-control-moviles.js",
     "./modules/wsp-estadisticas-ui.js",
     "./modules/wsp-operativo-ui.js",
