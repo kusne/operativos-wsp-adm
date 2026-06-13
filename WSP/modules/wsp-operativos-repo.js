@@ -128,16 +128,94 @@
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
-  function normalizarFechaISO(value) {
-    const raw = limpiarTexto(value || "");
-    if (!raw) return "";
-    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (iso) return raw;
-    const ar = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-    if (ar) return `${ar[3]}-${String(Number(ar[2])).padStart(2, "0")}-${String(Number(ar[1])).padStart(2, "0")}`;
-    return "";
+  function fechaIsoValida(yyyy, mm, dd) {
+    const y = Number(yyyy);
+    const m = Number(mm);
+    const d = Number(dd);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return "";
+    if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+    const check = new Date(Date.UTC(y, m - 1, d));
+    if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return "";
+    return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
 
+  function normalizarAnioFecha(value) {
+    const raw = String(value || "").trim();
+    if (!/^\d{2,4}$/.test(raw)) return NaN;
+    if (raw.length === 2) return 2000 + Number(raw);
+    return Number(raw);
+  }
+
+  function mesTextoNumero(value) {
+    const key = String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\./g, "")
+      .trim();
+
+    const meses = {
+      ene: 1, enero: 1, jan: 1, january: 1,
+      feb: 2, febrero: 2, february: 2,
+      mar: 3, marzo: 3, march: 3,
+      abr: 4, abril: 4, apr: 4, april: 4,
+      may: 5, mayo: 5,
+      jun: 6, junio: 6, june: 6,
+      jul: 7, julio: 7, july: 7,
+      ago: 8, agosto: 8, aug: 8, august: 8,
+      sep: 9, sept: 9, septiembre: 9, september: 9,
+      oct: 10, octubre: 10, october: 10,
+      nov: 11, noviembre: 11, november: 11,
+      dic: 12, diciembre: 12, dec: 12, december: 12,
+    };
+
+    return meses[key] || NaN;
+  }
+
+  function normalizarFechaISO(value) {
+    const rawBase = value instanceof Date && !Number.isNaN(value.getTime())
+      ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+      : limpiarTexto(value || "");
+    if (!rawBase) return "";
+
+    const raw = rawBase
+      .replace(/[–—]/g, "-")
+      .replace(/,/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    let m = raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:[T\s].*)?$/);
+    if (m) return fechaIsoValida(m[1], m[2], m[3]);
+
+    m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[T\s].*)?$/);
+    if (m) {
+      const yyyy = normalizarAnioFecha(m[3]);
+      return fechaIsoValida(yyyy, m[2], m[1]);
+    }
+
+    m = raw.match(/^(\d{8})$/);
+    if (m) {
+      const s = m[1];
+      const yyyyFirst = fechaIsoValida(s.slice(0, 4), s.slice(4, 6), s.slice(6, 8));
+      if (yyyyFirst) return yyyyFirst;
+      const dmy = fechaIsoValida(s.slice(4, 8), s.slice(2, 4), s.slice(0, 2));
+      if (dmy) return dmy;
+    }
+
+    m = raw.match(/^(\d{1,2})\s*(?:de\s*)?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ\.]+)\s*(?:de\s*)?(\d{2,4})$/i);
+    if (m) {
+      const yyyy = normalizarAnioFecha(m[3]);
+      const mes = mesTextoNumero(m[2]);
+      return fechaIsoValida(yyyy, mes, m[1]);
+    }
+
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return fechaIsoValida(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    }
+
+    return "";
+  }
   function sumarDiasISO(fechaISO, dias = 0) {
     const base = normalizarFechaISO(fechaISO);
     if (!base) return "";
@@ -528,8 +606,8 @@
 
     return {
       operativo_key: getOperativoKey(payload),
-      guardia_fecha: getGuardiaFecha(payload),
-      fecha_operativo: limpiarTexto(payload.fecha_operativo || payload.guardia_fecha || getGuardiaFecha(payload)),
+      guardia_fecha: normalizarFechaISO(getGuardiaFecha(payload)) || getGuardiaFecha(payload),
+      fecha_operativo: normalizarFechaISO(payload.fecha_operativo) || normalizarFechaISO(payload.guardia_fecha) || normalizarFechaISO(getGuardiaFecha(payload)) || getGuardiaFecha(payload),
       hora_desde: limpiarTexto(payload.hora_desde || partesLegacy.desde || ""),
       hora_hasta: limpiarTexto(payload.hora_hasta || partesLegacy.hasta || ""),
       franja_horaria: tiempo.franja_horaria,
@@ -572,10 +650,10 @@
       operativo_key: getOperativoKey(payload),
       evento_key: esTipoInformeIntermedio(tipo) ? eventoKeyInforme(tipo, payload) : limpiarTexto(payload.evento_key || eventoKey(tipo, payload)),
       informe_key: extraerInformeKeyPayload(payload) || null,
-      guardia_fecha: getGuardiaFecha(payload),
+      guardia_fecha: normalizarFechaISO(getGuardiaFecha(payload)) || getGuardiaFecha(payload),
       fuente: limpiarTexto(payload.fuente || payload.origen || "WSP"),
       tipo_evento: tipo,
-      fecha: limpiarTexto(payload.fecha_operativo || payload.fecha || "") || null,
+      fecha: normalizarFechaISO(payload.fecha_operativo) || normalizarFechaISO(payload.fecha) || null,
       horario: horario || snap.horario || null,
       hora_desde: partes.desde || null,
       hora_hasta: partes.hasta || null,
