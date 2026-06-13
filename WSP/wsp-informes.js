@@ -161,7 +161,7 @@
     ].filter((v) => v && v !== "/").join(" / ") || "/";
 
     const partes = [];
-    partes.push(bold("POLICIA DE LA PROVINCIA DE SANTA FE - GUARDIA PROVINCIAL"));
+    partes.push(bold("POLICIA DE LA PROVINCIA DE SANTA FE - DIRECCION GENERAL GUARDIA PROVINCIAL"));
     partes.push(bold("BRIGADA MOTORIZADA ZONA CENTRO NORTE"));
     partes.push(bold("TERCIO CHARLIE"));
     partes.push("");
