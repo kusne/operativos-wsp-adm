@@ -1065,6 +1065,138 @@ window.WSP.config = {
     return raw;
   }
 
+  // Blindaje Supabase: las columnas date/timestamp deben recibir YYYY-MM-DD.
+  // La UI puede mostrar DD/MM/YYYY, pero nunca debe insertarse ese formato en operativos_estado/eventos.
+  function fechaIsoValidaSupabaseWsp(yyyy, mm, dd) {
+    const y = Number(yyyy);
+    const m = Number(mm);
+    const d = Number(dd);
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return "";
+    if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+    const check = new Date(Date.UTC(y, m - 1, d));
+    if (check.getUTCFullYear() !== y || check.getUTCMonth() !== m - 1 || check.getUTCDate() !== d) return "";
+    return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  function normalizarAnioFechaSupabaseWsp(value) {
+    const raw = String(value || "").trim();
+    if (!/^\d{2,4}$/.test(raw)) return NaN;
+    if (raw.length === 2) return 2000 + Number(raw);
+    return Number(raw);
+  }
+
+  function mesTextoNumeroSupabaseWsp(value) {
+    const key = String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\./g, "")
+      .trim();
+
+    const meses = {
+      ene: 1, enero: 1, jan: 1, january: 1,
+      feb: 2, febrero: 2, february: 2,
+      mar: 3, marzo: 3, march: 3,
+      abr: 4, abril: 4, apr: 4, april: 4,
+      may: 5, mayo: 5,
+      jun: 6, junio: 6, june: 6,
+      jul: 7, julio: 7, july: 7,
+      ago: 8, agosto: 8, aug: 8, august: 8,
+      sep: 9, sept: 9, septiembre: 9, september: 9,
+      oct: 10, octubre: 10, october: 10,
+      nov: 11, noviembre: 11, november: 11,
+      dic: 12, diciembre: 12, dec: 12, december: 12,
+    };
+
+    return meses[key] || NaN;
+  }
+
+  function normalizarFechaISOParaSupabaseWsp(value, fallback = "") {
+    const rawBase = value instanceof Date && !Number.isNaN(value.getTime())
+      ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
+      : limpiarTextoSimple(value || "");
+    if (!rawBase) {
+      return fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "";
+    }
+
+    const raw = rawBase
+      .replace(/[–—]/g, "-")
+      .replace(/,/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // ISO / SQL / timestamp: 2026-06-13, 2026/06/13, 2026.06.13, 2026-06-13T10:30:00Z
+    let m = raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:[T\s].*)?$/);
+    if (m) return fechaIsoValidaSupabaseWsp(m[1], m[2], m[3]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+
+    // Formato argentino: 13/06/2026, 13-6-26, 13.06.2026
+    m = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[T\s].*)?$/);
+    if (m) {
+      const yyyy = normalizarAnioFechaSupabaseWsp(m[3]);
+      return fechaIsoValidaSupabaseWsp(yyyy, m[2], m[1]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+    }
+
+    // Compactos: 20260613 o 13062026. Si empieza con año válido, se interpreta YYYYMMDD; si no, DDMMYYYY.
+    m = raw.match(/^(\d{8})$/);
+    if (m) {
+      const s = m[1];
+      const yyyyFirst = fechaIsoValidaSupabaseWsp(s.slice(0, 4), s.slice(4, 6), s.slice(6, 8));
+      if (yyyyFirst) return yyyyFirst;
+      const dmy = fechaIsoValidaSupabaseWsp(s.slice(4, 8), s.slice(2, 4), s.slice(0, 2));
+      if (dmy) return dmy;
+    }
+
+    // Fechas con mes escrito: 13 de junio de 2026, 13 junio 2026, 13 JUN 2026
+    m = raw.match(/^(\d{1,2})\s*(?:de\s*)?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ\.]+)\s*(?:de\s*)?(\d{2,4})$/i);
+    if (m) {
+      const yyyy = normalizarAnioFechaSupabaseWsp(m[3]);
+      const mes = mesTextoNumeroSupabaseWsp(m[2]);
+      return fechaIsoValidaSupabaseWsp(yyyy, mes, m[1]) || (fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "");
+    }
+
+    // Último recurso para cadenas Date de JS / navegador. No se usa para DD/MM/YYYY porque ya se resolvió arriba.
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      const parsed = fechaIsoValidaSupabaseWsp(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      if (parsed) return parsed;
+    }
+
+    return fallback ? normalizarFechaISOParaSupabaseWsp(fallback) : "";
+  }
+  function normalizarPayloadFechasSupabaseWsp(payload = {}) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+
+    const guardiaFecha = normalizarFechaISOParaSupabaseWsp(payload.guardia_fecha, getGuardiaFechaISO()) || getGuardiaFechaISO();
+    const fechaOperativo = normalizarFechaISOParaSupabaseWsp(payload.fecha_operativo, guardiaFecha) || guardiaFecha;
+
+    const out = {
+      ...payload,
+      guardia_fecha: guardiaFecha,
+      fecha_operativo: fechaOperativo,
+    };
+
+    ["fecha_inicio", "fecha_finalizacion", "fecha_evento"].forEach((campo) => {
+      if (out[campo]) out[campo] = normalizarFechaISOParaSupabaseWsp(out[campo], out[campo]);
+    });
+
+    if (out.payload_completo && typeof out.payload_completo === "object" && !Array.isArray(out.payload_completo)) {
+      out.payload_completo = {
+        ...out.payload_completo,
+        guardia_fecha: guardiaFecha,
+        fecha_operativo: fechaOperativo,
+      };
+    }
+
+    out.metadata = {
+      ...(out.metadata || {}),
+      guardia_fecha: guardiaFecha,
+      fecha_operativo: fechaOperativo,
+      fechas_supabase_normalizadas: true,
+    };
+
+    return out;
+  }
+
   function horarioDesdeRegistroPublicado(rec) {
     const hDesde = limpiarTextoSimple(rec?.horaDesde || rec?.desde || "");
     const hHasta = limpiarTextoSimple(rec?.horaHasta || rec?.hasta || "");
@@ -7917,8 +8049,10 @@ ${bold(`Moviles ${organismo}:`)}`)
 
   function fechaFranjaHistorialWsp(franja) {
     const mod = payloadOperativoWsp();
-    if (mod && typeof mod.fechaFranjaHistorialWsp === "function") return mod.fechaFranjaHistorialWsp(franja);
-    return limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
+    const fecha = (mod && typeof mod.fechaFranjaHistorialWsp === "function")
+      ? mod.fechaFranjaHistorialWsp(franja)
+      : limpiarTextoSimple(franja?.fecha || franja?.__fechaOperativo || "");
+    return normalizarFechaISOParaSupabaseWsp(fecha, getGuardiaFechaISO());
   }
 
   function extraerMapasResultadosHistorialWsp(lineas = []) {
@@ -8105,10 +8239,11 @@ ${bold(`Moviles ${organismo}:`)}`)
   }
 
   async function guardarHistorialOperativoWsp(tipoEvento, payload) {
+    const payloadSupabase = normalizarPayloadFechasSupabaseWsp(payload);
     const svcRepo = historialOperativoRepoWsp();
     if (svcRepo && typeof svcRepo.guardarHistorialOperativoWsp === "function") {
       try {
-        return await svcRepo.guardarHistorialOperativoWsp(tipoEvento, payload, depsHistorialOperativoRepoWsp());
+        return await svcRepo.guardarHistorialOperativoWsp(tipoEvento, payloadSupabase, depsHistorialOperativoRepoWsp());
       } catch (e) {
         console.warn("[WSP] Historial operativo modular falló al guardar. Se usa fallback legacy.", e);
       }
@@ -8128,11 +8263,11 @@ ${bold(`Moviles ${organismo}:`)}`)
 
       let resultado = null;
       if (tipo === "INICIO" && typeof repo.guardarInicio === "function") {
-        resultado = await repo.guardarInicio(payload);
+        resultado = await repo.guardarInicio(payloadSupabase);
       } else if (tipo === "FINALIZADO" && typeof repo.guardarFinalizado === "function") {
-        resultado = await repo.guardarFinalizado(payload);
+        resultado = await repo.guardarFinalizado(payloadSupabase);
       } else if (typeof repo.guardarInforme === "function") {
-        resultado = await repo.guardarInforme(tipo, payload);
+        resultado = await repo.guardarInforme(tipo, payloadSupabase);
       } else {
         return {
           ok: false,
@@ -8394,7 +8529,7 @@ ${bold(`Moviles ${organismo}:`)}`)
         console.warn("[WSP] Historial informes modular falló al guardar. Se usa fallback legacy.", e);
       }
     }
-    const data = prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa);
+    const data = normalizarPayloadFechasSupabaseWsp(prepararPayloadInformeEventoWsp(tipoEvento, payload, nroActa));
 
     try {
       const repo = window.BMZCN?.OperativosRepo;
