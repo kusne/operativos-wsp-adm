@@ -154,103 +154,36 @@
   function normalizarDominio(value) {
     // Para 460/22 trabajamos con motos. Dominio válido:
     // - 6 caracteres: 3 números + 3 letras. Ej: 982CRW
-    // - 7 caracteres: 1 letra + 3 números + 3 letras. Ej: A264JDN / A006DCQ
-    // Técnica específica para A006DCQ y similares: en posiciones numéricas,
-    // Tesseract suele leer el cero barrado como 6/G/O/Q/D. Por eso se generan
-    // candidatos por posición y se prioriza cero en las primeras posiciones
-    // numéricas cuando el patrón se parece a A006AAA.
+    // - 7 caracteres: 1 letra + 3 números + 3 letras. Ej: A264JDN
+    // Se descartan dominios tipo auto y basura pegada de "Tipo".
     const bruto = normalizarMayus(value)
+      // Cero impreso con barra/diagonal: Tesseract puede devolver Ø, Θ, Φ, Q o signos parecidos.
+      // Se conserva como 0 antes de limpiar caracteres no alfanuméricos.
       .replace(/[ØøΘθΦφ⊘◎○●¤@]/g, "0")
       .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR|FECHA)\b.*$/i, "")
       .replace(/[^A-Z0-9]/g, "");
 
-    function opcionesNumeroDominio(ch, pos, seg) {
-      const c = String(ch || "").toUpperCase();
-      const base = charDominioNumero(c);
-      const out = [];
-      function add(v) { if (/^[0-9]$/.test(v) && !out.includes(v)) out.push(v); }
-
-      add(base);
-      if (/[OQØΘΦ⊘◎○●¤@D]/i.test(c)) add("0");
-      if (/[Il|]/.test(c)) add("1");
-      if (/[Z]/.test(c)) add("2");
-      if (/[S]/.test(c)) add("5");
-      if (/[G6]/.test(c)) {
-        add("6");
-        // Caso crítico: cero barrado leído como 6. Lo habilitamos como candidato,
-        // pero solo en posiciones numéricas. Después el score decide.
-        add("0");
-      }
-      if (/[B8]/.test(c)) add("8");
-      if (/^[0-9]$/.test(c)) add(c);
-      return out.length ? out : [base].filter((v) => /^[0-9]$/.test(v));
-    }
-
-    function formarLetras3(seg) {
-      if (!seg || seg.length !== 3) return "";
-      const out = charDominioLetra(seg[0]) + charDominioLetra(seg[1]) + charDominioLetra(seg[2]);
-      return /^[A-Z]{3}$/.test(out) ? out : "";
-    }
-
-    function scoreDominio7(out, raw) {
-      let score = 0;
-      const normalDirecto = charDominioLetra(raw[0])
-        + charDominioNumero(raw[1]) + charDominioNumero(raw[2]) + charDominioNumero(raw[3])
-        + charDominioLetra(raw[4]) + charDominioLetra(raw[5]) + charDominioLetra(raw[6]);
-      for (let i = 0; i < 7; i++) {
-        if (out[i] === normalDirecto[i]) score += 8;
-      }
-
-      // Penalizar dominios que empiezan con A6?6 cuando la lectura alternativa
-      // A0?6 es plausible. Es el caso del cero impreso con línea que el OCR lee como 6.
-      const rawNums = raw.slice(1, 4).toUpperCase();
-      if (/^[6G][06G][6G]$/.test(rawNums) && out[1] === "0") score += 20;
-      if (/^[6G][6G][6G]$/.test(rawNums) && out[1] === "0" && out[2] === "0" && out[3] === "6") score += 35;
-      if (/^[6G][0OQDG][6G]$/.test(rawNums) && out[1] === "0" && out[2] === "0" && out[3] === "6") score += 35;
-
-      // Cuando hay dos ceros seguidos en las posiciones 2 y 3 de una patente A000AAA,
-      // suele tratarse de una lectura tipo A006DCQ. Darle preferencia frente a A606/A666.
-      if (/^A00[0-9][A-Z]{3}$/.test(out)) score += 18;
-      if (/^A[0-9]{3}[A-Z]{3}$/.test(out)) score += 5;
-      return score;
-    }
-
     function formarMoto7(seg) {
       if (!seg || seg.length !== 7) return "";
-      const raw = String(seg || "").toUpperCase();
-      const letra0 = charDominioLetra(raw[0]);
-      const letrasFinal = formarLetras3(raw.slice(4, 7));
-      if (!/^[A-Z]$/.test(letra0) || !letrasFinal) return "";
-
-      const op1 = opcionesNumeroDominio(raw[1], 0, raw);
-      const op2 = opcionesNumeroDominio(raw[2], 1, raw);
-      const op3 = opcionesNumeroDominio(raw[3], 2, raw);
-      const candidatos = [];
-      for (const n1 of op1) for (const n2 of op2) for (const n3 of op3) {
-        const out = letra0 + n1 + n2 + n3 + letrasFinal;
-        if (/^[A-Z][0-9]{3}[A-Z]{3}$/.test(out)) {
-          candidatos.push({ out, score: scoreDominio7(out, raw) });
-        }
-      }
-      if (!candidatos.length) return "";
-      candidatos.sort((a, b) => b.score - a.score || a.out.localeCompare(b.out));
-      return candidatos[0].out;
+      const out = charDominioLetra(seg[0])
+        + charDominioNumero(seg[1])
+        + charDominioNumero(seg[2])
+        + charDominioNumero(seg[3])
+        + charDominioLetra(seg[4])
+        + charDominioLetra(seg[5])
+        + charDominioLetra(seg[6]);
+      return /^[A-Z][0-9]{3}[A-Z]{3}$/.test(out) ? out : "";
     }
 
     function formarMoto6(seg) {
       if (!seg || seg.length !== 6) return "";
-      const raw = String(seg || "").toUpperCase();
-      const op1 = opcionesNumeroDominio(raw[0], 0, raw);
-      const op2 = opcionesNumeroDominio(raw[1], 1, raw);
-      const op3 = opcionesNumeroDominio(raw[2], 2, raw);
-      const letrasFinal = formarLetras3(raw.slice(3, 6));
-      if (!letrasFinal) return "";
-      const candidatos = [];
-      for (const n1 of op1) for (const n2 of op2) for (const n3 of op3) {
-        const out = n1 + n2 + n3 + letrasFinal;
-        if (/^[0-9]{3}[A-Z]{3}$/.test(out)) candidatos.push(out);
-      }
-      return candidatos[0] || "";
+      const out = charDominioNumero(seg[0])
+        + charDominioNumero(seg[1])
+        + charDominioNumero(seg[2])
+        + charDominioLetra(seg[3])
+        + charDominioLetra(seg[4])
+        + charDominioLetra(seg[5]);
+      return /^[0-9]{3}[A-Z]{3}$/.test(out) ? out : "";
     }
 
     // Primero probar el comienzo exacto del campo, que normalmente ya viene aislado.
@@ -260,15 +193,9 @@
     if (directo6) return directo6;
 
     // Si el OCR insertó basura antes/después, escanear ventanas.
-    const candidatos = [];
     for (let i = 0; i <= Math.max(0, bruto.length - 7); i++) {
-      const raw = bruto.slice(i, i + 7);
-      const d = formarMoto7(raw);
-      if (d) candidatos.push({ out: d, score: scoreDominio7(d, raw) - i });
-    }
-    if (candidatos.length) {
-      candidatos.sort((a, b) => b.score - a.score || a.out.localeCompare(b.out));
-      return candidatos[0].out;
+      const d = formarMoto7(bruto.slice(i, i + 7));
+      if (d) return d;
     }
     for (let i = 0; i <= Math.max(0, bruto.length - 6); i++) {
       const d = formarMoto6(bruto.slice(i, i + 6));
@@ -1047,10 +974,9 @@
     return canvas.toDataURL("image/jpeg", 0.86);
   }
 
-  async function reconocerDataUrl(Tesseract, imagen, etiqueta, parametros = {}) {
+  async function reconocerDataUrl(Tesseract, imagen, etiqueta) {
     const resultado = await Tesseract.recognize(imagen, "spa", {
       preserve_interword_spaces: "1",
-      ...parametros,
       logger: (m) => {
         if (!m || !m.status) return;
         if (m.status === "recognizing text" && Number.isFinite(m.progress)) {
@@ -1104,26 +1030,6 @@
       if (textoVehiculo) textos.push("\nZONA_VEHICULO\n" + textoVehiculo);
     } catch (error) {
       console.warn("[WSP OCR 460] No se pudo leer zona de vehículo.", error);
-    }
-
-    // Pasadas específicas de la línea Dominio. Son más angostas y con whitelist
-    // alfanumérico para diferenciar mejor 0/6/O/Q en patentes como A006DCQ.
-    try {
-      const zonasDominio = [
-        { x: 0.02, y: 0.20, w: 0.48, h: 0.08 },
-        { x: 0.02, y: 0.22, w: 0.50, h: 0.09 },
-        { x: 0.04, y: 0.24, w: 0.48, h: 0.08 }
-      ];
-      for (let i = 0; i < zonasDominio.length; i++) {
-        const zonaDominio = await cargarImagenADataUrl(file, 2200, zonasDominio[i], { vertical916: false });
-        const textoDominio = await reconocerDataUrl(Tesseract, zonaDominio, `Revisando dominio ${i + 1}`, {
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789: ",
-          tessedit_pageseg_mode: "7"
-        });
-        if (textoDominio) textos.push("\nZONA_DOMINIO\nDominio: " + textoDominio);
-      }
-    } catch (error) {
-      console.warn("[WSP OCR 460] No se pudo leer zona específica de dominio.", error);
     }
 
     // El bloque de infracciones suele estar en el tercio inferior. Si la lectura
@@ -1225,5 +1131,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v10-dominio-ceros-6");
+  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-diagnostico");
 })();
