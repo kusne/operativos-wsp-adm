@@ -17,6 +17,7 @@
   // solo extrae estos campos: acta, dominio, marca, modelo, códigos, secuestro,
   // juzgado y labrante.
   const OCR460_MAX_WIDTH = 1400;
+  const OCR460_ASPECTO_VERTICAL_OBJETIVO = 9 / 16;
   const DOMINIO_MAX_ALFANUM = 7;
   const MARCAS_MOTO_CONOCIDAS = [
     "HONDA", "ZANELLA", "GUERRERO", "SUZUKI", "APPIA", "YAMAHA", "MOTOMEL",
@@ -26,9 +27,9 @@
 
   // Los números de acta APSV se validan como 9 dígitos y siempre comienzan en 0.
   // No se fuerza prefijo 070 porque pueden existir series 050, 060, 080, 090, etc.
-  // En las actas observadas el patrón útil es 0X0 + 6 dígitos. Esto evita falsos
-  // como 970544361, 797054427, 056140705 o 007053422.
-  const ACTA_PATRON_9_DIGITOS = /^0[1-9]0\d{6}$/;
+  // Patrón fuerte: 0 + serie 5/6/7/8/9 + 0 + 6 dígitos.
+  // Esto evita falsos como 010705342, 970544361, 797054427, 056140705 o 007053422.
+  const ACTA_PATRON_9_DIGITOS = /^0[5-9]0\d{6}$/;
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -333,6 +334,10 @@
     let modelo = limpiarTextoMarcaModelo(value);
     // No permitir signos en modelo. Mantener letras/números y espacios.
     modelo = modelo.replace(/[^A-Z0-9 ]/g, " ").replace(/\s{2,}/g, " ").trim();
+    // Correcciones OCR frecuentes en modelos cortos de moto.
+    modelo = modelo
+      .replace(/\bG11[OQ9]\b/g, "G110")
+      .replace(/\bWAVE\s*11[OQ]\b/g, "WAVE 110");
 
     // Si hay basura OCR luego del modelo, recortar con patrones frecuentes de motos.
     const conocidos = [
@@ -407,6 +412,15 @@
       const m = limpio.match(patron);
       if (m && m[0]) return normalizarDominio(m[0]);
     }
+
+    // 4) Fallback especial motos: probar tokens alfanuméricos parecidos a patente.
+    // Corrige casos como AOO6DCQ / A0O6DCQ / AQ06DCQ, donde los ceros
+    // impresos con barra se confunden con letras, pero solo en posiciones numéricas.
+    const tokens = limpio.match(/[A-Z0-9ØøΘθΦφ⊘◎○●¤@]{6,10}/g) || [];
+    for (const token of tokens) {
+      const dominio = normalizarDominio(token);
+      if (dominio) return dominio;
+    }
     return "";
   }
 
@@ -443,7 +457,7 @@
     if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
     const ctx = String(contexto || "");
     let score = 0;
-    // Cualquier acta válida tiene 9 dígitos y empieza en 0. No se premia 070 en particular.
+    // Cualquier acta válida tiene 9 dígitos, empieza en 0 y usa serie 050/060/070/080/090. No se premia 070 en particular.
     if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 16;
     if (/ACTA/i.test(ctx)) score += 22;
     if (/NRO|NR0|N[°º]/i.test(ctx)) score += 12;
@@ -898,7 +912,7 @@
     return `No se pudieron completar campos automáticamente. Intente con una foto más cercana y nítida del acta.`;
   }
 
-  async function cargarImagenADataUrl(file, maxWidth = OCR460_MAX_WIDTH, crop = null) {
+  async function cargarImagenADataUrl(file, maxWidth = OCR460_MAX_WIDTH, crop = null, opciones = {}) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
@@ -913,10 +927,27 @@
       im.src = dataUrl;
     });
 
-    const sx0 = crop ? Math.max(0, Math.min(img.width - 1, Math.round(img.width * (crop.x || 0)))) : 0;
-    const sy0 = crop ? Math.max(0, Math.min(img.height - 1, Math.round(img.height * (crop.y || 0)))) : 0;
-    const sw0 = crop ? Math.max(1, Math.min(img.width - sx0, Math.round(img.width * (crop.w || 1)))) : img.width;
-    const sh0 = crop ? Math.max(1, Math.min(img.height - sy0, Math.round(img.height * (crop.h || 1)))) : img.height;
+    let sx0 = crop ? Math.max(0, Math.min(img.width - 1, Math.round(img.width * (crop.x || 0)))) : 0;
+    let sy0 = crop ? Math.max(0, Math.min(img.height - 1, Math.round(img.height * (crop.y || 0)))) : 0;
+    let sw0 = crop ? Math.max(1, Math.min(img.width - sx0, Math.round(img.width * (crop.w || 1)))) : img.width;
+    let sh0 = crop ? Math.max(1, Math.min(img.height - sy0, Math.round(img.height * (crop.h || 1)))) : img.height;
+
+    // Modo 9:16 para OCR: no podemos obligar al navegador/cámara nativa a abrir
+    // en 9:16 usando input type=file, pero sí podemos procesar una copia vertical
+    // 9:16 para que Tesseract reciba el encuadre que mejor lee el acta.
+    if (opciones && opciones.vertical916) {
+      const objetivo = OCR460_ASPECTO_VERTICAL_OBJETIVO;
+      const actual = sw0 / sh0;
+      if (actual > objetivo) {
+        const nuevoW = Math.max(1, Math.round(sh0 * objetivo));
+        sx0 += Math.max(0, Math.round((sw0 - nuevoW) / 2));
+        sw0 = nuevoW;
+      } else if (actual < objetivo * 0.82) {
+        const nuevoH = Math.max(1, Math.round(sw0 / objetivo));
+        sy0 += Math.max(0, Math.round((sh0 - nuevoH) / 2));
+        sh0 = Math.min(sh0, nuevoH);
+      }
+    }
 
     const scale = sw0 > maxWidth ? maxWidth / sw0 : 1;
     const width = Math.max(1, Math.round(sw0 * scale));
@@ -969,6 +1000,17 @@
     const textoCompleto = await reconocerDataUrl(Tesseract, imagenCompleta, "Leyendo acta completa");
     const textos = [textoCompleto];
 
+    // Lectura complementaria 9:16. Es más lenta, pero ayuda cuando la foto del
+    // celular sale 4:3 y el acta queda con demasiado margen. Se suma como texto
+    // de apoyo; no reemplaza la lectura completa.
+    try {
+      const imagen916 = await cargarImagenADataUrl(file, 1300, null, { vertical916: true });
+      const texto916 = await reconocerDataUrl(Tesseract, imagen916, "Revisando encuadre vertical 9:16");
+      if (texto916) textos.push("\nZONA_916\n" + texto916);
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer copia 9:16.", error);
+    }
+
     // Segunda pasada chica para ACTA NRO. La línea del acta y el número del
     // código de barras están arriba; esta zona corrige errores tipo 070534222
     // cuando en el encabezado fino se lee 070534323.
@@ -978,6 +1020,16 @@
       if (textoActa) textos.push("\nZONA_ACTA\n" + textoActa);
     } catch (error) {
       console.warn("[WSP OCR 460] No se pudo leer zona de acta.", error);
+    }
+
+    // Pasada específica de vehículo. Refuerza Dominio/Marca/Modelo y especialmente
+    // patentes como A006DCQ, donde los ceros con barra se leen como O/Q/D.
+    try {
+      const zonaVehiculo = await cargarImagenADataUrl(file, 1800, { x: 0.00, y: 0.18, w: 1.00, h: 0.23 }, { vertical916: false });
+      const textoVehiculo = await reconocerDataUrl(Tesseract, zonaVehiculo, "Revisando dominio y vehículo");
+      if (textoVehiculo) textos.push("\nZONA_VEHICULO\n" + textoVehiculo);
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer zona de vehículo.", error);
     }
 
     // El bloque de infracciones suele estar en el tercio inferior. Si la lectura
@@ -1040,6 +1092,14 @@
     if (!r.btn || !r.input) return;
     inicializado = true;
 
+    // Hint para móviles: abre cámara trasera cuando el navegador lo respeta.
+    // El aspect ratio 9:16 no se puede imponer sobre la cámara nativa con input=file;
+    // se aplica como normalización de imagen antes del OCR.
+    try {
+      r.input.setAttribute("accept", "image/*");
+      r.input.setAttribute("capture", "environment");
+    } catch {}
+
     r.btn.addEventListener("click", () => {
       setEstado("Seleccione o saque una foto nítida del acta 460/22.");
       r.input.click();
@@ -1071,5 +1131,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v8-acta-cero-dominio-codigos");
+  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-diagnostico");
 })();
