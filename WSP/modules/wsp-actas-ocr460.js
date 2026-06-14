@@ -25,23 +25,11 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Validación de N° de acta por talonario digital PDA.
-  // Solo se acepta una de las series reales informadas:
-  // 07002xxxxx -> PDA 5, 07008xxxxx -> PDA 19,
-  // 07053xxxxx -> PDA 67, 07054xxxxx -> PDA 68.
-  const ACTA_SERIES_PDA_460 = Object.freeze([
-    { prefijo: "07002", pda: "5" },
-    { prefijo: "07008", pda: "19" },
-    { prefijo: "07053", pda: "67" },
-    { prefijo: "07054", pda: "68" },
-  ]);
-  const ACTA_PATRON_9_DIGITOS = /^(?:07002|07008|07053|07054)\d{4}$/;
-
-  function deducirPdaDesdeActa(actaNumero) {
-    const acta = String(actaNumero || "").replace(/\D+/g, "");
-    const serie = ACTA_SERIES_PDA_460.find((item) => acta.startsWith(item.prefijo));
-    return serie ? serie.pda : "";
-  }
+  // Los números de acta APSV se validan como 9 dígitos y siempre comienzan en 0.
+  // No se fuerza prefijo 070 porque pueden existir series 050, 060, 080, 090, etc.
+  // Patrón fuerte: 0 + serie 5/6/7/8/9 + 0 + 6 dígitos.
+  // Esto evita falsos como 010705342, 970544361, 797054427, 056140705 o 007053422.
+  const ACTA_PATRON_9_DIGITOS = /^0[5-9]0\d{6}$/;
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -181,6 +169,111 @@
     A555OQA: "A006DCQ",
   });
 
+  const OCR460_DOMINIOS_APRENDIDOS_KEY = "wsp_ocr460_dominios_aprendidos_v1";
+
+  function esDominioMotoValido(value) {
+    const token = limpiarTokenDominioOcr(value);
+    return /^[0-9]{3}[A-Z]{3}$/.test(token) || /^[A-Z][0-9]{3}[A-Z]{3}$/.test(token);
+  }
+
+  function leerTablaDominiosAprendidos() {
+    try {
+      const raw = window.localStorage ? window.localStorage.getItem(OCR460_DOMINIOS_APRENDIDOS_KEY) : "";
+      const data = raw ? JSON.parse(raw) : {};
+      if (!data || typeof data !== "object") return {};
+      const out = {};
+      Object.entries(data).forEach(([k, v]) => {
+        const key = limpiarTokenDominioOcr(k);
+        const val = limpiarTokenDominioOcr(v);
+        if (key && esDominioMotoValido(val)) out[key] = val;
+      });
+      return out;
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer tabla de dominios aprendidos.", error);
+      return {};
+    }
+  }
+
+  function guardarTablaDominiosAprendidos(tabla) {
+    try {
+      if (!window.localStorage) return false;
+      window.localStorage.setItem(OCR460_DOMINIOS_APRENDIDOS_KEY, JSON.stringify(tabla || {}));
+      return true;
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo guardar tabla de dominios aprendidos.", error);
+      return false;
+    }
+  }
+
+  function generarVariantesDominioDudoso(dominioCorrecto) {
+    const dominio = limpiarTokenDominioOcr(dominioCorrecto);
+    if (!esDominioMotoValido(dominio)) return [];
+    const base = [dominio];
+    const variantesPorDigito = {
+      "0": ["0", "O", "Q", "D", "6", "G"],
+      "6": ["6", "G", "0", "O", "Q"],
+      "1": ["1", "I", "L"],
+      "2": ["2", "Z"],
+      "5": ["5", "S"],
+      "8": ["8", "B"],
+    };
+    const posicionesNumericas = dominio.length === 7 ? [1, 2, 3] : [0, 1, 2];
+    for (const pos of posicionesNumericas) {
+      const ch = dominio[pos];
+      const vars = variantesPorDigito[ch] || [ch];
+      const actuales = base.slice();
+      for (const actual of actuales) {
+        for (const v of vars) base.push(actual.slice(0, pos) + v + actual.slice(pos + 1));
+      }
+    }
+    return Array.from(new Set(base.map(limpiarTokenDominioOcr).filter(Boolean)));
+  }
+
+  function aprenderDominioOcr(candidatosOcr, dominioCorrecto) {
+    const correcto = limpiarTokenDominioOcr(dominioCorrecto);
+    if (!esDominioMotoValido(correcto)) return false;
+    const tabla = leerTablaDominiosAprendidos();
+    let cambio = false;
+
+    const candidatos = new Set();
+    (Array.isArray(candidatosOcr) ? candidatosOcr : [candidatosOcr]).forEach((c) => {
+      const token = limpiarTokenDominioOcr(c);
+      if (token && token !== correcto) candidatos.add(token);
+    });
+
+    // Aunque el OCR no haya devuelto un candidato útil, se agregan variantes
+    // probables del dominio correcto. Esto ayuda con ceros barrados leídos como 6/O/Q/D.
+    generarVariantesDominioDudoso(correcto).forEach((v) => {
+      if (v && v !== correcto) candidatos.add(v);
+    });
+
+    candidatos.forEach((token) => {
+      if (token.length < 5 || token.length > 12) return;
+      if (tabla[token] !== correcto) {
+        tabla[token] = correcto;
+        cambio = true;
+      }
+    });
+
+    if (cambio) guardarTablaDominiosAprendidos(tabla);
+    return cambio;
+  }
+
+  function buscarDominioAprendidoEnToken(value) {
+    const token = limpiarTokenDominioOcr(value);
+    if (!token) return "";
+    const tabla = leerTablaDominiosAprendidos();
+    if (tabla[token]) return tabla[token];
+    for (let i = 0; i <= Math.max(0, token.length - 6); i++) {
+      for (let len of [7, 6]) {
+        if (i + len > token.length) continue;
+        const w = token.slice(i, i + len);
+        if (tabla[w]) return tabla[w];
+      }
+    }
+    return "";
+  }
+
   function limpiarTokenDominioOcr(value) {
     return normalizarMayus(value)
       .replace(/[ØøΘθΦφ⊘◎○●¤@]/g, "0")
@@ -190,6 +283,9 @@
   function corregirDominioOcrConocido(dominioOValor) {
     const token = limpiarTokenDominioOcr(dominioOValor);
     if (!token) return "";
+
+    const aprendido = buscarDominioAprendidoEnToken(token);
+    if (aprendido) return aprendido;
 
     if (CORRECCIONES_DOMINIO_OCR_460[token]) return CORRECCIONES_DOMINIO_OCR_460[token];
 
@@ -479,6 +575,39 @@
       if (dominio) return dominio;
     }
     return "";
+  }
+
+  function extraerCandidatosDominioParaAprendizaje(texto) {
+    const limpio = normalizarBusqueda(texto);
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+    const candidatos = [];
+
+    function add(value) {
+      const token = limpiarTokenDominioOcr(value);
+      if (!token) return;
+      if (!candidatos.includes(token)) candidatos.push(token);
+      for (let i = 0; i <= Math.max(0, token.length - 7); i++) {
+        const w7 = token.slice(i, i + 7);
+        if (w7.length === 7 && !candidatos.includes(w7)) candidatos.push(w7);
+      }
+      for (let i = 0; i <= Math.max(0, token.length - 6); i++) {
+        const w6 = token.slice(i, i + 6);
+        if (w6.length === 6 && !candidatos.includes(w6)) candidatos.push(w6);
+      }
+    }
+
+    for (const linea of lineas) {
+      if (!/(Dom[ií1]nio|D[o0]m[ií1]n[ií1]o|D[o0]m[a-z0-9]{1,5}o)/i.test(linea)) continue;
+      const valor = linea
+        .replace(/^.*?(?:Dom[ií1]nio|D[o0]m[ií1]n[ií1]o|D[o0]m[a-z0-9]{1,5}o)\s*[º°.:,;\- ]*/i, "")
+        .replace(/\b(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b.*$/i, "")
+        .trim();
+      add(valor);
+    }
+
+    // Respaldo acotado: candidatos parecidos a dominio en todo el OCR.
+    (limpio.match(/[A-Z0-9ØøΘθΦφ⊘◎○●¤@]{6,10}/g) || []).forEach(add);
+    return candidatos;
   }
 
   function normalizarActaCandidato(value) {
@@ -887,10 +1016,8 @@
 
   function extraerDatosActa460(textoOcr) {
     const texto = normalizarTextoOcr(textoOcr);
-    const actaNumero = extraerActa(texto);
     const datos = {
-      actaNumero,
-      pdaDispositivo: deducirPdaDesdeActa(actaNumero),
+      actaNumero: extraerActa(texto),
       dominio: extraerDominio(texto),
       modelo: normalizarMayus(extraerModelo(texto)),
       marca: normalizarMayus(extraerMarca(texto)),
@@ -936,6 +1063,20 @@
     return !!val;
   }
 
+  function manejarEdicionManualDominioAprendido() {
+    const r = refs();
+    if (!r.dominio || !ultimoTextoOcr) return;
+    const dominioManual = normalizarDominio(r.dominio.value);
+    if (!dominioManual || !esDominioMotoValido(dominioManual)) return;
+
+    const candidatos = extraerCandidatosDominioParaAprendizaje(ultimoTextoOcr);
+    const aprendido = aprenderDominioOcr(candidatos, dominioManual);
+    if (aprendido) {
+      setEstado(`Dominio guardado para próximas lecturas. Revisar dominio: ${dominioManual}.`, "ok");
+      console.info("[WSP OCR 460] Dominio aprendido:", { dominioManual, candidatos });
+    }
+  }
+
   function aplicarDatosAFormulario460(datos) {
     const r = refs();
     const cargados = [];
@@ -961,7 +1102,6 @@
     if (!datos.codigos?.length) faltantes.push("códigos");
 
     const extras = [];
-    if (datos.pdaDispositivo) extras.push(`PDA ${datos.pdaDispositivo}`);
     if (datos.juzgado) extras.push(`Juzgado: ${datos.juzgado}`);
     if (datos.labrante) extras.push("labrante detectado");
     if (datos.secuestraVehiculo) extras.push("el acta indica secuestro de vehículo");
@@ -1171,6 +1311,13 @@
       procesarArchivoActa(file);
     });
 
+    // Aprendizaje automático: si el OCR deja el dominio vacío o dudoso y el usuario
+    // lo completa manualmente, se guarda una corrección local para próximas lecturas.
+    if (r.dominio) {
+      r.dominio.addEventListener("change", manejarEdicionManualDominioAprendido);
+      r.dominio.addEventListener("blur", manejarEdicionManualDominioAprendido);
+    }
+
     setEstado(ESTADOS.idle);
   }
 
@@ -1181,6 +1328,8 @@
     leerTextoDesdeFoto,
     getUltimoTextoOcr: () => ultimoTextoOcr,
     getUltimosDatos: () => ultimosDatos,
+    getDominiosAprendidos: leerTablaDominiosAprendidos,
+    aprenderDominioOcr,
   };
 
   window.WSPActasOCR460 = window.WSP.modules.actasOcr460;
@@ -1191,5 +1340,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-diagnostico");
+  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-aprendizaje");
 })();
