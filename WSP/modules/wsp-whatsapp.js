@@ -4,7 +4,6 @@
   window.WSP = window.WSP || {};
   window.WSP.services = window.WSP.services || {};
 
-  const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000;
   let autoCierreWspTimer = null;
 
   function programarCierreVentanaWsp() {
@@ -12,32 +11,9 @@
       clearTimeout(autoCierreWspTimer);
       autoCierreWspTimer = null;
     }
-
-    autoCierreWspTimer = setTimeout(() => {
-      try {
-        if (window.electronAPI && typeof window.electronAPI.closeCurrentWindow === "function") {
-          window.electronAPI.closeCurrentWindow();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP WhatsApp] No se pudo cerrar mediante electronAPI.closeCurrentWindow.", e);
-      }
-
-      try {
-        if (window.electronAPI && typeof window.electronAPI.cerrarVentanaActual === "function") {
-          window.electronAPI.cerrarVentanaActual();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP WhatsApp] No se pudo cerrar mediante electronAPI.cerrarVentanaActual.", e);
-      }
-
-      try {
-        window.close();
-      } catch (e) {
-        console.warn("[WSP WhatsApp] El navegador bloqueó window.close().", e);
-      }
-    }, AUTO_CIERRE_WSP_MS);
+    // Paso 111: no cerrar la app después de abrir WhatsApp.
+    // Se conserva la función para no cambiar el flujo ni las llamadas existentes.
+    return false;
   }
 
   function archivosCompartiblesWsp(files) {

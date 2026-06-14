@@ -1,0 +1,35 @@
+PASO 111 - OPTIMIZACION RESTRINGIDA WSP
+Fecha: 2026-06-14
+
+Criterio aplicado:
+- NO se tocó OCR.
+- NO se tocó WSP/modules/wsp-actas-ocr460.js.
+- NO se tocaron validaciones de acta.
+- NO se tocaron informes ni flujo funcional.
+
+Archivos modificados:
+- WSP/wsp-bootstrap.js
+- WSP/wsp.js
+- WSP/modules/wsp-whatsapp.js
+- WSP/modules/wsp-whatsapp - copia.js
+
+Cambios realizados:
+1) Carga inicial de operativos:
+   - wsp-bootstrap.js inicia una prelectura REST de Supabase/operativos_publicados lo antes posible.
+   - wsp.js reutiliza esa prelectura durante la carga inicial para no esperar a que terminen todos los scripts.
+   - El contador inicial reutiliza la misma prelectura cuando está disponible.
+   - La limpieza de cache deja de bloquear el arranque; se ejecuta después de cargar los scripts.
+
+2) Cierre/ventana:
+   - Se desactiva el cierre automático de la app a los 5 minutos después de abrir WhatsApp.
+   - Se conserva la función existente para no cambiar llamadas ni flujo.
+   - Se agrega control de ventana única en bootstrap con Web Locks y fallback BroadcastChannel. Si se abre una segunda pestaña, queda bloqueada como duplicada.
+
+Validación realizada:
+- node --check WSP/wsp-bootstrap.js
+- node --check WSP/wsp.js
+- node --check WSP/modules/wsp-whatsapp.js
+- node --check "WSP/modules/wsp-whatsapp - copia.js"
+
+Importante:
+- El archivo WSP/modules/wsp-actas-ocr460.js quedó idéntico al zip base.

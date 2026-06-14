@@ -1617,6 +1617,30 @@ window.WSP.config = {
     return ordenes;
   }
 
+
+  async function obtenerPrefetchOperativosPublicadosWsp(guardiaFecha, opts = {}) {
+    const consumir = opts.consumir !== false;
+    const dataDirecta = window.__WSP_OPERATIVOS_PUBLICADOS_PREFETCH_DATA__ || null;
+    const promise = window.__WSP_OPERATIVOS_PUBLICADOS_PREFETCH_PROMISE__ || null;
+
+    if (consumir && window.__WSP_OPERATIVOS_PUBLICADOS_PREFETCH_CONSUMED__) return null;
+
+    let data = dataDirecta;
+    if (!data && promise && typeof promise.then === "function") {
+      data = await promise;
+    }
+
+    if (!data || data.ok !== true) return null;
+    if (String(data.guardiaFecha || "") !== String(guardiaFecha || "")) return null;
+    if (!Array.isArray(data.rows)) return null;
+
+    if (consumir) {
+      window.__WSP_OPERATIVOS_PUBLICADOS_PREFETCH_CONSUMED__ = true;
+    }
+
+    return data.rows;
+  }
+
   async function syncOrdenesDesdeServidor(opts = {}) {
     if (ordenesPublicadasSyncPromiseWsp) return ordenesPublicadasSyncPromiseWsp;
 
@@ -1631,24 +1655,32 @@ window.WSP.config = {
           order: "inicio_operativo.asc",
         });
 
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            Accept: "application/json",
-          },
-        });
+        const prefetchedRows = await obtenerPrefetchOperativosPublicadosWsp(guardiaFecha, { consumir: true });
+        let data = prefetchedRows;
 
-        if (!r.ok) {
-          const txt = await r.text().catch(() => "");
-          console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
-          guardarOrdenesSeguro([]);
-          ordenesPublicadasCargadasWsp = false;
-          actualizarContadorOperativosWsp(0);
-          return false;
+        if (!data) {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              Accept: "application/json",
+            },
+          });
+
+          if (!r.ok) {
+            const txt = await r.text().catch(() => "");
+            console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
+            guardarOrdenesSeguro([]);
+            ordenesPublicadasCargadasWsp = false;
+            actualizarContadorOperativosWsp(0);
+            return false;
+          }
+
+          data = await r.json();
+        } else {
+          console.log("[WSP] operativos_publicados inicial reutilizado desde prelectura bootstrap:", data.length);
         }
 
-        const data = await r.json();
         const ordenes = convertirOperativosPublicadosAFormatoWsp(data);
 
         guardarOrdenesSeguro(ordenes);
@@ -1673,6 +1705,9 @@ window.WSP.config = {
 
   async function contarOperativosPublicadosGuardiaSupabaseWsp() {
     const guardiaFecha = getGuardiaFechaISO();
+    const prefetchedRows = await obtenerPrefetchOperativosPublicadosWsp(guardiaFecha, { consumir: false });
+    if (Array.isArray(prefetchedRows)) return prefetchedRows.length;
+
     const params = new URLSearchParams({
       select: "id",
       guardia_fecha: `eq.${guardiaFecha}`,
