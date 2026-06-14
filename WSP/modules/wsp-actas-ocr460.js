@@ -25,11 +25,23 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Los números de acta APSV se validan como 9 dígitos y siempre comienzan en 0.
-  // No se fuerza prefijo 070 porque pueden existir series 050, 060, 080, 090, etc.
-  // Patrón fuerte: 0 + serie 5/6/7/8/9 + 0 + 6 dígitos.
-  // Esto evita falsos como 010705342, 970544361, 797054427, 056140705 o 007053422.
-  const ACTA_PATRON_9_DIGITOS = /^0[5-9]0\d{6}$/;
+  // Validación de N° de acta por talonario digital PDA.
+  // Solo se acepta una de las series reales informadas:
+  // 07002xxxxx -> PDA 5, 07008xxxxx -> PDA 19,
+  // 07053xxxxx -> PDA 67, 07054xxxxx -> PDA 68.
+  const ACTA_SERIES_PDA_460 = Object.freeze([
+    { prefijo: "07002", pda: "5" },
+    { prefijo: "07008", pda: "19" },
+    { prefijo: "07053", pda: "67" },
+    { prefijo: "07054", pda: "68" },
+  ]);
+  const ACTA_PATRON_9_DIGITOS = /^(?:07002|07008|07053|07054)\d{4}$/;
+
+  function deducirPdaDesdeActa(actaNumero) {
+    const acta = String(actaNumero || "").replace(/\D+/g, "");
+    const serie = ACTA_SERIES_PDA_460.find((item) => acta.startsWith(item.prefijo));
+    return serie ? serie.pda : "";
+  }
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -875,8 +887,10 @@
 
   function extraerDatosActa460(textoOcr) {
     const texto = normalizarTextoOcr(textoOcr);
+    const actaNumero = extraerActa(texto);
     const datos = {
-      actaNumero: extraerActa(texto),
+      actaNumero,
+      pdaDispositivo: deducirPdaDesdeActa(actaNumero),
       dominio: extraerDominio(texto),
       modelo: normalizarMayus(extraerModelo(texto)),
       marca: normalizarMayus(extraerMarca(texto)),
@@ -947,6 +961,7 @@
     if (!datos.codigos?.length) faltantes.push("códigos");
 
     const extras = [];
+    if (datos.pdaDispositivo) extras.push(`PDA ${datos.pdaDispositivo}`);
     if (datos.juzgado) extras.push(`Juzgado: ${datos.juzgado}`);
     if (datos.labrante) extras.push("labrante detectado");
     if (datos.secuestraVehiculo) extras.push("el acta indica secuestro de vehículo");
