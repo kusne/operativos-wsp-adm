@@ -356,10 +356,15 @@
     // Evita falsos positivos como texto de encabezado convertido a números
     // por confusiones OCR. Debe haber suficientes dígitos reales en el candidato.
     if ((raw.match(/\d/g) || []).length < 6) return "";
-    const numero = normalizarNumeroOcrEstricto(raw);
+    let numero = normalizarNumeroOcrEstricto(raw);
     // El número de acta APSV tiene 9 dígitos. Ej: 070544272.
-    const matches = numero.match(/\d{9}/g) || [];
-    const preferido = matches.find((n) => /^0\d{8}$/.test(n)) || matches[0] || "";
+    // En estas actas normalmente inicia con 0; Tesseract a veces lee ese 0 inicial como 9.
+    const crudos = numero.match(/\d{9}/g) || [];
+    const normalizados = crudos.map((n) => {
+      if (/^9\d{8}$/.test(n) && /^97/.test(n)) return "0" + n.slice(1);
+      return n;
+    });
+    const preferido = normalizados.find((n) => /^0\d{8}$/.test(n)) || normalizados[0] || "";
     return preferido || "";
   }
 
@@ -396,28 +401,119 @@
     return "";
   }
 
-  function agregarCodigoUnico(codigos, value) {
-    const digitos = normalizarNumeroOcrEstricto(value);
-    const matches = digitos.match(/\d{4,5}/g) || [];
-    for (const codigo of matches) {
-      if (codigo.length >= 4 && codigo.length <= 5 && !codigos.includes(codigo)) codigos.push(codigo);
-      if (codigos.length >= 6) break;
+  function obtenerSetCodigosNomenclador460() {
+    const out = new Set();
+    try {
+      if (window.WSP?.services?.nomenclador?.listarCodigos) {
+        window.WSP.services.nomenclador.listarCodigos().forEach((c) => {
+          const clean = String(c || "").replace(/\D+/g, "");
+          if (/^\d{4,5}$/.test(clean)) out.add(clean);
+        });
+      }
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer nomenclador desde servicio.", error);
     }
+
+    try {
+      if (window.NOMENCLADOR_CODIGOS && typeof window.NOMENCLADOR_CODIGOS === "object") {
+        Object.keys(window.NOMENCLADOR_CODIGOS).forEach((key) => {
+          const clean = String(key || "").replace(/\D+/g, "");
+          if (/^\d{4,5}$/.test(clean)) out.add(clean);
+        });
+      }
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer NOMENCLADOR_CODIGOS.", error);
+    }
+
+    // Fallback mínimo para códigos que aparecen en las actas 460 probadas.
+    ["4084", "5011", "5038", "5041", "9119", "11029", "13018"].forEach((c) => out.add(c));
+    return out;
   }
 
-  function agregarCodigoDesdeSegmento(codigos, value) {
-    const segmento = String(value || "")
-      .replace(/[\r\n]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    agregarCodigoUnico(codigos, segmento);
+  function existeCodigoNomenclador460(codigo, setCodigos) {
+    const clean = String(codigo || "").replace(/\D+/g, "");
+    if (!/^\d{4,5}$/.test(clean)) return false;
+    if (setCodigos && setCodigos.has(clean)) return true;
+    try {
+      if (window.WSP?.services?.nomenclador?.existeCodigo) return !!window.WSP.services.nomenclador.existeCodigo(clean);
+    } catch {}
+    try {
+      if (typeof window.getNomencladorFalta === "function") return !!window.getNomencladorFalta(clean);
+    } catch {}
+    return false;
+  }
+
+  function normalizarCodigoOCRCorto(value) {
+    return String(value || "")
+      .toUpperCase()
+      .replace(/[OoQ]/g, "0")
+      .replace(/[Il|]/g, "1")
+      .replace(/[Z]/g, "2")
+      .replace(/[^0-9]/g, "");
+  }
+
+  function candidatosCodigoDesdeTexto(value) {
+    const raw = String(value || "").toUpperCase();
+    const candidatos = [];
+
+    // Captura la primera secuencia inmediatamente posterior a Cod/Cód, sin comerse texto de la infracción.
+    // Permite OCR típico: Cod:5041, Cqd:4084, C0d:9119, Cod : 5 041.
+    const m = raw.match(/(?:C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB\s]{4,9})/i);
+    if (m && m[1]) {
+      const compacto = normalizarCodigoOCRCorto(m[1]);
+      if (compacto) {
+        if (compacto.length >= 5) candidatos.push(compacto.slice(0, 5));
+        if (compacto.length >= 4) candidatos.push(compacto.slice(0, 4));
+        const grupos = compacto.match(/\d{4,5}/g) || [];
+        grupos.forEach((g) => candidatos.push(g));
+      }
+    }
+
+    // Si se perdió completamente el prefijo Cod, aceptar número al inicio de la línea de infracción.
+    const inicio = raw.match(/^\s*([0-9OQIL|ZSGB]{4,5})\b/i);
+    if (inicio && inicio[1]) candidatos.push(normalizarCodigoOCRCorto(inicio[1]));
+
+    // Agregar variantes por eliminación de un dígito extra OCR: 40841 -> 4084.
+    const extendidos = [];
+    for (const c of candidatos) {
+      if (/^\d{5}$/.test(c)) {
+        for (let i = 0; i < c.length; i++) extendidos.push(c.slice(0, i) + c.slice(i + 1));
+      }
+      extendidos.push(c);
+    }
+
+    return Array.from(new Set(extendidos.filter((c) => /^\d{4,5}$/.test(c))));
+  }
+
+  function codigoPorTextoInfraccion(linea) {
+    const t = sinAcentos(String(linea || "").toUpperCase()).replace(/\s+/g, " ");
+    const out = [];
+
+    // Fallback semántico acotado a frases habituales del acta. Sirve cuando OCR rompe "Cod" o agrega dígitos.
+    if (/CASCO|BANDOLERA|CHALECO/.test(t)) out.push("4084");
+    if (/COBERTURA DE SEGURO|SEGURO OBLIGATORIO VIGEN/.test(t)) out.push("5041");
+    if (/COMPROBANTE DEL SEGURO/.test(t)) out.push("5038");
+    if (/HABILITAD/.test(t)) out.push("9119");
+    if (/(NO EXHIB|EXHIBIR).*(LICENCIA|DOCUMENTACION|DOCUMENTO|CEDULA)|LICENCIA DE CONDUCTOR O CUALQUIER OTRA/.test(t)) out.push("5011");
+    if (/PLACAS DE IDENTIFICACION|SIN LAS PLACAS|DOMINIO CORRESPONDIENTES/.test(t)) out.push("11029");
+    if (/REVISION TECNICA|RTO\b/.test(t)) out.push("13018");
+
+    return out;
+  }
+
+  function agregarCodigoUnico(codigos, codigo, setCodigos) {
+    const clean = String(codigo || "").replace(/\D+/g, "");
+    if (!/^\d{4,5}$/.test(clean)) return false;
+    if (!existeCodigoNomenclador460(clean, setCodigos)) return false;
+    if (!codigos.includes(clean)) codigos.push(clean);
+    return true;
   }
 
   function extraerBloqueInfracciones(lineas) {
     const idx = lineas.findIndex((linea) => /INFRACCIONES?|INFRACCI0NES?|INFRACC1ONES?/i.test(linea));
     if (idx < 0) return [];
     const out = [];
-    for (let i = idx + 1; i < Math.min(lineas.length, idx + 18); i++) {
+    for (let i = idx + 1; i < Math.min(lineas.length, idx + 22); i++) {
       const linea = lineas[i];
       if (/^(Observaciones|Medidas\s+Cautelares|Retiene\s+Licencia|Secuestra\s+Veh[iíi]culo|Otra\s+Medida|Juzgado|Firma)\b/i.test(linea)) break;
       out.push(linea);
@@ -425,28 +521,50 @@
     return out;
   }
 
+  function unirLineasInfraccionesPartidas(bloqueLineas) {
+    const out = [];
+    for (const lineaRaw of bloqueLineas || []) {
+      const linea = String(lineaRaw || "").trim();
+      if (!linea) continue;
+      const esNueva = /(?:C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*[0-9OQIL|ZSGB]/i.test(linea) || /^\s*[0-9OQIL|ZSGB]{4,5}\b/i.test(linea);
+      if (esNueva || !out.length) out.push(linea);
+      else out[out.length - 1] += " " + linea;
+    }
+    return out;
+  }
+
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
+    const setCodigos = obtenerSetCodigosNomenclador460();
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
-    const bloqueLineas = extraerBloqueInfracciones(lineas);
-    const bloque = bloqueLineas.length ? bloqueLineas.join("\n") : limpio;
+    const bloqueLineas = unirLineasInfraccionesPartidas(extraerBloqueInfracciones(lineas));
 
-    // Reglas de usuario: códigos de falta = 4 o 5 dígitos.
-    // Buscar solo números vinculados a etiqueta Cod/Cód/C0d/Cqd/Cod.
-    const reCodFlexible = /(?:^|[\n\s])C\s*[o0óqQ]\s*[dcl](?:\s*[ií1]\s*g\s*[o0])?\s*[º°.:,;\- ]*([0-9OoQqIl|SsZzGgBb\s]{4,12})/ig;
-    let match;
-    while ((match = reCodFlexible.exec(bloque))) {
-      if (match && match[1]) agregarCodigoDesdeSegmento(codigos, match[1]);
+    // Primera pasada: extraer candidatos numéricos vinculados a cada línea del bloque INFRACCIONES.
+    for (const linea of bloqueLineas) {
+      const candidatos = candidatosCodigoDesdeTexto(linea);
+      let agrego = false;
+      for (const candidato of candidatos) {
+        if (agregarCodigoUnico(codigos, candidato, setCodigos)) agrego = true;
+      }
+
+      // Segunda pasada: si el número OCR vino roto, usar el texto de la infracción para resolverlo.
+      // También agrega códigos faltantes cuando una línea trae texto claro pero número inválido.
+      const porTexto = codigoPorTextoInfraccion(linea);
+      for (const codigo of porTexto) {
+        if (agregarCodigoUnico(codigos, codigo, setCodigos)) agrego = true;
+      }
+
       if (codigos.length >= 6) break;
     }
 
-    // Fallback muy acotado: solo si no detectó nada y solo dentro del bloque INFRACCIONES.
-    // Acepta líneas que empiezan con número por pérdida total de "Cod" en OCR.
-    if (!codigos.length && bloqueLineas.length) {
-      for (const linea of bloqueLineas) {
-        const m = linea.trim().match(/^([0-9OoQqIl|SsZzGgBb]{4,5})\b/);
-        if (m && m[1]) agregarCodigoUnico(codigos, m[1]);
+    // Fallback final, igualmente validado contra nomenclador: si el OCR no mantuvo saltos de línea.
+    if (!codigos.length) {
+      const bloque = bloqueLineas.length ? bloqueLineas.join("\n") : limpio;
+      const partes = bloque.split(/(?=C\s*[O0ÓQ]\s*[DCL]\s*[º°.:,;\- ]*[0-9OQIL|ZSGB]|C0D\s*[º°.:,;\- ]*[0-9OQIL|ZSGB]|CODIGO\s*[º°.:,;\- ]*[0-9OQIL|ZSGB])/i);
+      for (const parte of partes) {
+        for (const candidato of candidatosCodigoDesdeTexto(parte)) agregarCodigoUnico(codigos, candidato, setCodigos);
+        for (const codigo of codigoPorTextoInfraccion(parte)) agregarCodigoUnico(codigos, codigo, setCodigos);
         if (codigos.length >= 6) break;
       }
     }
