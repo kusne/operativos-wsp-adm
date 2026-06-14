@@ -18,6 +18,11 @@
   // juzgado y labrante.
   const OCR460_MAX_WIDTH = 1400;
   const DOMINIO_MAX_ALFANUM = 7;
+  const MARCAS_MOTO_CONOCIDAS = [
+    "HONDA", "ZANELLA", "GUERRERO", "SUZUKI", "APPIA", "YAMAHA", "MOTOMEL",
+    "CORVEN", "GILERA", "BAJAJ", "KELLER", "MONDIAL", "KYMCO", "BENELLI",
+    "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
+  ];
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -116,23 +121,76 @@
       .toUpperCase();
   }
 
+  function charDominioNumero(ch) {
+    const c = String(ch || "").toUpperCase();
+    if (c === "O" || c === "Q" || c === "D") return "0";
+    if (c === "I" || c === "L" || c === "|") return "1";
+    if (c === "Z") return "2";
+    if (c === "S") return "5";
+    if (c === "G") return "6";
+    if (c === "B") return "8";
+    return c;
+  }
+
+  function charDominioLetra(ch) {
+    const c = String(ch || "").toUpperCase();
+    if (c === "0") return "O";
+    if (c === "1") return "I";
+    if (c === "2") return "Z";
+    if (c === "5") return "S";
+    if (c === "6") return "G";
+    if (c === "8") return "B";
+    return c;
+  }
+
   function normalizarDominio(value) {
-    // Dominio argentino: máximo 7 caracteres alfanuméricos.
-    // Se corta antes de etiquetas vecinas como "Tipo" para evitar casos reales
-    // como "A264JDN Tipo" -> "A264JDNTIP".
-    let limpio = normalizarMayus(value)
-      .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR)\b.*$/i, "")
+    // Para 460/22 trabajamos con motos. Dominio válido:
+    // - 6 caracteres: 3 números + 3 letras. Ej: 982CRW
+    // - 7 caracteres: 1 letra + 3 números + 3 letras. Ej: A264JDN
+    // Se descartan dominios tipo auto y basura pegada de "Tipo".
+    const bruto = normalizarMayus(value)
+      .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR|FECHA)\b.*$/i, "")
       .replace(/[^A-Z0-9]/g, "");
 
-    // Patrones frecuentes: AA862DN, A264JDN, ABC123.
-    const patronNuevoAuto = limpio.match(/[A-Z]{2}\d{3}[A-Z]{2}/);
-    if (patronNuevoAuto) return patronNuevoAuto[0].slice(0, DOMINIO_MAX_ALFANUM);
-    const patronMoto = limpio.match(/[A-Z]\d{3}[A-Z]{3}/);
-    if (patronMoto) return patronMoto[0].slice(0, DOMINIO_MAX_ALFANUM);
-    const patronViejo = limpio.match(/[A-Z]{3}\d{3}/);
-    if (patronViejo) return patronViejo[0].slice(0, DOMINIO_MAX_ALFANUM);
+    function formarMoto7(seg) {
+      if (!seg || seg.length !== 7) return "";
+      const out = charDominioLetra(seg[0])
+        + charDominioNumero(seg[1])
+        + charDominioNumero(seg[2])
+        + charDominioNumero(seg[3])
+        + charDominioLetra(seg[4])
+        + charDominioLetra(seg[5])
+        + charDominioLetra(seg[6]);
+      return /^[A-Z][0-9]{3}[A-Z]{3}$/.test(out) ? out : "";
+    }
 
-    return limpio.slice(0, DOMINIO_MAX_ALFANUM);
+    function formarMoto6(seg) {
+      if (!seg || seg.length !== 6) return "";
+      const out = charDominioNumero(seg[0])
+        + charDominioNumero(seg[1])
+        + charDominioNumero(seg[2])
+        + charDominioLetra(seg[3])
+        + charDominioLetra(seg[4])
+        + charDominioLetra(seg[5]);
+      return /^[0-9]{3}[A-Z]{3}$/.test(out) ? out : "";
+    }
+
+    // Primero probar el comienzo exacto del campo, que normalmente ya viene aislado.
+    const directo7 = formarMoto7(bruto.slice(0, 7));
+    if (directo7) return directo7;
+    const directo6 = formarMoto6(bruto.slice(0, 6));
+    if (directo6) return directo6;
+
+    // Si el OCR insertó basura antes/después, escanear ventanas.
+    for (let i = 0; i <= Math.max(0, bruto.length - 7); i++) {
+      const d = formarMoto7(bruto.slice(i, i + 7));
+      if (d) return d;
+    }
+    for (let i = 0; i <= Math.max(0, bruto.length - 6); i++) {
+      const d = formarMoto6(bruto.slice(i, i + 6));
+      if (d) return d;
+    }
+    return "";
   }
 
   function normalizarNumero(value) {
@@ -192,6 +250,59 @@
     return buscarPrimero(limpio, re);
   }
 
+  function limpiarTextoMarcaModelo(value) {
+    return normalizarMayus(value)
+      .replace(/\b(?:TIPO|T1PO|TIP0|DOMINIO|DNI|PROPIETARIO|LUGAR|NO\s+PRESENTA)\b.*$/i, "")
+      .replace(/[+\-:._;,]/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function limpiarMarcaOcr(value) {
+    let marca = limpiarTextoMarcaModelo(value);
+    for (const conocida of MARCAS_MOTO_CONOCIDAS) {
+      const re = new RegExp(`(^|\\s)${conocida.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`, "i");
+      if (re.test(marca)) return conocida;
+    }
+    // Quitar restos OCR típicos: "HONDA NE E", "ZANELLA _", "SUZUKI E E".
+    const tokens = marca.split(/\s+/).filter(Boolean);
+    while (tokens.length > 1 && tokens[tokens.length - 1].length <= 2) tokens.pop();
+    return tokens.join(" ").trim();
+  }
+
+  function limpiarModeloOcr(value) {
+    let modelo = limpiarTextoMarcaModelo(value);
+    // No permitir signos en modelo. Mantener letras/números y espacios.
+    modelo = modelo.replace(/[^A-Z0-9 ]/g, " ").replace(/\s{2,}/g, " ").trim();
+
+    // Si hay basura OCR luego del modelo, recortar con patrones frecuentes de motos.
+    const conocidos = [
+      /\bZB\s*110\b/i, /\bCG\s*150\b/i, /\bGSX\s*150\b/i, /\bWAVE\s*110\s*S\b/i,
+      /\bWAVE\s*110\b/i, /\bWAVE\b/i, /\bBREZZA\b/i, /\bG110\b/i
+    ];
+    for (const patron of conocidos) {
+      const m = modelo.match(patron);
+      if (m && m[0]) return normalizarMayus(m[0]);
+    }
+
+    // Regla general: si después de un token con números quedan letras sueltas OCR, eliminarlas.
+    const tokens = modelo.split(/\s+/).filter(Boolean);
+    if (tokens.length > 1) {
+      let lastUseful = tokens.length - 1;
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (/\d/.test(tokens[i])) {
+          lastUseful = i;
+          break;
+        }
+      }
+      if (lastUseful < tokens.length - 1) {
+        const extras = tokens.slice(lastUseful + 1);
+        if (extras.every((t) => t.length <= 2)) return tokens.slice(0, lastUseful + 1).join(" ");
+      }
+    }
+    return modelo;
+  }
+
   function extraerModelo(texto) {
     const limpio = normalizarBusqueda(texto);
     let modelo = buscarPrimero(limpio, [
@@ -199,7 +310,7 @@
       /Mode[l1]o\s*:\s*([^\n]+)/i,
     ]);
     modelo = modelo.replace(/\s+Tipo\s*:.*$/i, "").trim();
-    return cortarEnEtiquetas(modelo).replace(/[.:;,\-\s]+$/g, "").trim();
+    return limpiarModeloOcr(cortarEnEtiquetas(modelo));
   }
 
   function extraerMarca(texto) {
@@ -208,7 +319,7 @@
       /Marca\s*:\s*([^\n]+)/i,
       /Mar[cç]a\s*:\s*([^\n]+)/i,
     ]);
-    return cortarEnEtiquetas(marca);
+    return limpiarMarcaOcr(cortarEnEtiquetas(marca));
   }
 
   function extraerDominio(texto) {
@@ -240,60 +351,75 @@
     return "";
   }
 
+  function normalizarActaCandidato(value) {
+    const raw = String(value || "");
+    // Evita falsos positivos como texto de encabezado convertido a números
+    // por confusiones OCR. Debe haber suficientes dígitos reales en el candidato.
+    if ((raw.match(/\d/g) || []).length < 6) return "";
+    const numero = normalizarNumeroOcrEstricto(raw);
+    // El número de acta APSV tiene 9 dígitos. Ej: 070544272.
+    const matches = numero.match(/\d{9}/g) || [];
+    const preferido = matches.find((n) => /^0\d{8}$/.test(n)) || matches[0] || "";
+    return preferido || "";
+  }
+
   function extraerActa(texto) {
     const limpio = normalizarBusqueda(texto);
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
 
-    // Primer intento: línea del encabezado del acta. Ejemplos reales/OCR:
-    // "ACTA NRO. 070544272", "ACTA NRO . 070544272", "ACTA N° 070544272".
-    const lineasActa = lineas.filter((linea) => /ACTA/i.test(linea));
+    // 1) Preferir línea ACTA NRO. No aceptar menos de 9 dígitos para no confundir DNI/códigos.
+    const lineasActa = lineas.filter((linea) => /ACTA|NRO|NR0|N[°º]/i.test(linea));
     for (const linea of lineasActa) {
-      const porEtiqueta = linea.match(/ACTA\s*(?:N\s*)?(?:RO|R0|º|°|O|0|UMERO|ÚMERO)?\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i);
+      const normal = linea.replace(/[^A-Z0-9OoQqIl|SsZzGgBb°º.:,;*\s-]/gi, " ");
+      const porEtiqueta = normal.match(/ACTA[\s\S]{0,45}?([0-9OoQqIl|SsZzGgBb\s]{8,14})/i);
       if (porEtiqueta && porEtiqueta[1]) {
-        const numero = normalizarNumero(porEtiqueta[1]).slice(0, 12);
-        if (numero.length >= 6) return numero;
+        const acta = normalizarActaCandidato(porEtiqueta[1]);
+        if (acta) return acta;
       }
-
-      const primerNumeroEnLineaActa = linea.match(/([0-9OoIl ]{6,16})/i);
-      if (primerNumeroEnLineaActa && primerNumeroEnLineaActa[1]) {
-        const numero = normalizarNumero(primerNumeroEnLineaActa[1]).slice(0, 12);
-        if (numero.length >= 6) return numero;
-      }
+      const cualquiera = normalizarActaCandidato(normal);
+      if (cualquiera) return cualquiera;
     }
 
-    // Segundo intento: texto plano, por si Tesseract partió el renglón o perdió el punto.
-    const plano = limpio.replace(/\n+/g, " ");
-    const acta = buscarPrimero(plano, [
-      /ACTA\s*(?:NRO|NR0|N\s*RO|N\s*R0|Nº|N°|NO|N0|NUMERO|NÚMERO)\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i,
-      /ACTA[^0-9OoIl]{0,50}([0-9OoIl ]{6,16})/i,
-      /NRO\s*[º°.:,;\- ]*([0-9OoIl ]{6,16})/i,
-    ]);
-    return normalizarNumero(acta).slice(0, 12);
+    // 2) Barcode/encabezado con asteriscos: *070544272*.
+    const porAsterisco = limpio.match(/\*\s*([0-9OoQqIl|SsZzGgBb\s]{8,14})\s*\*/i);
+    if (porAsterisco && porAsterisco[1]) {
+      const acta = normalizarActaCandidato(porAsterisco[1]);
+      if (acta) return acta;
+    }
+
+    // 3) Fallback acotado: cualquier secuencia de 9 dígitos que empiece con 0.
+    const all = limpio.match(/[0-9OoQqIl|SsZzGgBb]{9}/g) || [];
+    for (const cand of all) {
+      const acta = normalizarActaCandidato(cand);
+      if (acta && /^0\d{8}$/.test(acta)) return acta;
+    }
+    return "";
   }
 
   function agregarCodigoUnico(codigos, value) {
-    const codigo = normalizarNumeroOcrEstricto(value).slice(0, 8);
-    if (codigo.length >= 3 && codigo.length <= 6 && !codigos.includes(codigo)) codigos.push(codigo);
+    const digitos = normalizarNumeroOcrEstricto(value);
+    const matches = digitos.match(/\d{4,5}/g) || [];
+    for (const codigo of matches) {
+      if (codigo.length >= 4 && codigo.length <= 5 && !codigos.includes(codigo)) codigos.push(codigo);
+      if (codigos.length >= 6) break;
+    }
   }
 
   function agregarCodigoDesdeSegmento(codigos, value) {
-    // Acepta variantes reales del OCR: "5041", "5 041", "5O41", "SO41".
-    // Solo toma la primera secuencia numérica del segmento que sigue a "Cod:".
     const segmento = String(value || "")
       .replace(/[\r\n]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    const match = segmento.match(/[0-9OoQqIl|SsZzGgBb](?:[0-9OoQqIl|SsZzGgBb\s]{1,10})[0-9OoQqIl|SsZzGgBb]/);
-    if (match && match[0]) agregarCodigoUnico(codigos, match[0]);
+    agregarCodigoUnico(codigos, segmento);
   }
 
   function extraerBloqueInfracciones(lineas) {
-    const idx = lineas.findIndex((linea) => /INFRACCIONES?/i.test(linea));
+    const idx = lineas.findIndex((linea) => /INFRACCIONES?|INFRACCI0NES?|INFRACC1ONES?/i.test(linea));
     if (idx < 0) return [];
     const out = [];
-    for (let i = idx + 1; i < Math.min(lineas.length, idx + 14); i++) {
+    for (let i = idx + 1; i < Math.min(lineas.length, idx + 18); i++) {
       const linea = lineas[i];
-      if (/^(Observaciones|Medidas\s+Cautelares|Retiene\s+Licencia|Secuestra\s+Veh[iíi]culo|Otra\s+Medida|Juzgado)\b/i.test(linea)) break;
+      if (/^(Observaciones|Medidas\s+Cautelares|Retiene\s+Licencia|Secuestra\s+Veh[iíi]culo|Otra\s+Medida|Juzgado|Firma)\b/i.test(linea)) break;
       out.push(linea);
     }
     return out;
@@ -303,50 +429,24 @@
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
-
-    // Regex flexible para casos reales/OCR:
-    // "Cod:5041", "Cod: 5041", "Cod :5041", "Cód. 5041", "Codigo 5041",
-    // "C0d: 5041" y variantes con espacios entre letras. También contempla lecturas
-    // imperfectas del rótulo como "Cqd", "Coa", "Ccd" o "Cod;".
-    const reCodFlexible = /(?:^|[^A-Z0-9])C\s*[o0óqQaA]\s*[dDqQaA](?:\s*[ií1]\s*g\s*[o0])?\s*[º°.:,;\- ]*([0-9OoQqIl|SsZzGgBb\s]{3,16})/ig;
-
-    function extraerNumerosCortosDeLinea(linea) {
-      // Fallback robusto para el bloque INFRACCIONES: cuando el OCR no lee "Cod"
-      // exacto, igualmente toma números de 3 a 6 dígitos que aparecen cerca del
-      // comienzo de la línea de infracción. Ejemplo real: "Coq:5041 ..." o "Cod;4084 ...".
-      const normal = String(linea || "")
-        .replace(/^[^0-9OoQqIl|SsZzGgBb]{0,14}/, "")
-        .trim();
-      const candidatoInicio = normal.match(/^([0-9OoQqIl|SsZzGgBb](?:[0-9OoQqIl|SsZzGgBb\s]{1,8})[0-9OoQqIl|SsZzGgBb])/);
-      if (candidatoInicio && candidatoInicio[1]) agregarCodigoDesdeSegmento(codigos, candidatoInicio[1]);
-
-      const zonaInicial = String(linea || "").slice(0, 28);
-      const matches = zonaInicial.match(/[0-9OoQqIl|SsZzGgBb](?:[0-9OoQqIl|SsZzGgBb\s]{1,8})[0-9OoQqIl|SsZzGgBb]/g) || [];
-      for (const m of matches) agregarCodigoDesdeSegmento(codigos, m);
-    }
-
-    // 1) Primero recorrer TODO el OCR, no quedarse con el primer match.
-    let match;
-    while ((match = reCodFlexible.exec(limpio))) {
-      if (match && match[1]) agregarCodigoDesdeSegmento(codigos, match[1]);
-      if (codigos.length >= 6) break;
-    }
-
-    // 2) Reforzar sobre el bloque INFRACCIONES. Esto evita perder códigos cuando
-    // Tesseract parte el texto en líneas raras o el primer recorrido se salta uno.
     const bloqueLineas = extraerBloqueInfracciones(lineas);
-    const bloque = bloqueLineas.join(" ");
-    reCodFlexible.lastIndex = 0;
+    const bloque = bloqueLineas.length ? bloqueLineas.join("\n") : limpio;
+
+    // Reglas de usuario: códigos de falta = 4 o 5 dígitos.
+    // Buscar solo números vinculados a etiqueta Cod/Cód/C0d/Cqd/Cod.
+    const reCodFlexible = /(?:^|[\n\s])C\s*[o0óqQ]\s*[dcl](?:\s*[ií1]\s*g\s*[o0])?\s*[º°.:,;\- ]*([0-9OoQqIl|SsZzGgBb\s]{4,12})/ig;
+    let match;
     while ((match = reCodFlexible.exec(bloque))) {
       if (match && match[1]) agregarCodigoDesdeSegmento(codigos, match[1]);
       if (codigos.length >= 6) break;
     }
 
-    // 3) Fallback dentro del bloque: no depender del rótulo "Cod". Si el OCR lee
-    // mal la palabra, igual rescata 5041 / 4084 cuando están al inicio de las líneas.
-    if (bloqueLineas.length) {
+    // Fallback muy acotado: solo si no detectó nada y solo dentro del bloque INFRACCIONES.
+    // Acepta líneas que empiezan con número por pérdida total de "Cod" en OCR.
+    if (!codigos.length && bloqueLineas.length) {
       for (const linea of bloqueLineas) {
-        extraerNumerosCortosDeLinea(linea);
+        const m = linea.trim().match(/^([0-9OoQqIl|SsZzGgBb]{4,5})\b/);
+        if (m && m[1]) agregarCodigoUnico(codigos, m[1]);
         if (codigos.length >= 6) break;
       }
     }
