@@ -30,8 +30,11 @@
   // Patrón fuerte: 0 + serie 5/6/7/8/9 + 0 + 6 dígitos.
   // Esto evita falsos como 010705342, 970544361, 797054427, 056140705 o 007053422.
   const ACTA_PATRON_9_DIGITOS = /^0[5-9]0\d{6}$/;
+  const PATENTES_OCR460_SCRIPT = "./modules/patentes.js?v=ocr460-patentes-20260614";
+  const CODIGOS_INCOMPATIBLES_MOTO_460 = new Set(["13018"]);
 
   let promesaTesseract = null;
+  let promesaPatentesOcr460 = null;
   let inicializado = false;
   let ultimoTextoOcr = "";
   let ultimosDatos = null;
@@ -86,6 +89,105 @@
       script.onerror = () => reject(new Error("No se pudo cargar Tesseract.js"));
       document.head.appendChild(script);
     });
+  }
+
+  function obtenerModuloPatentesOcr460() {
+    return window.WSP_OCR460_PATENTES || window.WSP?.modules?.patentesOcr460 || null;
+  }
+
+  function cargarPatentesOcr460() {
+    if (obtenerModuloPatentesOcr460()) return Promise.resolve(obtenerModuloPatentesOcr460());
+    if (promesaPatentesOcr460) return promesaPatentesOcr460;
+
+    promesaPatentesOcr460 = new Promise((resolve) => {
+      try {
+        const existente = Array.from(document.scripts || []).find((s) => String(s.src || "").includes("patentes.js"));
+        if (existente) {
+          setTimeout(() => resolve(obtenerModuloPatentesOcr460()), 0);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src = PATENTES_OCR460_SCRIPT;
+        script.async = true;
+        script.onload = () => resolve(obtenerModuloPatentesOcr460());
+        script.onerror = () => {
+          console.warn("[WSP OCR 460] No se pudo cargar patentes.js; se usan reglas internas.");
+          resolve(null);
+        };
+        document.head.appendChild(script);
+      } catch (error) {
+        console.warn("[WSP OCR 460] Error cargando patentes.js.", error);
+        resolve(null);
+      }
+    });
+
+    return promesaPatentesOcr460;
+  }
+
+
+  function cargarAprendizajesPatentesAlEntrarInformes() {
+    cargarPatentesOcr460()
+      .then((mod) => {
+        if (mod && typeof mod.cargarAprendizajesSupabaseEnSegundoPlano === "function") {
+          mod.cargarAprendizajesSupabaseEnSegundoPlano();
+        }
+      })
+      .catch((error) => {
+        console.warn("[WSP OCR 460] No se pudo precargar patentes aprendidas.", error);
+      });
+  }
+
+  function activarPrecargaPatentesEnInformes() {
+    const dispararSiInformes = () => {
+      const tipo = String(getEl("tipo")?.value || "").toUpperCase();
+      const tipoInforme = String(getEl("tipoInforme")?.value || "").toUpperCase();
+      const bloqueInformes = getEl("bloqueInformes") || getEl("informes") || getEl("bloqueInforme");
+      const bloqueVisible = bloqueInformes
+        ? (bloqueInformes.offsetParent !== null || getComputedStyle(bloqueInformes).display !== "none")
+        : false;
+
+      if (tipo === "INFORMES" || tipoInforme || bloqueVisible) cargarAprendizajesPatentesAlEntrarInformes();
+    };
+
+    [getEl("tipo"), getEl("tipoInforme")].filter(Boolean).forEach((el) => {
+      el.addEventListener("change", dispararSiInformes);
+      el.addEventListener("click", dispararSiInformes);
+    });
+
+    setTimeout(dispararSiInformes, 350);
+  }
+
+  function buscarDominioEnPatentesJs(value) {
+    const token = limpiarTokenDominioOcr(value);
+    if (!token) return "";
+    const mod = obtenerModuloPatentesOcr460();
+    if (!mod) return "";
+
+    try {
+      if (typeof mod.buscar === "function") {
+        const encontrado = limpiarTokenDominioOcr(mod.buscar(token));
+        if (encontrado && esDominioMotoValido(encontrado)) return encontrado;
+      }
+
+      const tablas = [mod.correcciones, mod.aprendidas, mod.patentes];
+      for (const tabla of tablas) {
+        if (!tabla) continue;
+        if (Array.isArray(tabla)) {
+          const directo = tabla.map(limpiarTokenDominioOcr).find((v) => v === token);
+          if (directo && esDominioMotoValido(directo)) return directo;
+          continue;
+        }
+        if (typeof tabla === "object") {
+          const val = limpiarTokenDominioOcr(tabla[token]);
+          if (val && esDominioMotoValido(val)) return val;
+        }
+      }
+    } catch (error) {
+      console.warn("[WSP OCR 460] Error consultando patentes.js.", error);
+    }
+
+    return "";
   }
 
   async function asegurarTesseract() {
@@ -255,7 +357,15 @@
       }
     });
 
-    if (cambio) guardarTablaDominiosAprendidos(tabla);
+    if (cambio) {
+      guardarTablaDominiosAprendidos(tabla);
+      try {
+        const mod = obtenerModuloPatentesOcr460();
+        if (mod && typeof mod.aprender === "function") mod.aprender(Array.from(candidatos), correcto);
+      } catch (error) {
+        console.warn("[WSP OCR 460] No se pudo sincronizar aprendizaje con patentes.js.", error);
+      }
+    }
     return cambio;
   }
 
@@ -283,6 +393,9 @@
   function corregirDominioOcrConocido(dominioOValor) {
     const token = limpiarTokenDominioOcr(dominioOValor);
     if (!token) return "";
+
+    const desdePatentes = buscarDominioEnPatentesJs(token);
+    if (desdePatentes) return desdePatentes;
 
     const aprendido = buscarDominioAprendidoEnToken(token);
     if (aprendido) return aprendido;
@@ -732,6 +845,17 @@
     return consensoActaCandidatos(candidatos);
   }
 
+  function esActaDeMoto(texto) {
+    const t = sinAcentos(String(texto || "").toUpperCase()).replace(/\s+/g, " ");
+    return /TIPO\s*[:;.]?\s*MOTOCICLETAS?|\bMOTOCICLETAS?\b|\bMOTO\b|\bCICLO\b|\bCUATRIC\b/.test(t);
+  }
+
+  function filtrarCodigosPorTipoVehiculo460(codigos, texto) {
+    const lista = Array.from(new Set((codigos || []).map((c) => String(c || "").replace(/\D+/g, "")).filter(Boolean)));
+    if (!esActaDeMoto(texto)) return lista;
+    return lista.filter((codigo) => !CODIGOS_INCOMPATIBLES_MOTO_460.has(codigo));
+  }
+
   function obtenerSetCodigosNomenclador460() {
     const out = new Set();
     try {
@@ -975,7 +1099,7 @@
       agregarCodigosPorLineasSemanticas(zona, codigos, setCodigos);
     }
 
-    return codigos;
+    return filtrarCodigosPorTipoVehiculo460(codigos, limpio);
   }
 
   function extraerMedidas(texto) {
@@ -1288,6 +1412,7 @@
 
   function init() {
     if (inicializado) return;
+    activarPrecargaPatentesEnInformes();
     const r = refs();
     if (!r.btn || !r.input) return;
     inicializado = true;
@@ -1329,6 +1454,8 @@
     getUltimoTextoOcr: () => ultimoTextoOcr,
     getUltimosDatos: () => ultimosDatos,
     getDominiosAprendidos: leerTablaDominiosAprendidos,
+    cargarPatentesOcr460,
+    cargarAprendizajesPatentesAlEntrarInformes,
     aprenderDominioOcr,
   };
 
@@ -1340,5 +1467,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-aprendizaje");
+  console.log("[WSP OCR 460] cargado v9-patentes-supabase-bg");
 })();
