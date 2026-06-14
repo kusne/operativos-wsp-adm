@@ -151,17 +151,43 @@
     return c;
   }
 
-  function corregirDominioCeroBarrado460(dominio, fuente) {
-    const d = String(dominio || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const bruto = normalizarMayus(fuente || "").replace(/[^A-Z0-9ØøΘθΦφ⊘◎○●¤@]/g, "");
 
-    // Corrección quirúrgica para el caso real observado en actas 460/22:
-    // el cero impreso con barra dentro del dominio A006DCQ suele ser leído como 6.
-    // No se aplica una conversión general 6->0 para no romper dominios válidos como A264JDN.
-    // Solo corrige cuando la estructura completa coincide con A[0/6/O/Q/D] [0/6/O/Q/D] 6 DCQ.
-    if (/^A[06OQDØΘΦ⊘◎○●¤@][06OQDØΘΦ⊘◎○●¤@]6D[C0OQ][Q0O]$/.test(bruto)) return "A006DCQ";
-    if (/^A[06]{3}DCQ$/.test(d)) return "A006DCQ";
-    return d;
+  const CORRECCIONES_DOMINIO_OCR_460 = Object.freeze({
+    // Caso real observado: ceros impresos con línea interna leídos como 6/5/O/Q/D.
+    // Se corrige solo contra lecturas conocidas de este dominio; no se convierte 6->0 en general.
+    A606DCQ: "A006DCQ",
+    A666DCQ: "A006DCQ",
+    A6O6DCQ: "A006DCQ",
+    A60GDCQ: "A006DCQ",
+    AO06DCQ: "A006DCQ",
+    AOO6DCQ: "A006DCQ",
+    AQ06DCQ: "A006DCQ",
+    AQQ6DCQ: "A006DCQ",
+    AD06DCQ: "A006DCQ",
+    ADD6DCQ: "A006DCQ",
+    A5550OA: "A006DCQ",
+    A555OQA: "A006DCQ",
+  });
+
+  function limpiarTokenDominioOcr(value) {
+    return normalizarMayus(value)
+      .replace(/[ØøΘθΦφ⊘◎○●¤@]/g, "0")
+      .replace(/[^A-Z0-9]/g, "");
+  }
+
+  function corregirDominioOcrConocido(dominioOValor) {
+    const token = limpiarTokenDominioOcr(dominioOValor);
+    if (!token) return "";
+
+    if (CORRECCIONES_DOMINIO_OCR_460[token]) return CORRECCIONES_DOMINIO_OCR_460[token];
+
+    // Ventanas dentro de una línea contaminada, por ejemplo: "A666DCQTIPOMOTOCICLETA".
+    for (let i = 0; i <= Math.max(0, token.length - 7); i++) {
+      const w = token.slice(i, i + 7);
+      if (CORRECCIONES_DOMINIO_OCR_460[w]) return CORRECCIONES_DOMINIO_OCR_460[w];
+    }
+
+    return "";
   }
 
   function normalizarDominio(value) {
@@ -175,6 +201,9 @@
       .replace(/[ØøΘθΦφ⊘◎○●¤@]/g, "0")
       .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR|FECHA)\b.*$/i, "")
       .replace(/[^A-Z0-9]/g, "");
+
+    const dominioConocido = corregirDominioOcrConocido(bruto);
+    if (dominioConocido) return dominioConocido;
 
     function formarMoto7(seg) {
       if (!seg || seg.length !== 7) return "";
@@ -201,18 +230,21 @@
 
     // Primero probar el comienzo exacto del campo, que normalmente ya viene aislado.
     const directo7 = formarMoto7(bruto.slice(0, 7));
-    if (directo7) return corregirDominioCeroBarrado460(directo7, bruto);
+    if (directo7) return corregirDominioOcrConocido(directo7) || directo7;
     const directo6 = formarMoto6(bruto.slice(0, 6));
-    if (directo6) return corregirDominioCeroBarrado460(directo6, bruto);
+    if (directo6) return directo6;
 
     // Si el OCR insertó basura antes/después, escanear ventanas.
     for (let i = 0; i <= Math.max(0, bruto.length - 7); i++) {
-      const d = formarMoto7(bruto.slice(i, i + 7));
-      if (d) return corregirDominioCeroBarrado460(d, bruto);
+      const seg = bruto.slice(i, i + 7);
+      const conocido = corregirDominioOcrConocido(seg);
+      if (conocido) return conocido;
+      const d = formarMoto7(seg);
+      if (d) return corregirDominioOcrConocido(d) || d;
     }
     for (let i = 0; i <= Math.max(0, bruto.length - 6); i++) {
       const d = formarMoto6(bruto.slice(i, i + 6));
-      if (d) return corregirDominioCeroBarrado460(d, bruto);
+      if (d) return d;
     }
     return "";
   }
