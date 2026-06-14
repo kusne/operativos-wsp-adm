@@ -1,5 +1,5 @@
 {
-  "version": "paso110-wsp-optimizacion-carga-ventana-unica-20260614",
-  "updated_at": "2026-06-14",
-  "descripcion": "Optimiza carga inicial de operativos con preload Supabase, evita consulta duplicada de contador, no bloquea bootstrap por limpieza de cache y desactiva cierre automático; agrega control de ventana única sin tocar reglas funcionales."
+  "version": "paso106-wsp-foto-abre-camara-por-defecto-20260610",
+  "updated_at": "2026-06-10",
+  "descripcion": "WSP mantiene bloqueo de Enviar hasta fotos listas y el botón principal de foto abre cámara por defecto en celular."
 }
