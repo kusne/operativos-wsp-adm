@@ -24,9 +24,11 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Los números de acta APSV se validan como 9 dígitos. No se fuerza prefijo
-  // 070 porque pueden existir series 050, 060, 080, 090, etc.
-  const ACTA_PATRON_9_DIGITOS = /^\d{9}$/;
+  // Los números de acta APSV se validan como 9 dígitos y siempre comienzan en 0.
+  // No se fuerza prefijo 070 porque pueden existir series 050, 060, 080, 090, etc.
+  // En las actas observadas el patrón útil es 0X0 + 6 dígitos. Esto evita falsos
+  // como 970544361, 797054427, 056140705 o 007053422.
+  const ACTA_PATRON_9_DIGITOS = /^0[1-9]0\d{6}$/;
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -154,6 +156,9 @@
     // - 7 caracteres: 1 letra + 3 números + 3 letras. Ej: A264JDN
     // Se descartan dominios tipo auto y basura pegada de "Tipo".
     const bruto = normalizarMayus(value)
+      // Cero impreso con barra/diagonal: Tesseract puede devolver Ø, Θ, Φ, Q o signos parecidos.
+      // Se conserva como 0 antes de limpiar caracteres no alfanuméricos.
+      .replace(/[ØøΘθΦφ⊘◎○●¤@]/g, "0")
       .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR|FECHA)\b.*$/i, "")
       .replace(/[^A-Z0-9]/g, "");
 
@@ -382,9 +387,9 @@
 
     // 1) Preferir la línea exacta de dominio y cortar antes de "Tipo".
     for (const linea of lineas) {
-      if (!/Dom[ií1]nio/i.test(linea)) continue;
+      if (!/(Dom[ií1]nio|D[o0]m[ií1]n[ií1]o|D[o0]m[a-z0-9]{1,5}o)/i.test(linea)) continue;
       let valor = linea
-        .replace(/^.*?Dom[ií1]nio\s*[º°.:,;\- ]*/i, "")
+        .replace(/^.*?(?:Dom[ií1]nio|D[o0]m[ií1]n[ií1]o|D[o0]m[a-z0-9]{1,5}o)\s*[º°.:,;\- ]*/i, "")
         .replace(/\b(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b.*$/i, "")
         .trim();
       const dominio = normalizarDominio(valor);
@@ -393,7 +398,7 @@
 
     // 2) Fallback de texto plano, acotado al valor inmediatamente posterior a Dominio.
     const plano = limpio.replace(/\n+/g, " ");
-    const match = plano.match(/Dom[ií1]nio\s*[º°.:,;\- ]*([A-Z0-9\s\-]{5,18})(?=\s+(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b|$)/i);
+    const match = plano.match(/(?:Dom[ií1]nio|D[o0]m[ií1]n[ií1]o|D[o0]m[a-z0-9]{1,5}o)\s*[º°.:,;\- ]*([A-Z0-9ØøΘθΦφ⊘◎○●¤@\s\-]{5,20})(?=\s+(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b|$)/i);
     if (match && match[1]) return normalizarDominio(match[1]);
 
     // 3) Fallback final: buscar patrones de dominio en todo el OCR.
@@ -407,17 +412,30 @@
 
   function normalizarActaCandidato(value) {
     const raw = String(value || "");
-    if ((raw.match(/\d/g) || []).length < 7) return "";
-    let numero = normalizarNumeroOcrEstricto(raw);
-    const crudos = numero.match(/\d{9}/g) || [];
+    if ((raw.match(/[0-9OoQqIl|SsZzGgBb]/g) || []).length < 8) return "";
+    const numero = normalizarNumeroOcrEstricto(raw);
     const normalizados = [];
 
-    for (const n0 of crudos) {
-      let n = n0;
-      // En números de acta solo validamos 9 dígitos. No forzamos prefijo fijo
-      // porque las series pueden empezar 050/060/070/080/090.
-      if (/^\d{9}$/.test(n)) normalizados.push(n);
+    function agregarSiValida(n, motivo) {
+      if (!n) return;
+      if (ACTA_PATRON_9_DIGITOS.test(n) && !normalizados.includes(n)) normalizados.push(n);
     }
+
+    // Probar todas las ventanas de 9 dígitos.
+    for (let i = 0; i <= Math.max(0, numero.length - 9); i++) {
+      const n0 = numero.slice(i, i + 9);
+      if (!/^\d{9}$/.test(n0)) continue;
+
+      // Regla fuerte: el acta empieza con 0 y el tercer dígito suele ser 0
+      // (050/060/070/080/090...).
+      agregarSiValida(n0, "directo");
+
+      // Corrección acotada: si OCR lee el primer 0 como 9/8/6/5 pero el resto
+      // conserva forma 0X0, corregir solo el primer carácter.
+      // Ejemplo real: 970544361 -> 070544361.
+      if (/^[9865][1-9]0\d{6}$/.test(n0)) agregarSiValida("0" + n0.slice(1), "primer_digito");
+    }
+
     return normalizados[0] || "";
   }
 
@@ -425,8 +443,8 @@
     if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
     const ctx = String(contexto || "");
     let score = 0;
-    // Cualquier acta válida tiene 9 dígitos. No se premia un prefijo concreto.
-    if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 12;
+    // Cualquier acta válida tiene 9 dígitos y empieza en 0. No se premia 070 en particular.
+    if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 16;
     if (/ACTA/i.test(ctx)) score += 22;
     if (/NRO|NR0|N[°º]/i.test(ctx)) score += 12;
     // El número entre asteriscos del encabezado/barcode suele ser más confiable
@@ -448,7 +466,7 @@
 
   function consensoActaCandidatos(candidatos) {
     const validos = (candidatos || [])
-      .filter((c) => /^\d{9}$/.test(c.acta))
+      .filter((c) => ACTA_PATRON_9_DIGITOS.test(c.acta))
       .sort((a, b) => b.score - a.score);
     if (!validos.length) return "";
 
@@ -470,7 +488,7 @@
         }
         out += Array.from(votos.entries()).sort((a, b) => b[1] - a[1])[0][0];
       }
-      if (/^\d{9}$/.test(out)) return out;
+      if (ACTA_PATRON_9_DIGITOS.test(out)) return out;
     }
 
     return base.acta;
@@ -599,17 +617,21 @@
   }
 
   function codigoPorTextoInfraccion(linea) {
-    const t = sinAcentos(String(linea || "").toUpperCase()).replace(/\s+/g, " ");
+    let t = sinAcentos(String(linea || "").toUpperCase()).replace(/\s+/g, " ");
+    // Normalización semántica: acá interesa leer palabras, no números exactos.
+    t = t.replace(/0/g, "O").replace(/1/g, "I").replace(/5/g, "S").replace(/8/g, "B");
     const out = [];
 
+    function add(c) { if (!out.includes(c)) out.push(c); }
+
     // Fallback semántico acotado a frases habituales del acta. Sirve cuando OCR rompe "Cod" o agrega dígitos.
-    if (/CASCO|BANDOLERA|CHALECO/.test(t)) out.push("4084");
-    if (/COBERTURA DE SEGURO|SEGURO OBLIGATORIO VIGEN/.test(t)) out.push("5041");
-    if (/COMPROBANTE DEL SEGURO/.test(t)) out.push("5038");
-    if (/HABILITAD/.test(t)) out.push("9119");
-    if (/(NO EXHIB|EXHIBIR).*(LICENCIA|DOCUMENTACION|DOCUMENTO|CEDULA)|LICENCIA DE CONDUCTOR O CUALQUIER OTRA/.test(t)) out.push("5011");
-    if (/PLACAS DE IDENTIFICACION|SIN LAS PLACAS|DOMINIO CORRESPONDIENTES/.test(t)) out.push("11029");
-    if (/REVISION TECNICA|RTO\b/.test(t)) out.push("13018");
+    if (/CASCO|BANDOLERA|CHALECO|MOTO.*CONDUCTOR.*ACOMP|CICLO.*CUATRIC/.test(t)) add("4084");
+    if (/COBERTURA DE SEGURO|SEGURO OBLIGATORIO VIGEN|SIN TENER.*SEGURO/.test(t)) add("5041");
+    if (/COMPROBANTE DEL SEGURO|SIN PORTAR.*SEGURO/.test(t)) add("5038");
+    if (/HABILITAD|SIN HABER SIDO/.test(t)) add("9119");
+    if (/(NO EXHIB|EXHIBIR).*(LICENCIA|DOCUMENTACION|DOCUMENTO|CEDULA)|LICENCIA DE CONDUCTOR O CUALQUIER OTRA/.test(t)) add("5011");
+    if (/PLACAS DE IDENTIFICACION|SIN LAS PLACAS|IDENTIFICACION DE DOMINIO|DOMINIO CORRESPONDIENTES/.test(t)) add("11029");
+    if (/REVISION TECNICA|RTO\b/.test(t)) add("13018");
 
     return out;
   }
@@ -665,7 +687,7 @@
     // Patrón deliberadamente flexible: Tesseract a veces lee "Cod" como Cqd,
     // C0d, Coq, Cod;, Cód, o separa letras. Exige que haya un número pegado
     // inmediatamente después para no confundir texto común.
-    const reCod = /(?:C\s*[O0ÓQ]\s*[DCLQ]?|C[O0ÓQ]D|C[O0ÓQ]Q|C[QO0]D|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB]{4,6})/ig;
+    const reCod = /(?:C\s*[O0ÓQ]\s*[DCLQ]?|C[O0ÓQ]D|C[O0ÓQ]Q|C[QO0]D|C0D|CQD|COQ|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB]{4,6})/ig;
     let m;
     while ((m = reCod.exec(texto))) {
       const base = normalizarCodigoOCRCorto(m[1]);
@@ -727,7 +749,7 @@
     // saltos de línea o separa "Cod" del número.
     const bloqueTexto = (bloqueOriginal.length ? bloqueOriginal : bloqueLineas).join("\n");
     if (bloqueTexto) {
-      const partesCod = bloqueTexto.split(/(?=C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
+      const partesCod = bloqueTexto.split(/(?=C\s*[O0ÓQ]\s*[DCLQ]|C0D|CQD|COQ|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
       for (const parte of partesCod) {
         procesarParte(parte);
         if (codigos.length >= 6) break;
@@ -744,7 +766,7 @@
     if (!codigos.length || /HABILITAD|PLACAS|SEGURO|CASCO|BANDOLERA|DOCUMENTACION|LICENCIA/i.test(limpio)) {
       const m = limpio.match(/INFRACCIONES?[\s\S]{0,1800}?(?=MEDIDAS\s+CAUTELARES|NOTIFICACION|NOTIFICACIÓN|$)/i);
       const zona = m ? m[0] : limpio;
-      const partes = zona.split(/(?=C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
+      const partes = zona.split(/(?=C\s*[O0ÓQ]\s*[DCLQ]|C0D|CQD|COQ|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
       for (const parte of partes) {
         procesarParte(parte);
         if (codigos.length >= 6) break;
@@ -1049,5 +1071,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v7-candidatos");
+  console.log("[WSP OCR 460] cargado v8-acta-cero-dominio-codigos");
 })();
