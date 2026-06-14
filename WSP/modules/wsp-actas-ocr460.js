@@ -9,8 +9,15 @@
     idle: "Opcional: use este botón antes de cargar los campos manuales.",
     loading: "Cargando lector OCR...",
     preparing: "Preparando imagen del acta...",
-    reading: "Leyendo acta. Puede demorar unos segundos...",
+    reading: "Leyendo solo datos útiles del acta 460/22...",
   };
+
+  // Optimización 460/22: el OCR sigue leyendo la foto completa para no perder datos
+  // cuando el acta viene torcida o cortada, pero la imagen se reduce y el parser
+  // solo extrae estos campos: acta, dominio, marca, modelo, códigos, secuestro,
+  // juzgado y labrante.
+  const OCR460_MAX_WIDTH = 1400;
+  const DOMINIO_MAX_ALFANUM = 7;
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -110,13 +117,40 @@
   }
 
   function normalizarDominio(value) {
-    return normalizarMayus(value).replace(/[^A-Z0-9]/g, "").slice(0, 10);
+    // Dominio argentino: máximo 7 caracteres alfanuméricos.
+    // Se corta antes de etiquetas vecinas como "Tipo" para evitar casos reales
+    // como "A264JDN Tipo" -> "A264JDNTIP".
+    let limpio = normalizarMayus(value)
+      .replace(/\b(?:TIPO|T1PO|TIP0|MODELO|MARCA|DNI|PROPIETARIO|LUGAR)\b.*$/i, "")
+      .replace(/[^A-Z0-9]/g, "");
+
+    // Patrones frecuentes: AA862DN, A264JDN, ABC123.
+    const patronNuevoAuto = limpio.match(/[A-Z]{2}\d{3}[A-Z]{2}/);
+    if (patronNuevoAuto) return patronNuevoAuto[0].slice(0, DOMINIO_MAX_ALFANUM);
+    const patronMoto = limpio.match(/[A-Z]\d{3}[A-Z]{3}/);
+    if (patronMoto) return patronMoto[0].slice(0, DOMINIO_MAX_ALFANUM);
+    const patronViejo = limpio.match(/[A-Z]{3}\d{3}/);
+    if (patronViejo) return patronViejo[0].slice(0, DOMINIO_MAX_ALFANUM);
+
+    return limpio.slice(0, DOMINIO_MAX_ALFANUM);
   }
 
   function normalizarNumero(value) {
     return String(value || "")
       .replace(/[Oo]/g, "0")
-      .replace(/[Il]/g, "1")
+      .replace(/[Il|]/g, "1")
+      .replace(/\D+/g, "");
+  }
+
+  function normalizarNumeroOcrEstricto(value) {
+    // Solo para números de acta/códigos, donde el OCR suele confundir letras con números.
+    return String(value || "")
+      .replace(/[OoQq]/g, "0")
+      .replace(/[Il|]/g, "1")
+      .replace(/[Zz]/g, "2")
+      .replace(/[Ss]/g, "5")
+      .replace(/[Gg]/g, "6")
+      .replace(/[Bb]/g, "8")
       .replace(/\D+/g, "");
   }
 
@@ -179,11 +213,31 @@
 
   function extraerDominio(texto) {
     const limpio = normalizarBusqueda(texto);
-    const dominio = buscarPrimero(limpio, [
-      /Dominio\s*:\s*([A-Z0-9\s-]{5,12})/i,
-      /Dom[ií1]nio\s*:\s*([A-Z0-9\s-]{5,12})/i,
-    ]);
-    return normalizarDominio(dominio);
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+
+    // 1) Preferir la línea exacta de dominio y cortar antes de "Tipo".
+    for (const linea of lineas) {
+      if (!/Dom[ií1]nio/i.test(linea)) continue;
+      let valor = linea
+        .replace(/^.*?Dom[ií1]nio\s*[º°.:,;\- ]*/i, "")
+        .replace(/\b(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b.*$/i, "")
+        .trim();
+      const dominio = normalizarDominio(valor);
+      if (dominio.length >= 5) return dominio;
+    }
+
+    // 2) Fallback de texto plano, acotado al valor inmediatamente posterior a Dominio.
+    const plano = limpio.replace(/\n+/g, " ");
+    const match = plano.match(/Dom[ií1]nio\s*[º°.:,;\- ]*([A-Z0-9\s\-]{5,18})(?=\s+(?:Tipo|T1po|Tip0|Modelo|Marca|DNI|Propietario|Lugar)\b|$)/i);
+    if (match && match[1]) return normalizarDominio(match[1]);
+
+    // 3) Fallback final: buscar patrones de dominio en todo el OCR.
+    const patrones = [/[A-Z]{2}\d{3}[A-Z]{2}/i, /[A-Z]\d{3}[A-Z]{3}/i, /[A-Z]{3}\d{3}/i];
+    for (const patron of patrones) {
+      const m = limpio.match(patron);
+      if (m && m[0]) return normalizarDominio(m[0]);
+    }
+    return "";
   }
 
   function extraerActa(texto) {
@@ -218,33 +272,40 @@
   }
 
   function agregarCodigoUnico(codigos, value) {
-    const codigo = normalizarNumero(value).slice(0, 8);
+    const codigo = normalizarNumeroOcrEstricto(value).slice(0, 8);
     if (codigo.length >= 3 && codigo.length <= 6 && !codigos.includes(codigo)) codigos.push(codigo);
   }
 
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
 
-    // Campo del acta: debajo de "INFRACCIONES" suele figurar "Cod: 5041".
-    // Se aceptan variantes normales del OCR: "Cód", "Codigo", "Cod .", "Cod : 5 041".
-    const re = /\bC[o0]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl ]{3,12})/ig;
-    let match;
-    while ((match = re.exec(limpio))) {
-      agregarCodigoUnico(codigos, match[1]);
+    // 1) Línea directa: "Cod: 5041", "Cód. 5041", "Codigo 5041".
+    for (const linea of lineas) {
+      if (!/\bC[o0ó]d|C[o0ó]digo/i.test(linea)) continue;
+      const m = linea.match(/\bC[o0ó]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl|SsZzGgBb\s]{3,14})/i);
+      if (m && m[1]) agregarCodigoUnico(codigos, m[1]);
     }
-
     if (codigos.length) return codigos;
 
-    // Fallback acotado: buscar números de código solo dentro del bloque INFRACCIONES.
-    // No se buscan números en todo el acta para no confundir DNI, dominio o número de acta.
-    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+    // 2) Bloque INFRACCIONES: buscar solo en pocas líneas para no agarrar DNI/acta.
     const idx = lineas.findIndex((linea) => /INFRACCIONES?/i.test(linea));
     if (idx >= 0) {
-      const bloque = lineas.slice(idx, idx + 10).join(" ");
-      const reBloque = /(?:\bC[o0]d(?:igo)?\b[^0-9OoIl]{0,20})?\b([0-9OoIl ]{3,8})\b/ig;
+      const bloqueLineas = lineas.slice(idx, idx + 8);
+      for (const linea of bloqueLineas) {
+        const conCod = linea.match(/\bC[o0ó]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl|SsZzGgBb\s]{3,14})/i);
+        if (conCod && conCod[1]) agregarCodigoUnico(codigos, conCod[1]);
+      }
+      if (codigos.length) return codigos;
+
+      // 3) Fallback dentro del bloque: primer número de 3 a 6 dígitos después de INFRACCIONES.
+      const bloque = bloqueLineas.join(" ");
+      const reBloque = /\b([0-9OoIl|SsZzGgBb]{3,6})\b/g;
+      let match;
       while ((match = reBloque.exec(bloque))) {
         agregarCodigoUnico(codigos, match[1]);
+        if (codigos.length >= 4) break;
       }
     }
 
@@ -260,13 +321,31 @@
 
   function extraerJuzgado(texto) {
     const limpio = normalizarBusqueda(texto);
-    return cortarEnEtiquetas(buscarPrimero(limpio, /Juzgado\s*:\s*([^\n]+)/i));
+    return cortarEnEtiquetas(buscarPrimero(limpio, [
+      /Juzgado\s*:\s*([^\n]+)/i,
+      /Juzqado\s*:\s*([^\n]+)/i,
+    ]));
   }
 
   function extraerLabrante(texto) {
     const limpio = normalizarBusqueda(texto);
-    const lineas = buscarLineas(limpio, /(SUBOFICIAL|INSPECTOR|OFICIAL|AGENTE|DELGADO|POLICIA)/i);
-    return lineas.map((v) => v.trim()).filter(Boolean).slice(0, 3).join(" / ");
+    const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+    const candidatos = [];
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i];
+      if (/(Firma\s+y\s+aclaracion|N[°º]\s*Dispositivo|Suboficial|Inspector|Oficial|Agente|Policia|Polic[ií]a|Delgado)/i.test(linea)) {
+        candidatos.push(linea);
+        if (lineas[i + 1]) candidatos.push(lineas[i + 1]);
+      }
+    }
+    const unicos = [];
+    candidatos
+      .map((v) => v.replace(/^[-.:\s]+/, "").trim())
+      .filter((v) => /(SUBOFICIAL|INSPECTOR|OFICIAL|AGENTE|POLICIA|POLICIA|DELGADO|[A-ZÁÉÍÓÚÑ]{3,}\s+[A-ZÁÉÍÓÚÑ]{3,})/i.test(v))
+      .forEach((v) => {
+        if (v && !unicos.includes(v)) unicos.push(v);
+      });
+    return unicos.slice(0, 3).join(" / ");
   }
 
   function extraerDatosActa460(textoOcr) {
@@ -333,7 +412,7 @@
     return `No se pudieron completar campos automáticamente. Intente con una foto más cercana y nítida del acta.`;
   }
 
-  async function cargarImagenADataUrl(file, maxWidth = 1800) {
+  async function cargarImagenADataUrl(file, maxWidth = OCR460_MAX_WIDTH) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
@@ -370,7 +449,7 @@
       console.warn("[WSP OCR 460] No se pudo preprocesar imagen. Se usa original escalada.", error);
     }
 
-    return canvas.toDataURL("image/jpeg", 0.92);
+    return canvas.toDataURL("image/jpeg", 0.86);
   }
 
   async function leerTextoDesdeFoto(file) {
