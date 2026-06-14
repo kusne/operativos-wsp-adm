@@ -24,15 +24,15 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Los números de acta APSV que estamos leyendo en estas actas impresas
-  // vienen con 9 dígitos y normalmente empiezan con 070. Se usa solo para
-  // puntuar candidatos, no para inventar datos cuando el OCR no ve el número.
-  const ACTA_PREFIJO_HABITUAL = /^070\d{6}$/;
+  // Los números de acta APSV se validan como 9 dígitos. No se fuerza prefijo
+  // 070 porque pueden existir series 050, 060, 080, 090, etc.
+  const ACTA_PATRON_9_DIGITOS = /^\d{9}$/;
 
   let promesaTesseract = null;
   let inicializado = false;
   let ultimoTextoOcr = "";
   let ultimosDatos = null;
+  let lecturaActualOcr460 = 0;
 
   function getEl(id) {
     return document.getElementById(id);
@@ -263,6 +263,54 @@
       .trim();
   }
 
+  function distanciaLevenshtein(a, b) {
+    a = String(a || "");
+    b = String(b || "");
+    const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+    for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+      }
+    }
+    return dp[a.length][b.length];
+  }
+
+  function limpiarTokenMarcaParaFuzzy(value) {
+    return normalizarMayus(value)
+      .replace(/0/g, "O")
+      .replace(/1/g, "I")
+      .replace(/5/g, "S")
+      .replace(/6/g, "G")
+      .replace(/8/g, "B")
+      .replace(/[^A-Z]/g, "");
+  }
+
+  function corregirMarcaConocida(marca) {
+    const limpia = limpiarTokenMarcaParaFuzzy(marca);
+    if (!limpia) return "";
+    for (const conocida of MARCAS_MOTO_CONOCIDAS) {
+      if (limpia.includes(conocida) || conocida.includes(limpia)) return conocida;
+    }
+    let mejor = "";
+    let mejorDist = 999;
+    for (const conocida of MARCAS_MOTO_CONOCIDAS) {
+      const dist = distanciaLevenshtein(limpia, conocida);
+      const maxLen = Math.max(limpia.length, conocida.length);
+      const tolerancia = maxLen <= 5 ? 1 : 2;
+      if (dist < mejorDist && dist <= tolerancia) {
+        mejor = conocida;
+        mejorDist = dist;
+      }
+    }
+    return mejor;
+  }
+
   function limpiarMarcaOcr(value) {
     let marca = limpiarTextoMarcaModelo(value);
     for (const conocida of MARCAS_MOTO_CONOCIDAS) {
@@ -272,7 +320,8 @@
     // Quitar restos OCR típicos: "HONDA NE E", "ZANELLA _", "SUZUKI E E".
     const tokens = marca.split(/\s+/).filter(Boolean);
     while (tokens.length > 1 && tokens[tokens.length - 1].length <= 2) tokens.pop();
-    return tokens.join(" ").trim();
+    const compacta = tokens.join(" ").trim();
+    return corregirMarcaConocida(compacta) || compacta;
   }
 
   function limpiarModeloOcr(value) {
@@ -365,11 +414,8 @@
 
     for (const n0 of crudos) {
       let n = n0;
-      // Cero inicial leído como 9: 970544361 -> 070544361.
-      if (/^97\d{7}$/.test(n)) n = "0" + n.slice(1);
-      // En estas actas impresas es común que el OCR lea el 5 como 9 en el
-      // prefijo 0705xxxxx. Si aparece 0709xxxxx, se corrige a 0705xxxxx.
-      if (/^0709\d{5}$/.test(n)) n = "0705" + n.slice(4);
+      // En números de acta solo validamos 9 dígitos. No forzamos prefijo fijo
+      // porque las series pueden empezar 050/060/070/080/090.
       if (/^\d{9}$/.test(n)) normalizados.push(n);
     }
     return normalizados[0] || "";
@@ -379,18 +425,56 @@
     if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
     const ctx = String(contexto || "");
     let score = 0;
-    if (/^0\d{8}$/.test(numero)) score += 10;
-    if (ACTA_PREFIJO_HABITUAL.test(numero)) score += 12;
-    if (/ACTA/i.test(ctx)) score += 20;
-    if (/NRO|NR0|N[°º]/i.test(ctx)) score += 10;
+    // Cualquier acta válida tiene 9 dígitos. No se premia un prefijo concreto.
+    if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 12;
+    if (/ACTA/i.test(ctx)) score += 22;
+    if (/NRO|NR0|N[°º]/i.test(ctx)) score += 12;
     // El número entre asteriscos del encabezado/barcode suele ser más confiable
     // que el OCR de la línea grande cuando una cifra queda deformada.
-    if (/\*/.test(ctx)) score += 34;
-    if (/ZONA_ACTA/i.test(ctx)) score += 16;
-    if (/DNI|LICENCIA|DOMINIO|COD|INFRACCIONES|KM|FECHA|HORA/i.test(ctx)) score -= 12;
+    if (/\*/.test(ctx)) score += 40;
+    if (/ZONA_ACTA/i.test(ctx)) score += 18;
+    if (/DNI|LICENCIA|DOMINIO|COD|INFRACCIONES|KM|FECHA|HORA/i.test(ctx)) score -= 14;
     return score;
   }
 
+  function distanciaDigitos(a, b) {
+    a = String(a || "");
+    b = String(b || "");
+    if (a.length !== b.length) return 99;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+    return d;
+  }
+
+  function consensoActaCandidatos(candidatos) {
+    const validos = (candidatos || [])
+      .filter((c) => /^\d{9}$/.test(c.acta))
+      .sort((a, b) => b.score - a.score);
+    if (!validos.length) return "";
+
+    // Si hay un candidato entre asteriscos, priorizarlo; pero solo por contexto,
+    // no por prefijo 070.
+    const conAsterisco = validos.filter((c) => /\*/.test(c.contexto || ""));
+    if (conAsterisco.length) return conAsterisco[0].acta;
+
+    // Si dos o más lecturas son muy parecidas, armar consenso por posición.
+    const base = validos[0];
+    const parecidos = validos.filter((c) => distanciaDigitos(c.acta, base.acta) <= 2);
+    if (parecidos.length >= 2) {
+      let out = "";
+      for (let pos = 0; pos < 9; pos++) {
+        const votos = new Map();
+        for (const c of parecidos) {
+          const peso = Math.max(1, Math.round((c.score + 50) / 10));
+          votos.set(c.acta[pos], (votos.get(c.acta[pos]) || 0) + peso);
+        }
+        out += Array.from(votos.entries()).sort((a, b) => b[1] - a[1])[0][0];
+      }
+      if (/^\d{9}$/.test(out)) return out;
+    }
+
+    return base.acta;
+  }
   function agregarActaCandidata(lista, candidato, contexto) {
     const acta = normalizarActaCandidato(candidato);
     if (!acta) return;
@@ -427,16 +511,7 @@
       matches.forEach((m) => agregarActaCandidata(candidatos, m, contexto));
     }
 
-    // Si aparece un candidato entre asteriscos (*070xxxxxx*), se prefiere porque
-    // normalmente corresponde al número impreso bajo el código de barras y evita
-    // errores de una sola cifra en la línea grande de ACTA NRO.
-    const conAsterisco = candidatos
-      .filter((c) => /\*/.test(c.contexto || "") && /^0\d{8}$/.test(c.acta))
-      .sort((a, b) => b.score - a.score);
-    if (conAsterisco.length) return conAsterisco[0].acta;
-
-    candidatos.sort((a, b) => b.score - a.score);
-    return candidatos[0]?.acta || "";
+    return consensoActaCandidatos(candidatos);
   }
 
   function obtenerSetCodigosNomenclador460() {
@@ -617,6 +692,15 @@
     }
   }
 
+  function agregarCodigosPorLineasSemanticas(zona, codigos, setCodigos) {
+    const lineas = String(zona || "").split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i];
+      const contexto = [linea, lineas[i + 1] || ""].join(" ");
+      for (const codigo of codigoPorTextoInfraccion(contexto)) agregarCodigoUnico(codigos, codigo, setCodigos);
+    }
+  }
+
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
@@ -652,6 +736,7 @@
       // Fallback semántico global del bloque: si el número quedó ilegible, el texto
       // de la falta suele seguir siendo claro.
       for (const codigo of codigoPorTextoInfraccion(bloqueTexto)) agregarCodigoUnico(codigos, codigo, setCodigos);
+      agregarCodigosPorLineasSemanticas(bloqueTexto, codigos, setCodigos);
     }
 
     // Tercera pasada: si el bloque fue mal cortado, usar solo la zona entre
@@ -665,6 +750,7 @@
         if (codigos.length >= 6) break;
       }
       for (const codigo of codigoPorTextoInfraccion(zona)) agregarCodigoUnico(codigos, codigo, setCodigos);
+      agregarCodigosPorLineasSemanticas(zona, codigos, setCodigos);
     }
 
     return codigos;
@@ -878,9 +964,17 @@
     try {
       const datosParciales = extraerDatosActa460(textos.join("\n"));
       if (!datosParciales.codigos || datosParciales.codigos.length < 2) {
-        const zonaInfracciones = await cargarImagenADataUrl(file, 1800, { x: 0.00, y: 0.62, w: 1.00, h: 0.30 });
-        const textoInfracciones = await reconocerDataUrl(Tesseract, zonaInfracciones, "Revisando códigos");
-        if (textoInfracciones) textos.push("\nZONA_INFRACCIONES\n" + textoInfracciones);
+        const zonas = [
+          { x: 0.00, y: 0.58, w: 1.00, h: 0.36 },
+          { x: 0.00, y: 0.66, w: 1.00, h: 0.28 }
+        ];
+        for (let i = 0; i < zonas.length; i++) {
+          const zonaInfracciones = await cargarImagenADataUrl(file, 1900, zonas[i]);
+          const textoInfracciones = await reconocerDataUrl(Tesseract, zonaInfracciones, `Revisando códigos ${i + 1}/${zonas.length}`);
+          if (textoInfracciones) textos.push(`\nZONA_INFRACCIONES_${i + 1}\n` + textoInfracciones);
+          const datosZona = extraerDatosActa460(textos.join("\n"));
+          if (datosZona.codigos && datosZona.codigos.length >= 2) break;
+        }
       }
     } catch (error) {
       console.warn("[WSP OCR 460] No se pudo leer zona de infracciones.", error);
@@ -890,14 +984,17 @@
   }
 
   async function procesarArchivoActa(file) {
+    const lecturaId = ++lecturaActualOcr460;
     setCargando(true);
     limpiarCamposOcr460();
     ultimosDatos = null;
     ultimoTextoOcr = "";
     try {
       const texto = await leerTextoDesdeFoto(file);
+      if (lecturaId !== lecturaActualOcr460) return;
       ultimoTextoOcr = normalizarTextoOcr(texto);
       const datos = extraerDatosActa460(ultimoTextoOcr);
+      if (lecturaId !== lecturaActualOcr460) return;
       ultimosDatos = datos;
       const cargados = aplicarDatosAFormulario460(datos);
       const tipo = cargados.length ? "ok" : "warn";
@@ -905,10 +1002,11 @@
       console.info("[WSP OCR 460] Texto OCR:", ultimoTextoOcr);
       console.info("[WSP OCR 460] Datos extraídos:", datos);
     } catch (error) {
+      if (lecturaId !== lecturaActualOcr460) return;
       console.error("[WSP OCR 460] Error leyendo acta", error);
       setEstado("No se pudo leer el acta. Revise conexión o cargue los campos manualmente.", "error");
     } finally {
-      setCargando(false);
+      if (lecturaId === lecturaActualOcr460) setCargando(false);
       const r = refs();
       if (r.input) r.input.value = "";
     }
@@ -951,5 +1049,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v6-zonas");
+  console.log("[WSP OCR 460] cargado v7-candidatos");
 })();
