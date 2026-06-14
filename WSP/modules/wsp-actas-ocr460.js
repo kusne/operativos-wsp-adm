@@ -25,22 +25,25 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Series conocidas de talonarios digitales PDA para las actas APSV usadas por la Brigada.
-  // Regla aportada por el usuario:
-  // - PDA 5  -> actas 07002....
-  // - PDA 19 -> actas 07008....
-  // - PDA 67 -> actas 07053....
-  // - PDA 68 -> actas 07054....
-  // Se valida el N° de acta contra estas series para descartar falsas lecturas OCR
-  // como 080705442, 010705342, 056140705, 797054427, etc.
+  // Series reales de los talonarios digitales de PDA/APSV usados por la Brigada.
+  // Se usa únicamente para validar/corregir N° de acta y deducir dispositivo.
+  // No modifica dominio, marca, modelo, códigos ni lectura de otros campos.
   const ACTA_SERIES_PDA_460 = Object.freeze({
     "07002": "5",
     "07008": "19",
     "07053": "67",
     "07054": "68",
   });
-  const ACTA_SERIES_VALIDAS_460 = Object.keys(ACTA_SERIES_PDA_460);
-  const ACTA_PATRON_9_DIGITOS = /^(?:07002|07008|07053|07054)\d{4}$/;
+
+  function deducirPdaPorActa460(actaNumero) {
+    const numero = String(actaNumero || "").replace(/\D+/g, "");
+    const serie = Object.keys(ACTA_SERIES_PDA_460).find((prefijo) => numero.startsWith(prefijo));
+    return serie ? { serie, dispositivo: ACTA_SERIES_PDA_460[serie] } : null;
+  }
+
+  function esActaValidaPda460(actaNumero) {
+    return /^\d{9}$/.test(String(actaNumero || "")) && !!deducirPdaPorActa460(actaNumero);
+  }
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -279,26 +282,6 @@
       .replace(/\D+/g, "");
   }
 
-  function deducirDispositivoPdaPorActa(actaNumero) {
-    const n = String(actaNumero || "").replace(/\D+/g, "");
-    for (const serie of ACTA_SERIES_VALIDAS_460) {
-      if (n.startsWith(serie)) return ACTA_SERIES_PDA_460[serie];
-    }
-    return "";
-  }
-
-  function extraerDispositivoPdaDesdeTexto(texto) {
-    const t = normalizarBusqueda(texto);
-    const m = t.match(/(?:N[°º]?\s*)?Dispositivo\s*[Nn]?[°º]?\s*[:.]?\s*(5|19|67|68)\b/i);
-    return m && m[1] ? String(m[1]) : "";
-  }
-
-  function dispositivoCompatibleConActa(actaNumero, dispositivoPda) {
-    const deducido = deducirDispositivoPdaPorActa(actaNumero);
-    if (!deducido || !dispositivoPda) return true;
-    return String(deducido) === String(dispositivoPda);
-  }
-
   function limpiarValorCampo(value) {
     return String(value || "")
       .replace(/^[.:\-\s]+/, "")
@@ -506,37 +489,26 @@
     const numero = normalizarNumeroOcrEstricto(raw);
     const normalizados = [];
 
-    function agregarSiValida(n) {
+    function agregarSiValida(n, motivo) {
       if (!n) return;
-      if (ACTA_PATRON_9_DIGITOS.test(n) && !normalizados.includes(n)) normalizados.push(n);
+      if (esActaValidaPda460(n) && !normalizados.includes(n)) normalizados.push(n);
     }
 
-    function corregirPorSerieConocida(n0) {
-      if (!/^\d{9}$/.test(n0)) return;
-
-      // Si la lectura ya coincide con una serie real, se acepta.
-      agregarSiValida(n0);
-
-      // Corrección acotada del primer carácter: casos reales donde el primer 0
-      // se leyó como 9/8/6/5/7, pero el resto conserva serie conocida.
-      // Ej.: 970544361 -> 070544361.
-      if (/^[98657]/.test(n0)) agregarSiValida("0" + n0.slice(1));
-
-      // Corrección por prefijo de 5 dígitos: solo si está a distancia 1 de una
-      // serie conocida. No inventa un acta completa si el error es mayor.
-      const prefijo = n0.slice(0, 5);
-      for (const serie of ACTA_SERIES_VALIDAS_460) {
-        if (distanciaDigitos(prefijo, serie) <= 1) {
-          agregarSiValida(serie + n0.slice(5));
-        }
-      }
-    }
-
-    // Probar todas las ventanas de 9 dígitos OCR-normalizados.
+    // Probar todas las ventanas de 9 dígitos, pero aceptar solo series reales PDA.
     for (let i = 0; i <= Math.max(0, numero.length - 9); i++) {
       const n0 = numero.slice(i, i + 9);
       if (!/^\d{9}$/.test(n0)) continue;
-      corregirPorSerieConocida(n0);
+
+      agregarSiValida(n0, "directo");
+
+      // Corrección acotada: si OCR lee el primer 0 como 9/8/6/5 pero el resto
+      // coincide con una serie real, corregir solo el primer carácter.
+      // Ejemplo real: 970544361 -> 070544361.
+      if (/^[9865]\d{8}$/.test(n0)) agregarSiValida("0" + n0.slice(1), "primer_digito");
+
+      // Corrección acotada de segundo dígito para series conocidas 07002/07008/07053/07054.
+      // Solo se aplica si después queda una serie PDA válida; no inventa actas fuera del talonario.
+      if (/^0[1789]0\d{6}$/.test(n0)) agregarSiValida("07" + n0.slice(2), "segundo_digito");
     }
 
     return normalizados[0] || "";
@@ -544,11 +516,11 @@
 
   function puntuarActaCandidato(numero, contexto) {
     if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
+    if (!esActaValidaPda460(numero)) return -1000;
     const ctx = String(contexto || "");
     let score = 0;
-    // Solo se considera fuerte si coincide con las series PDA conocidas.
-    if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 30;
-    if (deducirDispositivoPdaPorActa(numero)) score += 12;
+    // Acta válida para este sistema: 9 dígitos y prefijo de talonario PDA conocido.
+    score += 32;
     if (/ACTA/i.test(ctx)) score += 22;
     if (/NRO|NR0|N[°º]/i.test(ctx)) score += 12;
     // El número entre asteriscos del encabezado/barcode suele ser más confiable
@@ -570,7 +542,7 @@
 
   function consensoActaCandidatos(candidatos) {
     const validos = (candidatos || [])
-      .filter((c) => ACTA_PATRON_9_DIGITOS.test(c.acta))
+      .filter((c) => esActaValidaPda460(c.acta))
       .sort((a, b) => b.score - a.score);
     if (!validos.length) return "";
 
@@ -592,7 +564,7 @@
         }
         out += Array.from(votos.entries()).sort((a, b) => b[1] - a[1])[0][0];
       }
-      if (ACTA_PATRON_9_DIGITOS.test(out)) return out;
+      if (esActaValidaPda460(out)) return out;
     }
 
     return base.acta;
@@ -921,14 +893,11 @@
   function extraerDatosActa460(textoOcr) {
     const texto = normalizarTextoOcr(textoOcr);
     const actaNumero = extraerActa(texto);
-    const dispositivoTexto = extraerDispositivoPdaDesdeTexto(texto);
-    const dispositivoDeducido = deducirDispositivoPdaPorActa(actaNumero);
+    const pdaActa = deducirPdaPorActa460(actaNumero);
     const datos = {
       actaNumero,
-      dispositivoPda: dispositivoTexto || dispositivoDeducido,
-      dispositivoPdaDeducido: dispositivoDeducido,
-      dispositivoPdaLeido: dispositivoTexto,
-      dispositivoPdaFuente: dispositivoTexto ? "texto acta" : (dispositivoDeducido ? "serie acta" : ""),
+      pdaDispositivo: pdaActa ? pdaActa.dispositivo : "",
+      pdaSerie: pdaActa ? pdaActa.serie : "",
       dominio: extraerDominio(texto),
       modelo: normalizarMayus(extraerModelo(texto)),
       marca: normalizarMayus(extraerMarca(texto)),
@@ -938,11 +907,6 @@
       ...extraerMedidas(texto),
       textoOcr: texto,
     };
-
-    // Si alguna vez el texto OCR trae N° de dispositivo y no coincide con la serie
-    // deducida, no se invalida el acta automáticamente, pero queda marcado para
-    // diagnóstico interno en consola/getUltimosDatos().
-    datos.dispositivoPdaCompatible = dispositivoCompatibleConActa(actaNumero, dispositivoTexto);
     return datos;
   }
 
@@ -990,11 +954,6 @@
     if (setOcrValue(r.modelo, datos.modelo)) cargados.push("modelo");
     if (setOcrValue(r.dominio, datos.dominio)) cargados.push("dominio");
     if (setOcrValue(r.acta, datos.actaNumero)) cargados.push("acta");
-    if (r.acta) {
-      r.acta.dataset.pda = datos.dispositivoPda || "";
-      r.acta.dataset.pdaFuente = datos.dispositivoPdaFuente || "";
-      r.acta.dataset.pdaCompatible = datos.dispositivoPdaCompatible === false ? "false" : "true";
-    }
     if (setOcrValue(r.codigos, Array.isArray(datos.codigos) && datos.codigos.length ? datos.codigos.join(" / ") : "")) cargados.push("códigos");
 
     return cargados;
@@ -1009,8 +968,7 @@
     if (!datos.codigos?.length) faltantes.push("códigos");
 
     const extras = [];
-    if (datos.dispositivoPda) extras.push(`PDA ${datos.dispositivoPda}${datos.dispositivoPdaFuente ? ` (${datos.dispositivoPdaFuente})` : ""}`);
-    if (datos.dispositivoPdaCompatible === false) extras.push("revisar coincidencia PDA/serie");
+    if (datos.pdaDispositivo) extras.push(`PDA ${datos.pdaDispositivo}`);
     if (datos.juzgado) extras.push(`Juzgado: ${datos.juzgado}`);
     if (datos.labrante) extras.push("labrante detectado");
     if (datos.secuestraVehiculo) extras.push("el acta indica secuestro de vehículo");
@@ -1240,5 +1198,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado v9.3.1-pda-sin-tocar-dominio");
+  console.log("[WSP OCR 460] cargado v9-916-acta-dominio-diagnostico");
 })();
