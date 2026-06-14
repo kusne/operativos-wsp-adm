@@ -25,25 +25,11 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
-  // Series reales de los talonarios digitales de PDA/APSV usados por la Brigada.
-  // Se usa únicamente para validar/corregir N° de acta y deducir dispositivo.
-  // No modifica dominio, marca, modelo, códigos ni lectura de otros campos.
-  const ACTA_SERIES_PDA_460 = Object.freeze({
-    "07002": "5",
-    "07008": "19",
-    "07053": "67",
-    "07054": "68",
-  });
-
-  function deducirPdaPorActa460(actaNumero) {
-    const numero = String(actaNumero || "").replace(/\D+/g, "");
-    const serie = Object.keys(ACTA_SERIES_PDA_460).find((prefijo) => numero.startsWith(prefijo));
-    return serie ? { serie, dispositivo: ACTA_SERIES_PDA_460[serie] } : null;
-  }
-
-  function esActaValidaPda460(actaNumero) {
-    return /^\d{9}$/.test(String(actaNumero || "")) && !!deducirPdaPorActa460(actaNumero);
-  }
+  // Los números de acta APSV se validan como 9 dígitos y siempre comienzan en 0.
+  // No se fuerza prefijo 070 porque pueden existir series 050, 060, 080, 090, etc.
+  // Patrón fuerte: 0 + serie 5/6/7/8/9 + 0 + 6 dígitos.
+  // Esto evita falsos como 010705342, 970544361, 797054427, 056140705 o 007053422.
+  const ACTA_PATRON_9_DIGITOS = /^0[5-9]0\d{6}$/;
 
   let promesaTesseract = null;
   let inicializado = false;
@@ -491,24 +477,22 @@
 
     function agregarSiValida(n, motivo) {
       if (!n) return;
-      if (esActaValidaPda460(n) && !normalizados.includes(n)) normalizados.push(n);
+      if (ACTA_PATRON_9_DIGITOS.test(n) && !normalizados.includes(n)) normalizados.push(n);
     }
 
-    // Probar todas las ventanas de 9 dígitos, pero aceptar solo series reales PDA.
+    // Probar todas las ventanas de 9 dígitos.
     for (let i = 0; i <= Math.max(0, numero.length - 9); i++) {
       const n0 = numero.slice(i, i + 9);
       if (!/^\d{9}$/.test(n0)) continue;
 
+      // Regla fuerte: el acta empieza con 0 y el tercer dígito suele ser 0
+      // (050/060/070/080/090...).
       agregarSiValida(n0, "directo");
 
       // Corrección acotada: si OCR lee el primer 0 como 9/8/6/5 pero el resto
-      // coincide con una serie real, corregir solo el primer carácter.
+      // conserva forma 0X0, corregir solo el primer carácter.
       // Ejemplo real: 970544361 -> 070544361.
-      if (/^[9865]\d{8}$/.test(n0)) agregarSiValida("0" + n0.slice(1), "primer_digito");
-
-      // Corrección acotada de segundo dígito para series conocidas 07002/07008/07053/07054.
-      // Solo se aplica si después queda una serie PDA válida; no inventa actas fuera del talonario.
-      if (/^0[1789]0\d{6}$/.test(n0)) agregarSiValida("07" + n0.slice(2), "segundo_digito");
+      if (/^[9865][1-9]0\d{6}$/.test(n0)) agregarSiValida("0" + n0.slice(1), "primer_digito");
     }
 
     return normalizados[0] || "";
@@ -516,11 +500,10 @@
 
   function puntuarActaCandidato(numero, contexto) {
     if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
-    if (!esActaValidaPda460(numero)) return -1000;
     const ctx = String(contexto || "");
     let score = 0;
-    // Acta válida para este sistema: 9 dígitos y prefijo de talonario PDA conocido.
-    score += 32;
+    // Cualquier acta válida tiene 9 dígitos, empieza en 0 y usa serie 050/060/070/080/090. No se premia 070 en particular.
+    if (ACTA_PATRON_9_DIGITOS.test(numero)) score += 16;
     if (/ACTA/i.test(ctx)) score += 22;
     if (/NRO|NR0|N[°º]/i.test(ctx)) score += 12;
     // El número entre asteriscos del encabezado/barcode suele ser más confiable
@@ -542,7 +525,7 @@
 
   function consensoActaCandidatos(candidatos) {
     const validos = (candidatos || [])
-      .filter((c) => esActaValidaPda460(c.acta))
+      .filter((c) => ACTA_PATRON_9_DIGITOS.test(c.acta))
       .sort((a, b) => b.score - a.score);
     if (!validos.length) return "";
 
@@ -564,7 +547,7 @@
         }
         out += Array.from(votos.entries()).sort((a, b) => b[1] - a[1])[0][0];
       }
-      if (esActaValidaPda460(out)) return out;
+      if (ACTA_PATRON_9_DIGITOS.test(out)) return out;
     }
 
     return base.acta;
@@ -892,12 +875,8 @@
 
   function extraerDatosActa460(textoOcr) {
     const texto = normalizarTextoOcr(textoOcr);
-    const actaNumero = extraerActa(texto);
-    const pdaActa = deducirPdaPorActa460(actaNumero);
     const datos = {
-      actaNumero,
-      pdaDispositivo: pdaActa ? pdaActa.dispositivo : "",
-      pdaSerie: pdaActa ? pdaActa.serie : "",
+      actaNumero: extraerActa(texto),
       dominio: extraerDominio(texto),
       modelo: normalizarMayus(extraerModelo(texto)),
       marca: normalizarMayus(extraerMarca(texto)),
@@ -968,7 +947,6 @@
     if (!datos.codigos?.length) faltantes.push("códigos");
 
     const extras = [];
-    if (datos.pdaDispositivo) extras.push(`PDA ${datos.pdaDispositivo}`);
     if (datos.juzgado) extras.push(`Juzgado: ${datos.juzgado}`);
     if (datos.labrante) extras.push("labrante detectado");
     if (datos.secuestraVehiculo) extras.push("el acta indica secuestro de vehículo");
