@@ -24,6 +24,11 @@
     "KAWASAKI", "BETA", "TVS", "BMW", "KTM", "HERO", "VESPA"
   ];
 
+  // Los números de acta APSV que estamos leyendo en estas actas impresas
+  // vienen con 9 dígitos y normalmente empiezan con 070. Se usa solo para
+  // puntuar candidatos, no para inventar datos cuando el OCR no ve el número.
+  const ACTA_PREFIJO_HABITUAL = /^070\d{6}$/;
+
   let promesaTesseract = null;
   let inicializado = false;
   let ultimoTextoOcr = "";
@@ -353,52 +358,85 @@
 
   function normalizarActaCandidato(value) {
     const raw = String(value || "");
-    // Evita falsos positivos como texto de encabezado convertido a números
-    // por confusiones OCR. Debe haber suficientes dígitos reales en el candidato.
-    if ((raw.match(/\d/g) || []).length < 6) return "";
+    if ((raw.match(/\d/g) || []).length < 7) return "";
     let numero = normalizarNumeroOcrEstricto(raw);
-    // El número de acta APSV tiene 9 dígitos. Ej: 070544272.
-    // En estas actas normalmente inicia con 0; Tesseract a veces lee ese 0 inicial como 9.
     const crudos = numero.match(/\d{9}/g) || [];
-    const normalizados = crudos.map((n) => {
-      if (/^9\d{8}$/.test(n) && /^97/.test(n)) return "0" + n.slice(1);
-      return n;
-    });
-    const preferido = normalizados.find((n) => /^0\d{8}$/.test(n)) || normalizados[0] || "";
-    return preferido || "";
+    const normalizados = [];
+
+    for (const n0 of crudos) {
+      let n = n0;
+      // Cero inicial leído como 9: 970544361 -> 070544361.
+      if (/^97\d{7}$/.test(n)) n = "0" + n.slice(1);
+      // En estas actas impresas es común que el OCR lea el 5 como 9 en el
+      // prefijo 0705xxxxx. Si aparece 0709xxxxx, se corrige a 0705xxxxx.
+      if (/^0709\d{5}$/.test(n)) n = "0705" + n.slice(4);
+      if (/^\d{9}$/.test(n)) normalizados.push(n);
+    }
+    return normalizados[0] || "";
+  }
+
+  function puntuarActaCandidato(numero, contexto) {
+    if (!/^\d{9}$/.test(String(numero || ""))) return -1000;
+    const ctx = String(contexto || "");
+    let score = 0;
+    if (/^0\d{8}$/.test(numero)) score += 10;
+    if (ACTA_PREFIJO_HABITUAL.test(numero)) score += 12;
+    if (/ACTA/i.test(ctx)) score += 20;
+    if (/NRO|NR0|N[°º]/i.test(ctx)) score += 10;
+    // El número entre asteriscos del encabezado/barcode suele ser más confiable
+    // que el OCR de la línea grande cuando una cifra queda deformada.
+    if (/\*/.test(ctx)) score += 34;
+    if (/ZONA_ACTA/i.test(ctx)) score += 16;
+    if (/DNI|LICENCIA|DOMINIO|COD|INFRACCIONES|KM|FECHA|HORA/i.test(ctx)) score -= 12;
+    return score;
+  }
+
+  function agregarActaCandidata(lista, candidato, contexto) {
+    const acta = normalizarActaCandidato(candidato);
+    if (!acta) return;
+    const score = puntuarActaCandidato(acta, contexto || candidato);
+    const existente = lista.find((x) => x.acta === acta);
+    if (existente) existente.score = Math.max(existente.score, score);
+    else lista.push({ acta, score, contexto: String(contexto || "").slice(0, 160) });
   }
 
   function extraerActa(texto) {
     const limpio = normalizarBusqueda(texto);
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
+    const candidatos = [];
 
-    // 1) Preferir línea ACTA NRO. No aceptar menos de 9 dígitos para no confundir DNI/códigos.
-    const lineasActa = lineas.filter((linea) => /ACTA|NRO|NR0|N[°º]/i.test(linea));
-    for (const linea of lineasActa) {
-      const normal = linea.replace(/[^A-Z0-9OoQqIl|SsZzGgBb°º.:,;*\s-]/gi, " ");
-      const porEtiqueta = normal.match(/ACTA[\s\S]{0,45}?([0-9OoQqIl|SsZzGgBb\s]{8,14})/i);
-      if (porEtiqueta && porEtiqueta[1]) {
-        const acta = normalizarActaCandidato(porEtiqueta[1]);
-        if (acta) return acta;
+    // 1) Línea ACTA NRO. y línea del código de barras (*0705xxxxx*).
+    for (const linea of lineas) {
+      if (/ACTA|NRO|NR0|N[°º]|\*/i.test(linea)) {
+        const normal = linea.replace(/[^A-Z0-9OoQqIl|SsZzGgBb°º.:,;*\s-]/gi, " ");
+        const porEtiqueta = normal.match(/ACTA[\s\S]{0,70}?([0-9OoQqIl|SsZzGgBb\s]{8,16})/i);
+        if (porEtiqueta && porEtiqueta[1]) agregarActaCandidata(candidatos, porEtiqueta[1], linea);
+        const porAsterisco = normal.match(/\*\s*([0-9OoQqIl|SsZzGgBb\s]{8,16})\s*\*/i);
+        if (porAsterisco && porAsterisco[1]) agregarActaCandidata(candidatos, porAsterisco[1], linea);
+        agregarActaCandidata(candidatos, normal, linea);
       }
-      const cualquiera = normalizarActaCandidato(normal);
-      if (cualquiera) return cualquiera;
     }
 
-    // 2) Barcode/encabezado con asteriscos: *070544272*.
-    const porAsterisco = limpio.match(/\*\s*([0-9OoQqIl|SsZzGgBb\s]{8,14})\s*\*/i);
-    if (porAsterisco && porAsterisco[1]) {
-      const acta = normalizarActaCandidato(porAsterisco[1]);
-      if (acta) return acta;
+    // 2) Fallback acotado: secuencias de 9 caracteres OCR-numéricos que estén
+    // cerca de ACTA o de asteriscos. Evita tomar DNI/códigos.
+    const ventanas = limpio.split(/\n/);
+    for (let i = 0; i < ventanas.length; i++) {
+      const contexto = [ventanas[i - 1], ventanas[i], ventanas[i + 1]].filter(Boolean).join(" ");
+      if (!/ACTA|NRO|NR0|N[°º]|\*/i.test(contexto)) continue;
+      const matches = contexto.match(/[0-9OoQqIl|SsZzGgBb]{9}/g) || [];
+      matches.forEach((m) => agregarActaCandidata(candidatos, m, contexto));
     }
 
-    // 3) Fallback acotado: cualquier secuencia de 9 dígitos que empiece con 0.
-    const all = limpio.match(/[0-9OoQqIl|SsZzGgBb]{9}/g) || [];
-    for (const cand of all) {
-      const acta = normalizarActaCandidato(cand);
-      if (acta && /^0\d{8}$/.test(acta)) return acta;
-    }
-    return "";
+    // Si aparece un candidato entre asteriscos (*070xxxxxx*), se prefiere porque
+    // normalmente corresponde al número impreso bajo el código de barras y evita
+    // errores de una sola cifra en la línea grande de ACTA NRO.
+    const conAsterisco = candidatos
+      .filter((c) => /\*/.test(c.contexto || "") && /^0\d{8}$/.test(c.acta))
+      .sort((a, b) => b.score - a.score);
+    if (conAsterisco.length) return conAsterisco[0].acta;
+
+    candidatos.sort((a, b) => b.score - a.score);
+    return candidatos[0]?.acta || "";
   }
 
   function obtenerSetCodigosNomenclador460() {
@@ -458,7 +496,7 @@
 
     // Captura la primera secuencia inmediatamente posterior a Cod/Cód, sin comerse texto de la infracción.
     // Permite OCR típico: Cod:5041, Cqd:4084, C0d:9119, Cod : 5 041.
-    const m = raw.match(/(?:C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB\s]{4,9})/i);
+    const m = raw.match(/(?:C\s*[O0ÓQ]\s*[DCL]|C[QO0]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB\s]{4,10})/i);
     if (m && m[1]) {
       const compacto = normalizarCodigoOCRCorto(m[1]);
       if (compacto) {
@@ -504,8 +542,20 @@
   function agregarCodigoUnico(codigos, codigo, setCodigos) {
     const clean = String(codigo || "").replace(/\D+/g, "");
     if (!/^\d{4,5}$/.test(clean)) return false;
-    if (!existeCodigoNomenclador460(clean, setCodigos)) return false;
-    if (!codigos.includes(clean)) codigos.push(clean);
+
+    let elegido = "";
+    if (existeCodigoNomenclador460(clean, setCodigos)) elegido = clean;
+
+    // Si OCR agregó un dígito al final o en medio, corregir contra nomenclador.
+    // Ejemplo real: 40841 -> 4084.
+    if (!elegido && /^\d{5}$/.test(clean)) {
+      const variantes = [clean.slice(0, 4), clean.slice(1)];
+      for (let i = 0; i < clean.length; i++) variantes.push(clean.slice(0, i) + clean.slice(i + 1));
+      elegido = variantes.find((v) => /^\d{4,5}$/.test(v) && existeCodigoNomenclador460(v, setCodigos)) || "";
+    }
+
+    if (!elegido) return false;
+    if (!codigos.includes(elegido)) codigos.push(elegido);
     return true;
   }
 
@@ -533,40 +583,88 @@
     return out;
   }
 
+  function agregarCodigosPorPatronAmplio(zona, codigos, setCodigos) {
+    const texto = String(zona || "").toUpperCase();
+    if (!texto) return;
+
+    // Patrón deliberadamente flexible: Tesseract a veces lee "Cod" como Cqd,
+    // C0d, Coq, Cod;, Cód, o separa letras. Exige que haya un número pegado
+    // inmediatamente después para no confundir texto común.
+    const reCod = /(?:C\s*[O0ÓQ]\s*[DCLQ]?|C[O0ÓQ]D|C[O0ÓQ]Q|C[QO0]D|C0D|CODIGO|C[O0ÓQ]DIGO)\s*[º°.:,;\- ]*([0-9OQIL|ZSGB]{4,6})/ig;
+    let m;
+    while ((m = reCod.exec(texto))) {
+      const base = normalizarCodigoOCRCorto(m[1]);
+      if (!base) continue;
+      const opciones = [];
+      if (/^\d{4,5}$/.test(base)) opciones.push(base);
+      if (base.length > 5) {
+        opciones.push(base.slice(0, 5), base.slice(0, 4));
+      }
+      if (base.length === 5) {
+        opciones.push(base.slice(0, 4), base.slice(1));
+        for (let i = 0; i < base.length; i++) opciones.push(base.slice(0, i) + base.slice(i + 1));
+      }
+      opciones.forEach((op) => agregarCodigoUnico(codigos, op, setCodigos));
+    }
+  }
+
+  function agregarCodigosValidosCercanosEnBloque(zona, codigos, setCodigos) {
+    const texto = String(zona || "");
+    const tokens = texto.match(/\b\d{4,5}\b/g) || [];
+    for (const token of tokens) {
+      // Solo aceptar tokens existentes en nomenclador dentro del bloque de infracciones.
+      agregarCodigoUnico(codigos, token, setCodigos);
+    }
+  }
+
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
     const setCodigos = obtenerSetCodigosNomenclador460();
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
-    const bloqueLineas = unirLineasInfraccionesPartidas(extraerBloqueInfracciones(lineas));
+    const bloqueOriginal = extraerBloqueInfracciones(lineas);
+    const bloqueLineas = unirLineasInfraccionesPartidas(bloqueOriginal);
 
-    // Primera pasada: extraer candidatos numéricos vinculados a cada línea del bloque INFRACCIONES.
+    function procesarParte(parte) {
+      const antes = codigos.length;
+      agregarCodigosPorPatronAmplio(parte, codigos, setCodigos);
+      for (const candidato of candidatosCodigoDesdeTexto(parte)) agregarCodigoUnico(codigos, candidato, setCodigos);
+      for (const codigo of codigoPorTextoInfraccion(parte)) agregarCodigoUnico(codigos, codigo, setCodigos);
+      return codigos.length > antes;
+    }
+
+    // Primera pasada: cada infracción unida con sus continuaciones.
     for (const linea of bloqueLineas) {
-      const candidatos = candidatosCodigoDesdeTexto(linea);
-      let agrego = false;
-      for (const candidato of candidatos) {
-        if (agregarCodigoUnico(codigos, candidato, setCodigos)) agrego = true;
-      }
-
-      // Segunda pasada: si el número OCR vino roto, usar el texto de la infracción para resolverlo.
-      // También agrega códigos faltantes cuando una línea trae texto claro pero número inválido.
-      const porTexto = codigoPorTextoInfraccion(linea);
-      for (const codigo of porTexto) {
-        if (agregarCodigoUnico(codigos, codigo, setCodigos)) agrego = true;
-      }
-
+      procesarParte(linea);
       if (codigos.length >= 6) break;
     }
 
-    // Fallback final, igualmente validado contra nomenclador: si el OCR no mantuvo saltos de línea.
-    if (!codigos.length) {
-      const bloque = bloqueLineas.length ? bloqueLineas.join("\n") : limpio;
-      const partes = bloque.split(/(?=C\s*[O0ÓQ]\s*[DCL]\s*[º°.:,;\- ]*[0-9OQIL|ZSGB]|C0D\s*[º°.:,;\- ]*[0-9OQIL|ZSGB]|CODIGO\s*[º°.:,;\- ]*[0-9OQIL|ZSGB])/i);
-      for (const parte of partes) {
-        for (const candidato of candidatosCodigoDesdeTexto(parte)) agregarCodigoUnico(codigos, candidato, setCodigos);
-        for (const codigo of codigoPorTextoInfraccion(parte)) agregarCodigoUnico(codigos, codigo, setCodigos);
+    // Segunda pasada: bloque completo. Esto corrige casos donde el OCR rompe
+    // saltos de línea o separa "Cod" del número.
+    const bloqueTexto = (bloqueOriginal.length ? bloqueOriginal : bloqueLineas).join("\n");
+    if (bloqueTexto) {
+      const partesCod = bloqueTexto.split(/(?=C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
+      for (const parte of partesCod) {
+        procesarParte(parte);
         if (codigos.length >= 6) break;
       }
+      agregarCodigosValidosCercanosEnBloque(bloqueTexto, codigos, setCodigos);
+      // Fallback semántico global del bloque: si el número quedó ilegible, el texto
+      // de la falta suele seguir siendo claro.
+      for (const codigo of codigoPorTextoInfraccion(bloqueTexto)) agregarCodigoUnico(codigos, codigo, setCodigos);
+    }
+
+    // Tercera pasada: si el bloque fue mal cortado, usar solo la zona entre
+    // INFRACCIONES y MEDIDAS/NOTIFICACIÓN.
+    if (!codigos.length || /HABILITAD|PLACAS|SEGURO|CASCO|BANDOLERA|DOCUMENTACION|LICENCIA/i.test(limpio)) {
+      const m = limpio.match(/INFRACCIONES?[\s\S]{0,1800}?(?=MEDIDAS\s+CAUTELARES|NOTIFICACION|NOTIFICACIÓN|$)/i);
+      const zona = m ? m[0] : limpio;
+      const partes = zona.split(/(?=C\s*[O0ÓQ]\s*[DCL]|C0D|CODIGO|C[O0ÓQ]DIGO|C[QO0]D)/i);
+      for (const parte of partes) {
+        procesarParte(parte);
+        if (codigos.length >= 6) break;
+      }
+      for (const codigo of codigoPorTextoInfraccion(zona)) agregarCodigoUnico(codigos, codigo, setCodigos);
     }
 
     return codigos;
@@ -624,6 +722,17 @@
     return datos;
   }
 
+  function limpiarCampoOcr(el) {
+    if (!el) return;
+    el.value = "";
+    dispatchInput(el);
+  }
+
+  function limpiarCamposOcr460() {
+    const r = refs();
+    [r.marca, r.modelo, r.dominio, r.acta, r.codigos].forEach(limpiarCampoOcr);
+  }
+
   function dispatchInput(el) {
     if (!el) return;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -638,18 +747,27 @@
     return true;
   }
 
+  function setOcrValue(el, value) {
+    const val = String(value || "").trim();
+    if (!el) return false;
+    el.value = val;
+    dispatchInput(el);
+    return !!val;
+  }
+
   function aplicarDatosAFormulario460(datos) {
     const r = refs();
     const cargados = [];
 
-    if (setValue(r.marca, datos.marca)) cargados.push("marca");
-    if (setValue(r.modelo, datos.modelo)) cargados.push("modelo");
-    if (setValue(r.dominio, datos.dominio)) cargados.push("dominio");
-    if (setValue(r.acta, datos.actaNumero)) cargados.push("acta");
-    if (Array.isArray(datos.codigos) && datos.codigos.length && setValue(r.codigos, datos.codigos.join(" / "))) cargados.push("códigos");
+    // El OCR es una precarga. Al leer una foto nueva se limpian los campos
+    // gestionados por OCR para no dejar valores de un acta anterior cuando
+    // algún dato no se detecta en la foto nueva.
+    if (setOcrValue(r.marca, datos.marca)) cargados.push("marca");
+    if (setOcrValue(r.modelo, datos.modelo)) cargados.push("modelo");
+    if (setOcrValue(r.dominio, datos.dominio)) cargados.push("dominio");
+    if (setOcrValue(r.acta, datos.actaNumero)) cargados.push("acta");
+    if (setOcrValue(r.codigos, Array.isArray(datos.codigos) && datos.codigos.length ? datos.codigos.join(" / ") : "")) cargados.push("códigos");
 
-    // No se marca inventario automáticamente: en 460/22 debe revisarlo el usuario.
-    // Se informa en el estado si el acta dice Secuestra Vehículo: Sí.
     return cargados;
   }
 
@@ -672,7 +790,7 @@
     return `No se pudieron completar campos automáticamente. Intente con una foto más cercana y nítida del acta.`;
   }
 
-  async function cargarImagenADataUrl(file, maxWidth = OCR460_MAX_WIDTH) {
+  async function cargarImagenADataUrl(file, maxWidth = OCR460_MAX_WIDTH, crop = null) {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
@@ -687,14 +805,19 @@
       im.src = dataUrl;
     });
 
-    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-    const width = Math.max(1, Math.round(img.width * scale));
-    const height = Math.max(1, Math.round(img.height * scale));
+    const sx0 = crop ? Math.max(0, Math.min(img.width - 1, Math.round(img.width * (crop.x || 0)))) : 0;
+    const sy0 = crop ? Math.max(0, Math.min(img.height - 1, Math.round(img.height * (crop.y || 0)))) : 0;
+    const sw0 = crop ? Math.max(1, Math.min(img.width - sx0, Math.round(img.width * (crop.w || 1)))) : img.width;
+    const sh0 = crop ? Math.max(1, Math.min(img.height - sy0, Math.round(img.height * (crop.h || 1)))) : img.height;
+
+    const scale = sw0 > maxWidth ? maxWidth / sw0 : 1;
+    const width = Math.max(1, Math.round(sw0 * scale));
+    const height = Math.max(1, Math.round(sh0 * scale));
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(img, 0, 0, width, height);
+    ctx.drawImage(img, sx0, sy0, sw0, sh0, 0, 0, width, height);
 
     try {
       const imageData = ctx.getImageData(0, 0, width, height);
@@ -712,28 +835,65 @@
     return canvas.toDataURL("image/jpeg", 0.86);
   }
 
-  async function leerTextoDesdeFoto(file) {
-    if (!file) return "";
-    setEstado(ESTADOS.loading);
-    const Tesseract = await asegurarTesseract();
-    setEstado(ESTADOS.preparing);
-    const imagen = await cargarImagenADataUrl(file);
-    setEstado(ESTADOS.reading);
-
+  async function reconocerDataUrl(Tesseract, imagen, etiqueta) {
     const resultado = await Tesseract.recognize(imagen, "spa", {
+      preserve_interword_spaces: "1",
       logger: (m) => {
         if (!m || !m.status) return;
         if (m.status === "recognizing text" && Number.isFinite(m.progress)) {
           const pct = Math.max(0, Math.min(99, Math.round(m.progress * 100)));
-          setEstado(`Leyendo acta... ${pct}%`);
+          setEstado(`${etiqueta || "Leyendo acta"}... ${pct}%`);
         }
       },
     });
     return resultado?.data?.text || "";
   }
 
+  async function leerTextoDesdeFoto(file) {
+    if (!file) return "";
+    setEstado(ESTADOS.loading);
+    const Tesseract = await asegurarTesseract();
+
+    setEstado(ESTADOS.preparing);
+    const imagenCompleta = await cargarImagenADataUrl(file);
+
+    setEstado(ESTADOS.reading);
+    const textoCompleto = await reconocerDataUrl(Tesseract, imagenCompleta, "Leyendo acta completa");
+    const textos = [textoCompleto];
+
+    // Segunda pasada chica para ACTA NRO. La línea del acta y el número del
+    // código de barras están arriba; esta zona corrige errores tipo 070534222
+    // cuando en el encabezado fino se lee 070534323.
+    try {
+      const zonaActa = await cargarImagenADataUrl(file, 1800, { x: 0.10, y: 0.06, w: 0.82, h: 0.20 });
+      const textoActa = await reconocerDataUrl(Tesseract, zonaActa, "Revisando N° de acta");
+      if (textoActa) textos.push("\nZONA_ACTA\n" + textoActa);
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer zona de acta.", error);
+    }
+
+    // El bloque de infracciones suele estar en el tercio inferior. Si la lectura
+    // completa trae uno o ningún código, hacemos una pasada focalizada para no
+    // perder el primer/segundo Cod:.
+    try {
+      const datosParciales = extraerDatosActa460(textos.join("\n"));
+      if (!datosParciales.codigos || datosParciales.codigos.length < 2) {
+        const zonaInfracciones = await cargarImagenADataUrl(file, 1800, { x: 0.00, y: 0.62, w: 1.00, h: 0.30 });
+        const textoInfracciones = await reconocerDataUrl(Tesseract, zonaInfracciones, "Revisando códigos");
+        if (textoInfracciones) textos.push("\nZONA_INFRACCIONES\n" + textoInfracciones);
+      }
+    } catch (error) {
+      console.warn("[WSP OCR 460] No se pudo leer zona de infracciones.", error);
+    }
+
+    return textos.join("\n");
+  }
+
   async function procesarArchivoActa(file) {
     setCargando(true);
+    limpiarCamposOcr460();
+    ultimosDatos = null;
+    ultimoTextoOcr = "";
     try {
       const texto = await leerTextoDesdeFoto(file);
       ultimoTextoOcr = normalizarTextoOcr(texto);
@@ -791,5 +951,5 @@
     init();
   }
 
-  console.log("[WSP OCR 460] cargado");
+  console.log("[WSP OCR 460] cargado v6-zonas");
 })();
