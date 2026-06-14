@@ -276,36 +276,64 @@
     if (codigo.length >= 3 && codigo.length <= 6 && !codigos.includes(codigo)) codigos.push(codigo);
   }
 
+  function agregarCodigoDesdeSegmento(codigos, value) {
+    // Acepta variantes reales del OCR: "5041", "5 041", "5O41", "SO41".
+    // Solo toma la primera secuencia numérica del segmento que sigue a "Cod:".
+    const segmento = String(value || "")
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const match = segmento.match(/[0-9OoQqIl|SsZzGgBb](?:[0-9OoQqIl|SsZzGgBb\s]{1,10})[0-9OoQqIl|SsZzGgBb]/);
+    if (match && match[0]) agregarCodigoUnico(codigos, match[0]);
+  }
+
+  function extraerBloqueInfracciones(lineas) {
+    const idx = lineas.findIndex((linea) => /INFRACCIONES?/i.test(linea));
+    if (idx < 0) return [];
+    const out = [];
+    for (let i = idx + 1; i < Math.min(lineas.length, idx + 14); i++) {
+      const linea = lineas[i];
+      if (/^(Observaciones|Medidas\s+Cautelares|Retiene\s+Licencia|Secuestra\s+Veh[iíi]culo|Otra\s+Medida|Juzgado)\b/i.test(linea)) break;
+      out.push(linea);
+    }
+    return out;
+  }
+
   function extraerCodigos(texto) {
     const limpio = normalizarBusqueda(texto);
     const codigos = [];
     const lineas = limpio.split("\n").map((linea) => linea.trim()).filter(Boolean);
 
-    // 1) Línea directa: "Cod: 5041", "Cód. 5041", "Codigo 5041".
-    for (const linea of lineas) {
-      if (!/\bC[o0ó]d|C[o0ó]digo/i.test(linea)) continue;
-      const m = linea.match(/\bC[o0ó]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl|SsZzGgBb\s]{3,14})/i);
-      if (m && m[1]) agregarCodigoUnico(codigos, m[1]);
+    // Regex flexible para casos reales/OCR:
+    // "Cod:5041", "Cod: 5041", "Cod :5041", "Cód. 5041", "Codigo 5041",
+    // "C0d: 5041" y variantes con espacios entre letras.
+    const reCodFlexible = /\bC\s*[o0ó]\s*d(?:\s*[ií1]\s*g\s*[o0])?\s*[º°.:,;\- ]*([0-9OoQqIl|SsZzGgBb\s]{3,16})/ig;
+
+    // 1) Primero recorrer TODO el OCR, no quedarse con el primer match.
+    let match;
+    while ((match = reCodFlexible.exec(limpio))) {
+      if (match && match[1]) agregarCodigoDesdeSegmento(codigos, match[1]);
+      if (codigos.length >= 6) break;
     }
-    if (codigos.length) return codigos;
 
-    // 2) Bloque INFRACCIONES: buscar solo en pocas líneas para no agarrar DNI/acta.
-    const idx = lineas.findIndex((linea) => /INFRACCIONES?/i.test(linea));
-    if (idx >= 0) {
-      const bloqueLineas = lineas.slice(idx, idx + 8);
+    // 2) Reforzar sobre el bloque INFRACCIONES. Esto evita perder códigos cuando
+    // Tesseract parte el texto en líneas raras o el primer recorrido se saltea uno.
+    const bloqueLineas = extraerBloqueInfracciones(lineas);
+    const bloque = bloqueLineas.join(" ");
+    reCodFlexible.lastIndex = 0;
+    while ((match = reCodFlexible.exec(bloque))) {
+      if (match && match[1]) agregarCodigoDesdeSegmento(codigos, match[1]);
+      if (codigos.length >= 6) break;
+    }
+
+    // 3) Fallback dentro del bloque: si el OCR omitió "Cod", tomar números de 3 a 6
+    // dígitos que aparecen al inicio o cerca del inicio de cada línea de infracción.
+    if (bloqueLineas.length) {
       for (const linea of bloqueLineas) {
-        const conCod = linea.match(/\bC[o0ó]d(?:igo)?\s*[º°.:,;\- ]*([0-9OoIl|SsZzGgBb\s]{3,14})/i);
-        if (conCod && conCod[1]) agregarCodigoUnico(codigos, conCod[1]);
-      }
-      if (codigos.length) return codigos;
-
-      // 3) Fallback dentro del bloque: primer número de 3 a 6 dígitos después de INFRACCIONES.
-      const bloque = bloqueLineas.join(" ");
-      const reBloque = /\b([0-9OoIl|SsZzGgBb]{3,6})\b/g;
-      let match;
-      while ((match = reBloque.exec(bloque))) {
-        agregarCodigoUnico(codigos, match[1]);
-        if (codigos.length >= 4) break;
+        const normal = linea.replace(/^[-.:\s]+/, "");
+        const alInicio = normal.match(/^([0-9OoQqIl|SsZzGgBb][0-9OoQqIl|SsZzGgBb\s]{2,8})\b/);
+        if (alInicio && alInicio[1]) agregarCodigoDesdeSegmento(codigos, alInicio[1]);
+        if (codigos.length >= 6) break;
       }
     }
 
