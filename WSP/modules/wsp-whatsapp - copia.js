@@ -4,7 +4,7 @@
   window.WSP = window.WSP || {};
   window.WSP.services = window.WSP.services || {};
 
-  const AUTO_CIERRE_WSP_MS = 5 * 60 * 1000;
+  const AUTO_CIERRE_WSP_MS = 0;
   let autoCierreWspTimer = null;
 
   function programarCierreVentanaWsp() {
@@ -13,31 +13,9 @@
       autoCierreWspTimer = null;
     }
 
-    autoCierreWspTimer = setTimeout(() => {
-      try {
-        if (window.electronAPI && typeof window.electronAPI.closeCurrentWindow === "function") {
-          window.electronAPI.closeCurrentWindow();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP WhatsApp] No se pudo cerrar mediante electronAPI.closeCurrentWindow.", e);
-      }
-
-      try {
-        if (window.electronAPI && typeof window.electronAPI.cerrarVentanaActual === "function") {
-          window.electronAPI.cerrarVentanaActual();
-          return;
-        }
-      } catch (e) {
-        console.warn("[WSP WhatsApp] No se pudo cerrar mediante electronAPI.cerrarVentanaActual.", e);
-      }
-
-      try {
-        window.close();
-      } catch (e) {
-        console.warn("[WSP WhatsApp] El navegador bloqueó window.close().", e);
-      }
-    }, AUTO_CIERRE_WSP_MS);
+    // Paso 110: la app ya no se cierra automáticamente después de abrir WhatsApp.
+    // El control de ventana única se hace al abrir la app, no cerrando la ventana activa cada X minutos.
+    return false;
   }
 
   function archivosCompartiblesWsp(files) {

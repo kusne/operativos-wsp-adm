@@ -1617,38 +1617,71 @@ window.WSP.config = {
     return ordenes;
   }
 
+
+  async function leerPreloadOperativosPublicadosWsp(guardiaFecha) {
+    const preload = window.__WSP_OPERATIVOS_PUBLICADOS_PRELOAD__;
+    if (!preload || preload.guardiaFecha !== guardiaFecha || !preload.promise) return null;
+
+    try {
+      const resultado = await preload.promise;
+      if (resultado?.ok && resultado.guardiaFecha === guardiaFecha && Array.isArray(resultado.data)) {
+        window.WSP = window.WSP || {};
+        window.WSP.debug = window.WSP.debug || {};
+        window.WSP.debug.preloadOperativosPublicados = {
+          usado: true,
+          guardiaFecha,
+          filas: resultado.data.length,
+          iniciadoHaceMs: Date.now() - Number(preload.startedAt || Date.now()),
+          version: preload.version || "",
+        };
+        return resultado.data;
+      }
+      return null;
+    } catch (e) {
+      console.warn("[WSP] Preload de operativos publicados no disponible. Se usa lectura REST normal.", e);
+      return null;
+    }
+  }
+
   async function syncOrdenesDesdeServidor(opts = {}) {
     if (ordenesPublicadasSyncPromiseWsp) return ordenesPublicadasSyncPromiseWsp;
 
     const tarea = (async () => {
       try {
         const guardiaFecha = getGuardiaFechaISO();
-        const params = new URLSearchParams({
-          select: "id,operativo_key,guardia_fecha,fecha_operativo,inicio_operativo,hora_desde,hora_hasta,lugar,lugar_normalizado,tipo,ordenes_origen,archivos_origen,activo,sin_efecto,error_en_la_orden,error_motivo,registro_original,updated_at",
-          guardia_fecha: `eq.${guardiaFecha}`,
-          activo: "eq.true",
-          sin_efecto: "eq.false",
-          order: "inicio_operativo.asc",
-        });
+        let data = await leerPreloadOperativosPublicadosWsp(guardiaFecha);
 
-        const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            Accept: "application/json",
-          },
-        });
+        if (!Array.isArray(data)) {
+          const params = new URLSearchParams({
+            select: "id,operativo_key,guardia_fecha,fecha_operativo,inicio_operativo,hora_desde,hora_hasta,lugar,lugar_normalizado,tipo,ordenes_origen,archivos_origen,activo,sin_efecto,error_en_la_orden,error_motivo,registro_original,updated_at",
+            guardia_fecha: `eq.${guardiaFecha}`,
+            activo: "eq.true",
+            sin_efecto: "eq.false",
+            order: "inicio_operativo.asc",
+          });
 
-        if (!r.ok) {
-          const txt = await r.text().catch(() => "");
-          console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
-          guardarOrdenesSeguro([]);
-          ordenesPublicadasCargadasWsp = false;
-          actualizarContadorOperativosWsp(0);
-          return false;
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/operativos_publicados?${params.toString()}`, {
+            cache: "no-store",
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              Accept: "application/json",
+              "Cache-Control": "no-cache",
+            },
+          });
+
+          if (!r.ok) {
+            const txt = await r.text().catch(() => "");
+            console.error("[WSP] Supabase REST error operativos_publicados:", r.status, txt);
+            guardarOrdenesSeguro([]);
+            ordenesPublicadasCargadasWsp = false;
+            actualizarContadorOperativosWsp(0);
+            return false;
+          }
+
+          data = await r.json();
         }
 
-        const data = await r.json();
         const ordenes = convertirOperativosPublicadosAFormatoWsp(data);
 
         guardarOrdenesSeguro(ordenes);
@@ -11265,8 +11298,9 @@ ${bold("Se adjunta vista fotográfica")}`);
     }
 
     const cargaOperativosInicial = syncOrdenesDesdeServidor({ origen: "init_pantalla_principal" });
-    refrescarContadorPublicadosRapidoWsp({ origen: "init_pantalla_principal" });
 
+    // Optimización Paso 110: evita una segunda consulta simultánea solo para contar.
+    // El contador se actualiza con la misma lectura que carga el selector.
     inicializarFotosWspPaso104();
     sincronizarUIAlcoholimetro();
     sincronizarUIQrzDominio();
