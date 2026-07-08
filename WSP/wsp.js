@@ -4128,6 +4128,19 @@ window.WSP.config = {
     return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
+  function horaActualHHMMFinalizaWsp(now = new Date()) {
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function resolverFinalizarConHoraActualWsp(horario = "", horaActual = horaActualHHMMFinalizaWsp()) {
+    const canonico = normalizarHoraRangoFinalizaWsp(horario || "");
+    if (!canonico) return "";
+    if (!/\bFINALIZAR\b/i.test(canonico)) return canonico;
+    const hora = normalizarHoraCampoFinalizaWsp(horaActual);
+    if (!hora) return "";
+    return normalizarHoraRangoFinalizaWsp(canonico.replace(/\bFINALIZAR\b/ig, hora)) || "";
+  }
+
   function construirHorarioDesdePartesFinalizaWsp(desde = "", hasta = "") {
     const d = normalizarHoraCampoFinalizaWsp(desde);
     const h = normalizarHoraCampoFinalizaWsp(hasta);
@@ -10954,8 +10967,10 @@ ${bold(`Moviles ${organismo}:`)}`)
     let textoFinal = modMensajesOperativo && typeof modMensajesOperativo.construirTextoDesdePartes === "function"
       ? modMensajesOperativo.construirTextoDesdePartes(partes)
       : compactarSaltos(partes.join("\n"));
+    let horaActualFinalizaEnvio = "";
     if (esFinaliza) {
-      const horarioCanonicoTexto = normalizarHoraRangoFinalizaWsp(franjaSeleccionada?.horario || "");
+      horaActualFinalizaEnvio = horaActualHHMMFinalizaWsp();
+      const horarioCanonicoTexto = resolverFinalizarConHoraActualWsp(franjaSeleccionada?.horario || "", horaActualFinalizaEnvio);
       if (!horarioCanonicoTexto) {
         alert("No se imprimirá el FINALIZADO porque la franja horaria está vacía o corrupta. Vuelva a seleccionar el operativo iniciado.");
         return;
@@ -10990,13 +11005,21 @@ ${bold("Se adjunta vista fotográfica")}`);
         window.WSP.debug.finalizaDatosEnvio.texto_generado = textoFinal;
         window.WSP.debug.finalizaDatosEnvio.textoFinal = textoFinal;
       }
-      const horarioCanonicoPayload = resolverHorarioCanonicoFinalizaWsp(payloadHistorial, franjaSeleccionada);
+      const horarioCanonicoPayload = resolverFinalizarConHoraActualWsp(
+        resolverHorarioCanonicoFinalizaWsp(payloadHistorial, franjaSeleccionada),
+        horaActualFinalizaEnvio || horaActualHHMMFinalizaWsp()
+      );
       if (!horarioCanonicoPayload) {
         alert("No se guardará ni enviará el FINALIZADO porque la franja horaria llegó corrupta al payload.");
         return;
       }
+      const partesCanonicasPayload = extraerHorarioPartesWsp(horarioCanonicoPayload);
       payloadHistorial.horario = horarioCanonicoPayload;
       payloadHistorial.franja_horaria = horarioCanonicoPayload;
+      payloadHistorial.hora_desde = partesCanonicasPayload.desde || payloadHistorial.hora_desde || "";
+      payloadHistorial.hora_hasta = partesCanonicasPayload.hasta || payloadHistorial.hora_hasta || "";
+      payloadHistorial.hora_inicio = partesCanonicasPayload.desde || payloadHistorial.hora_inicio || "";
+      payloadHistorial.hora_finalizacion = partesCanonicasPayload.hasta || payloadHistorial.hora_finalizacion || "";
       payloadHistorial.texto_generado = textoFinal;
       payloadHistorial.personal = String(personalTexto || "").split(/\r?\n/).map((v) => limpiarTextoSimple(v)).filter(Boolean);
       payloadHistorial.moviles = String(mov || "").split("/").map((v) => limpiarTextoSimple(v)).filter(Boolean).filter((v) => v !== "/");
