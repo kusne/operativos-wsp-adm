@@ -330,7 +330,7 @@
     const corralonTexto = textoCorralonInforme(corralon);
     const codigosTxt = (Array.isArray(codigos) ? codigos : []).join("/");
     const inventarioFrase = r.inf460Inventario?.checked ? " Labrando acta de inventario." : "";
-    const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase}`;
+    const obs = `Realizando ${tipoOp} procedemos a la detención de un motovehículo marca ${marca}${modelo ? ` modelo ${modelo}` : ""}, dominio ${dominio}, labrándose acta de infracción N° ${nroActa} por el/los código/s ${codigosTxt}, remitiendo el birrodado al corralón de ${corralonTexto}.${inventarioFrase},.Cabe destacar que se realizo consulta sobre el vehiculo y persona por posibles requirimientos legales vigentes, con resultados negativos.`;
 
     return compactarSaltos([
       bold("POLICÍA DE LA PROVINCIA DE SANTA FE - DIRECCION GENERAL GUARDIA PROVINCIAL"),
