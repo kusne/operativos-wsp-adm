@@ -7448,9 +7448,10 @@ window.WSP.config = {
   function detectarOrganismosConjunto() {
     const fuente = obtenerFuenteConjunto();
     const hayFraseConjunto = FRASES_CONJUNTO.some((regex) => regex.test(fuente));
+    const fuenteOrganismos = fuente.replace(/\baltura\s+(?:gendarmeria|gna)\b/g, " ");
 
     const organismos = ORGANISMOS_CONJUNTO
-      .filter((organismo) => organismo.patrones.some((regex) => regex.test(fuente)))
+      .filter((organismo) => organismo.patrones.some((regex) => regex.test(fuenteOrganismos)))
       .map((organismo) => organismo.nombre)
       .filter((nombre, idx, arr) => arr.indexOf(nombre) === idx);
 
